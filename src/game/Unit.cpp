@@ -10821,6 +10821,145 @@ void Unit::NearTeleportTo(float x, float y, float z, float orientation, bool cas
     }
 }
 
+void Unit::Blinkway(uint32 mapid, float x, float y, float z, float dist)
+{
+    Unit* unitTarget = (Unit*)this;
+
+    // author: qvipka
+    // recalculate, we need it if want can blink in different situations
+    float orientation = unitTarget->GetOrientation();
+    float destx = x + dist * cos(orientation);
+    float desty = y + dist * sin(orientation);
+
+    float destz, tstX, tstY, tstZ, prevX, prevY, prevZ, pground, pfloor, tground, tfloor, beforewaterz, travelDistZ;
+    const float step = 2.0f;
+    const uint8 numChecks = ceil(fabs(dist / step));
+    const float DELTA_X = (destx - x) / numChecks;
+    const float DELTA_Y = (desty - y) / numChecks;
+    int j = 1;
+    for (j; j < (numChecks + 1); j++)
+    {
+        prevX = x + (float(j - 1)*DELTA_X);
+        prevY = y + (float(j - 1)*DELTA_Y);
+
+        if (j < 2)
+        {
+            pground = GetTerrain()->GetHeightStatic(prevX, prevY, MAX_HEIGHT, true);
+            pfloor = GetTerrain()->GetHeightStatic(prevX, prevY, z, true);
+            prevZ = fabs(pground - z) <= fabs(pfloor - z) ? pground : pfloor;
+        }
+        else
+        {
+            prevZ = tstZ;
+        }
+
+        tstX = x + (float(j)*DELTA_X);
+        tstY = y + (float(j)*DELTA_Y);
+        tground = GetTerrain()->GetHeightStatic(tstX, tstY, MAX_HEIGHT, true);
+        tfloor = GetTerrain()->GetHeightStatic(tstX, tstY, z, true);
+        tstZ = fabs(tground - prevZ) <= fabs(tfloor - prevZ) ? tground : tfloor;
+
+        if (!GetTerrain()->IsInWater(x, y, z))
+        {
+            if (GetTerrain()->IsInWater(tstX, tstY, tstZ) && !GetTerrain()->IsInWater(prevX, prevY, prevZ))// if first we start contact with water, we save coordinate Z before water and use her
+            {
+                beforewaterz = prevZ;
+                tstZ = beforewaterz;
+            }
+            else if (GetTerrain()->IsInWater(tstX, tstY, tstZ)) // it next step , where first contact was previos step, and we must recalculate prevZ to Z before water.
+            {
+                prevZ = beforewaterz;
+                tstZ = beforewaterz;
+            }
+        }
+        else if (GetTerrain()->IsInWater(tstX, tstY, tstZ))
+        {
+            prevZ = z;
+            tstZ = z;
+        }
+
+        if (!GetTerrain()->IsInWater(tstX, tstY, tstZ))  // second safety check z for blink way if on the ground
+        {
+            travelDistZ = sqrt((tstY - prevY)*(tstY - prevY) + (tstX - prevX)*(tstX - prevX));
+            // The fastest way to get an accurate result 90% of the time.
+            // Better result can be obtained like 99% accuracy with a ray light, but the cost is too high and the code is too long.
+            tstZ = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ + travelDistZ - 2.0f, true);
+
+            float destz2 = fabs(tground - prevZ) <= fabs(tfloor - prevZ) ? tground : tfloor;
+
+            //sLog.outError("step 1, distance of blink = %f", travelDistZ);
+            if (fabs(tstZ - prevZ) > travelDistZ)              // Map check
+            {
+                // Vmap Horizontal or above
+                tstZ = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ, true);
+                //sLog.outError("step 2, distance of blink = %f", travelDistZ);
+                if (fabs(tstZ - prevZ) > travelDistZ)
+                {
+                    // Vmap Higher
+                    tstZ = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ + travelDistZ + 2.0f, true);
+                    // let's forget this bad coords where a z cannot be find and retry at next tick
+                    //sLog.outError("step 3, distance of blink = %f", travelDistZ);
+                }
+            }
+
+            if (fabs(tstZ - prevZ) > fabs(destz2 - prevZ))
+            {
+                // recheck allow to blink on nearest floor,level
+                tstZ = destz2;
+                //sLog.outError("step 4");
+            }
+        }
+
+        destz = tstZ;
+
+        bool col = VMAP::VMapFactory::createOrGetVMapManager()->getObjectHitPos(mapid, prevX, prevY, prevZ + 0.5f, tstX, tstY, tstZ + 0.5f, tstX, tstY, tstZ, -0.5f);
+        // collision occured
+        if (col || (fabs(prevZ - tstZ) > 2.8))
+        {
+            // move back a bit
+            destx = tstX - (0.6 * cos(orientation));
+            desty = tstY - (0.6 * sin(orientation));
+
+            // The fastest way to get an accurate result 90% of the time.
+            // Better result can be obtained like 99% accuracy with a ray light, but the cost is too high and the code is too long.
+            travelDistZ = sqrt((desty - prevY)*(desty - prevY) + (destx - prevX)*(destx - prevX));
+
+            destz = GetTerrain()->GetHeightStatic(destx, desty, prevZ + travelDistZ - 2.0f, true);
+
+            float ground = GetTerrain()->GetHeightStatic(destx, desty, MAX_HEIGHT, true);
+            float floor = GetTerrain()->GetHeightStatic(destx, desty, prevZ, true);
+            float destz2 = fabs(ground - prevZ) <= fabs(floor - prevZ) ? ground : floor;
+
+            if (fabs(destz - prevZ) > travelDistZ)              // Map check
+            {
+                // Vmap Horizontal or above
+                destz = GetTerrain()->GetHeightStatic(destx, desty, prevZ, true);
+
+                if (fabs(destz - prevZ) > travelDistZ)
+                {
+                    // Vmap Higher
+                    destz = GetTerrain()->GetHeightStatic(destx, desty, prevZ + travelDistZ + 2.0f, true);
+                }
+            }
+
+            if (fabs(destz - prevZ) > fabs(destz2 - prevZ)) // recheck allow to blink on nearest floor,level
+                destz = destz2;
+
+            break;
+        }
+        // we have correct destz now
+    }
+
+    /* If need Log for Blink checking uncomment this
+    float range = sqrt((desty - y)*(desty - y) + (destx - x)*(destx - x));
+    if (j < 10)
+      sLog.outError("Blink number 4, standart, cycle checking coordinates not finalized, collide with ground, distance of blink = %f", range);
+    else
+      sLog.outError("Blink number 4, standart, cycle checking coordinates finalized, distance of blink = %f", range);*/
+
+    unitTarget->NearTeleportTo(destx, desty, destz + 0.5f, unitTarget->GetOrientation());
+}
+
 void Unit::MonsterMoveWithSpeed(float x, float y, float z, float speed, bool generatePath, bool forceDestination)
 {
     Movement::MoveSplineInit init(*this);

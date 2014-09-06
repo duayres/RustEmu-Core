@@ -10171,20 +10171,77 @@ void Spell::EffectLeapForward(SpellEffectIndex eff_idx)
     if (unitTarget->IsTaxiFlying())
         return;
 
-    if (m_spellInfo->rangeIndex == SPELL_RANGE_IDX_SELF_ONLY)
+    uint32 mapid = m_caster->GetMapId();
+    float dist = GetSpellRadius(sSpellRadiusStore.LookupEntry(m_spellInfo->EffectRadiusIndex[eff_idx]));
+    float distance = dist;
+    float x, y, z, cz;
+    float destx, desty, destz, ground, floor, colz, cground, cfloor;
+    float orientation = unitTarget->GetOrientation();
+
+    unitTarget->GetPosition(x, y, z);
+    destx = x + dist * cos(orientation);
+    desty = y + dist * sin(orientation);
+    ground = unitTarget->GetTerrain()->GetHeightStatic(destx, desty, MAX_HEIGHT, true);
+    floor = unitTarget->GetTerrain()->GetHeightStatic(destx, desty, z, true);
+    cground = unitTarget->GetTerrain()->GetHeightStatic(x, y, MAX_HEIGHT, true);
+    cfloor = unitTarget->GetTerrain()->GetHeightStatic(x, y, z, true);
+    cz = fabs(cground - z) <= fabs(cfloor - z) ? cground : cfloor;
+    colz = fabs(ground - z) <= fabs(floor - z) ? ground : floor;
+    destz = colz + 0.5f;
+
+    bool col = VMAP::VMapFactory::createOrGetVMapManager()->getObjectHitPos(mapid, x, y, z + 0.5f, destx, desty, destz + 0.5f, destx, desty, destz, -0.5f);
+
+    // collision occured
+    if (col)
     {
-        float dis = GetSpellRadius(sSpellRadiusStore.LookupEntry(m_spellInfo->EffectRadiusIndex[eff_idx]));
+        // move back a bit
+        destx -= 0.6 * cos(orientation);
+        desty -= 0.6 * sin(orientation);
+        ground = unitTarget->GetTerrain()->GetHeightStatic(destx, desty, MAX_HEIGHT, true);
+        floor = unitTarget->GetTerrain()->GetHeightStatic(destx, desty, z, true);
+        colz = fabs(ground - z) <= fabs(floor - z) ? ground : floor;
+        destz = colz + 0.5f;
+    }
 
-        // before caster
-        float fx, fy, fz;
-        unitTarget->GetClosePoint(fx, fy, fz, unitTarget->GetObjectBoundingRadius(), dis);
-        float ox, oy, oz;
-        unitTarget->GetPosition(ox, oy, oz);
-
-        if (unitTarget->GetMap()->GetHitPosition(ox, oy, oz + 0.5f, fx, fy, fz, unitTarget->GetPhaseMask(), -0.5f))
-            unitTarget->UpdateAllowedPositionZ(fx, fy, fz);
-
-        unitTarget->NearTeleportTo(fx, fy, fz, unitTarget->GetOrientation(), unitTarget == m_caster);
+    if (!((Player*)unitTarget)->HasMovementFlag(MOVEFLAG_FALLING) || (z - colz < 20.0f))
+    {
+        if ((((Player*)unitTarget)->HasMovementFlag(MOVEFLAG_FALLING) && (z - cz > 3.0f)) && (!unitTarget->GetTerrain()->IsInWater(x, y, z)))
+        {
+            //sLog.outError("Blink number 2, from falling");
+            unitTarget->NearTeleportTo(destx, desty, colz, unitTarget->GetOrientation(), unitTarget == m_caster);
+        }
+        else
+        {
+            /*//recalculate, we wanna fly above abyss and don't wanna stop to edge =) (if nessesary enable "stop to edge" - comment this lines
+            //destx = x + dist * cos(orientation);                                            //1
+            //desty = y + dist * sin(orientation);                                            //2
+            //ground = unitTarget->GetTerrain()->GetHeightStatic(destx, desty, MAX_HEIGHT, true);   //3
+            //floor = unitTarget->GetTerrain()->GetHeightStatic(destx, desty, z, true);             //4
+            //colz = fabs(ground - z) <= fabs(floor - z) ? ground : floor;                    //5
+            //destz = z;
+            if (z - colz > 20.0f && !unitTarget->GetTerrain()->IsInWater(destx, desty, destz))
+            {
+            bool col = VMAP::VMapFactory::createOrGetVMapManager()->getObjectHitPos(mapid, x, y, z + 0.5f, destx, desty, destz + 0.5f, destx, desty, destz, -0.5f);
+            // collision occured
+            if (col)
+            {
+            // move back a bit
+            destx -= 0.6 * cos(orientation);
+            desty -= 0.6 * sin(orientation);
+            }
+            //sLog.outError("Blink number 3, from height to abyss");
+            unitTarget->NearTeleportTo(destx, desty, destz, unitTarget->GetOrientation(), unitTarget == m_caster);
+            }
+            else
+            {*/
+            unitTarget->Blinkway(mapid, x, y, z, distance);
+            //}
+        }
+    }
+    else
+    {
+        //sLog.outError("Blink number 5, in falling but on hight");
+        unitTarget->NearTeleportTo(destx, desty, z, unitTarget->GetOrientation(), unitTarget == m_caster);
     }
 }
 
