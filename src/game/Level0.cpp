@@ -31,6 +31,8 @@
 #include "revision_nr.h"
 #include "Util.h"
 
+#include "boost/version.hpp"
+
 bool ChatHandler::HandleHelpCommand(char* args)
 {
     if (!*args)
@@ -113,6 +115,7 @@ bool ChatHandler::HandleServerInfoCommand(char* /*args*/)
     else
         SendSysMessage(LANG_USING_SCRIPT_LIB_NONE);
 
+    PSendSysMessage("Boost version:", BOOST_VERSION);
     PSendSysMessage(LANG_USING_WORLD_DB, sWorld.GetDBVersion());
     PSendSysMessage(LANG_USING_EVENT_AI, sWorld.GetCreatureEventAIVersion());
     PSendSysMessage(LANG_CONNECTED_USERS, activeClientsNum, maxActiveClientsNum, queuedClientsNum, maxQueuedClientsNum);
