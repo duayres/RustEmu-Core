@@ -115,7 +115,7 @@ bool ChatHandler::HandleServerInfoCommand(char* /*args*/)
     else
         SendSysMessage(LANG_USING_SCRIPT_LIB_NONE);
 
-    PSendSysMessage("Boost version:", BOOST_VERSION);
+    PSendSysMessage("Using BOOST: %i.%i.%i", BOOST_VERSION / 100000, BOOST_VERSION / 100 % 1000, BOOST_VERSION % 100);
     PSendSysMessage(LANG_USING_WORLD_DB, sWorld.GetDBVersion());
     PSendSysMessage(LANG_USING_EVENT_AI, sWorld.GetCreatureEventAIVersion());
     PSendSysMessage(LANG_CONNECTED_USERS, activeClientsNum, maxActiveClientsNum, queuedClientsNum, maxQueuedClientsNum);
