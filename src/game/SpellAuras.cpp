@@ -4613,8 +4613,11 @@ void Aura::HandleAuraModStun(bool apply, bool Real)
 
         if (!target->hasUnitState(UNIT_STAT_ROOT))        // prevent allow move if have also root effect
         {
-            if (target->getVictim() && target->isAlive())
-                target->SetTargetGuid(target->getVictim()->GetObjectGuid());
+            if (target->isAlive())
+            {
+                if (Unit* pVictim = target->getVictim())
+                    target->SetTargetGuid(pVictim->GetObjectGuid());
+            }
 
             target->SetRoot(false);
         }
