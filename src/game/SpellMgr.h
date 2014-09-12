@@ -657,7 +657,13 @@ enum ProcFlagsEx
     PROC_EX_EX_TRIGGER_ALWAYS   = 0x0010000,                // If set trigger always ( no matter another flags) used for drop charges
     PROC_EX_EX_ONE_TIME_TRIGGER = 0x0020000,                // If set trigger always but only one time (not used)
     PROC_EX_PERIODIC_POSITIVE   = 0x0040000,                // For periodic heal
-    PROC_EX_CAST_END            = 0x0080000                 // procs on end of cast
+    PROC_EX_CAST_END            = 0x0080000,                 // procs on end of cast
+
+    // Custom proc ex flag system
+    PROC_EX_DIRECT_DAMAGE       = 0x0100000,                // do not proc from absorbed damage
+    PROC_EX_SHIELD_BREAK        = 0x0200000,                // proc at remove aura by shield break
+    PROC_EX_DISPEL              = 0x0400000,                // proc at remove aura by dispel
+    PROC_EX_EXPIRE              = 0x0800000,                // proc at remove aura by expire
 };
 
 struct SpellProcEventEntry

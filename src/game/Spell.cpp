@@ -1027,18 +1027,20 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
     ResetEffectDamageAndHeal();
 
     // Fill base trigger info
-    uint32 procAttacker = m_procAttacker;
-    uint32 procVictim   = m_procVictim;
-    uint32 procEx       = PROC_EX_NONE;
+    DamageInfo damageInfo(caster, unitTarget, m_spellInfo);
+    damageInfo.procAttacker = m_procAttacker;
+    damageInfo.procVictim = m_procVictim;
+    damageInfo.procEx = PROC_EX_NONE;
+    damageInfo.attackType = m_attackType;
 
     // drop proc flags in case target not affected negative effects in negative spell
     // for example caster bonus or animation,
     // except miss case where will assigned PROC_EX_* flags later
-    if (((procAttacker | procVictim) & NEGATIVE_TRIGGER_MASK) &&
+    if (((damageInfo.procAttacker | damageInfo.procVictim) & NEGATIVE_TRIGGER_MASK) &&
             !(target->effectMask & m_negativeEffectMask) && missInfo == SPELL_MISS_NONE)
     {
-        procAttacker = PROC_FLAG_NONE;
-        procVictim   = PROC_FLAG_NONE;
+        damageInfo.procAttacker = PROC_FLAG_NONE;
+        damageInfo.procVictim = PROC_FLAG_NONE;
     }
 
     float speed = m_spellInfo->speed == 0.0f && m_triggeredBySpellInfo ? m_triggeredBySpellInfo->speed : m_spellInfo->speed;
@@ -1086,26 +1088,29 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
     if (m_healing)
     {
         bool crit = real_caster && real_caster->IsSpellCrit(unitTarget, m_spellInfo, m_spellSchoolMask);
-        uint32 addhealth = m_healing;
+        damageInfo.damage = m_healing;
         if (crit)
         {
-            procEx |= PROC_EX_CRITICAL_HIT;
-            addhealth = caster->SpellCriticalHealingBonus(m_spellInfo, addhealth, NULL);
+            damageInfo.procEx |= PROC_EX_CRITICAL_HIT;
+            damageInfo.damage = caster->SpellCriticalHealingBonus(m_spellInfo, damageInfo.damage, NULL);
         }
         else
-            procEx |= PROC_EX_NORMAL_HIT;
+            damageInfo.procEx |= PROC_EX_NORMAL_HIT;
 
-        uint32 absorb = 0;
-        unitTarget->CalculateHealAbsorb(addhealth, &absorb);
-        addhealth -= absorb;
+        damageInfo.absorb = 0;
+        unitTarget->CalculateHealAbsorb(damageInfo.damage, &damageInfo.absorb);
+        damageInfo.damage -= damageInfo.absorb;
 
         // Do triggers for unit (reflect triggers passed on hit phase for correct drop charge)
         if (m_canTrigger && missInfo != SPELL_MISS_REFLECT)
         {
-            caster->ProcDamageAndSpell(unitTarget, real_caster ? procAttacker : uint32(PROC_FLAG_NONE), procVictim, procEx, addhealth, m_attackType, m_spellInfo);
+            uint32 saveAttacker = damageInfo.procAttacker;
+            damageInfo.procAttacker = real_caster ? damageInfo.procAttacker : PROC_FLAG_NONE;
+            caster->ProcDamageAndSpell(&damageInfo);
+            damageInfo.procAttacker = saveAttacker;
         }
 
-        int32 gain = caster->DealHeal(unitTarget, addhealth, m_spellInfo, crit, absorb);
+        int32 gain = caster->DealHeal(unitTarget, damageInfo.damage, m_spellInfo, crit, damageInfo.absorb);
 
         if (real_caster)
             unitTarget->getHostileRefManager().threatAssist(real_caster, float(gain) * 0.5f * sSpellMgr.GetSpellThreatMultiplier(m_spellInfo), m_spellInfo);
@@ -1114,7 +1119,6 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
     else if (m_damage)
     {
         // Fill base damage struct (unitTarget - is real spell target)
-        SpellNonMeleeDamage damageInfo(caster, unitTarget, m_spellInfo->Id, m_spellSchoolMask);
 
         if (speed > 0.0f)
         {
@@ -1132,12 +1136,20 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
         // Send log damage message to client
         caster->SendSpellNonMeleeDamageLog(&damageInfo);
 
-        procEx = createProcExtendMask(&damageInfo, missInfo);
-        procVictim |= PROC_FLAG_TAKEN_ANY_DAMAGE;
+        damageInfo.procEx = createProcExtendMask(&damageInfo, missInfo);
+        damageInfo.procVictim |= PROC_FLAG_TAKEN_ANY_DAMAGE;
+
+        if (damageInfo.absorb)
+            damageInfo.procEx &= ~PROC_EX_DIRECT_DAMAGE;
 
         // Do triggers for unit (reflect triggers passed on hit phase for correct drop charge)
         if (m_canTrigger && missInfo != SPELL_MISS_REFLECT)
-            caster->ProcDamageAndSpell(unitTarget, real_caster ? procAttacker : uint32(PROC_FLAG_NONE), procVictim, procEx, damageInfo.damage, m_attackType, m_spellInfo);
+        {
+            uint32 saveAttacker = damageInfo.procAttacker;
+            damageInfo.procAttacker = real_caster ? damageInfo.procAttacker : PROC_FLAG_NONE;
+            caster->ProcDamageAndSpell(&damageInfo);
+            damageInfo.procAttacker = saveAttacker;
+        }
 
         // trigger weapon enchants for weapon based spells; exclude spells that stop attack, because may break CC
         if (m_caster->GetTypeId() == TYPEID_PLAYER && m_spellInfo->EquippedItemClass == ITEM_CLASS_WEAPON &&
@@ -1174,14 +1186,18 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
         }
     }
     // Passive spell hits/misses or active spells only misses (only triggers if proc flags set)
-    else if (procAttacker || procVictim)
+    else if (damageInfo.procAttacker || damageInfo.procVictim)
     {
         // Fill base damage struct (unitTarget - is real spell target)
-        SpellNonMeleeDamage damageInfo(caster, unitTarget, m_spellInfo->Id, m_spellSchoolMask);
-        procEx = createProcExtendMask(&damageInfo, missInfo);
+        damageInfo.procEx = createProcExtendMask(&damageInfo, missInfo);
         // Do triggers for unit (reflect triggers passed on hit phase for correct drop charge)
         if (m_canTrigger && missInfo != SPELL_MISS_REFLECT)
-            caster->ProcDamageAndSpell(unit, real_caster ? procAttacker : uint32(PROC_FLAG_NONE), procVictim, procEx, 0, m_attackType, m_spellInfo);
+        {
+            uint32 saveAttacker = damageInfo.procAttacker;
+            damageInfo.procAttacker = real_caster ? damageInfo.procAttacker : PROC_FLAG_NONE;
+            caster->ProcDamageAndSpell(&damageInfo);
+            damageInfo.procAttacker = saveAttacker;
+        }
     }
 
     // Call scripted function for AI if this spell is casted upon a creature
@@ -1443,7 +1459,7 @@ void Spell::HandleDelayedSpellLaunch(TargetInfo* target)
     m_healing = 0; // healing maybe not needed at this point
 
     // Fill base damage struct (unitTarget - is real spell target)
-    SpellNonMeleeDamage damageInfo(caster, unitTarget, m_spellInfo->Id, m_spellSchoolMask);
+    DamageInfo damageInfo(caster, unitTarget, m_spellInfo);
 
     // keep damage amount for reflected spells
     if (missInfo == SPELL_MISS_NONE || (missInfo == SPELL_MISS_REFLECT && target->reflectResult == SPELL_MISS_NONE))
@@ -3346,14 +3362,23 @@ void Spell::cast(bool skipCheck)
         // critical hit related part is currently done on hit so proc there,
         // 0 damage since any damage based procs should be on hit
         // 0 victim proc since there is no victim proc dependent on successfull cast for caster
-        m_caster->ProcDamageAndSpell(procTarget, m_procAttacker, 0, PROC_EX_CAST_END, 0, m_attackType, m_spellInfo);
+        if (!GetCastTime())
+            m_caster->ProcDamageAndSpell(procTarget, m_procAttacker, PROC_FLAG_NONE, PROC_EX_CAST_END, 0, m_attackType, m_spellInfo);
     }
     else
     {
-        m_caster->ProcDamageAndSpell(procTarget, m_procAttacker, 0, PROC_EX_CAST_END, 0, m_attackType, m_spellInfo);
+        if (GetCastTime())
+        {
+            m_caster->ProcDamageAndSpell(procTarget, m_procAttacker, PROC_FLAG_NONE, PROC_EX_CAST_END, 0, m_attackType, m_spellInfo);
 
-        // Immediate spell, no big deal
-        handle_immediate();
+            // Immediate spell, no big deal
+            handle_immediate();
+        }
+        else
+        {
+            handle_immediate();
+            m_caster->ProcDamageAndSpell(procTarget, m_procAttacker, PROC_FLAG_NONE, PROC_EX_CAST_END, 0, m_attackType, m_spellInfo);
+        }
     }
 
     m_caster->DecreaseCastCounter();
@@ -4108,22 +4133,20 @@ void Spell::SendLogExecute()
 
     data << uint32(m_spellInfo->Id);
     data << uint32(count1);                                 // count1 (effects count)
-    
+
     DEBUG_FILTER_LOG(LOG_FILTER_SPELL_CAST, "Spell::SendLogExecute() sended spelllog to %s (spell %u, effects count %u)", m_caster->GetObjectGuid().GetString().c_str(), m_spellInfo->Id, count1);
-    
+
     for (int i = 0; i < count1; ++i)
     {
         if (m_effectExecuteData[i].empty())
             continue;
-        
+
         data << uint32(m_spellInfo->Effect[i]);             // spell effect
         data.append(m_effectExecuteData[i]);
-        
+
         m_effectExecuteData[i].clear();
-        
     }
     m_caster->SendMessageToSet(&data, true);
-    
 }
 
 void Spell::SendEffectLogExecute(SpellEffectIndex eff, ObjectGuid targetGuid, uint32 data1, uint32 data2, float data3)

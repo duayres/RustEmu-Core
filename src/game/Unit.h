@@ -841,36 +841,95 @@ enum MeleeHitOutcome
     MELEE_HIT_NORMAL    = 8,
 };
 
-struct CleanDamage
-{
-    CleanDamage(uint32 _damage, WeaponAttackType _attackType, MeleeHitOutcome _hitOutCome) :
-        damage(_damage), attackType(_attackType), hitOutCome(_hitOutCome) {}
-
-    uint32 damage;
-    WeaponAttackType attackType;
-    MeleeHitOutcome hitOutCome;
-};
-
+//struct CleanDamage
+//struct CalcDamageInfo
+//struct SpellNonMeleeDamage
 // Struct for use in Unit::CalculateMeleeDamage
-// Need create structure like in SMSG_ATTACKERSTATEUPDATE opcode
-struct CalcDamageInfo
+// Spell damage info structure based on structure sending in SMSG_SPELLNONMELEEDAMAGELOG opcode
+struct DamageInfo
 {
+    // Constructors for use with spell damage
+    DamageInfo(Unit *_attacker, Unit *_target, uint32 _SpellID)
+        : attacker(_attacker), target(_target), SpellID(_SpellID), m_spellInfo(NULL)
+    {
+        Reset();
+    };
+
+    DamageInfo(Unit *_attacker, Unit *_target, SpellEntry const* spellInfo)
+        : attacker(_attacker), target(_target), m_spellInfo(spellInfo), SpellID(0)
+    {
+        Reset();
+    };
+
+    // Constructor for use with melee damage
+    DamageInfo(Unit *_attacker, Unit *_target)
+        : attacker(_attacker), target(_target), SpellID(0), m_spellInfo(NULL)
+    {
+        Reset();
+    };
+
+    // Constructors for use on temporary operation
+    DamageInfo(uint32 _damage)
+        : attacker(NULL), target(NULL), SpellID(0), m_spellInfo(NULL)
+    {
+        Reset();
+    };
+
+    DamageInfo(uint32 _damage, uint32 _SpellID)
+        : attacker(NULL), target(NULL), SpellID(_SpellID), m_spellInfo(NULL)
+    {
+        Reset();
+    };
+
+    DamageInfo(uint32 _damage, SpellEntry const* spellInfo)
+        : attacker(NULL), target(NULL), m_spellInfo(spellInfo), SpellID(0)
+    {
+        Reset();
+    };
+
+    // main operations
+    void Reset(uint32 _damage = 0);
+
+    // compartibility methods
+    void CleanDamage(int32 _damage, uint32 _absorb, WeaponAttackType _attackType, MeleeHitOutcome _hitOutCome)
+    {
+        cleanDamage = _damage;
+        absorb = _absorb;
+        attackType = _attackType;
+        hitOutCome = _hitOutCome;
+    }
+
     Unit*  attacker;             // Attacker
     Unit*  target;               // Target for damage
-    SpellSchoolMask damageSchoolMask;
+
+    // Spell parameters
+    uint32            SpellID;
+    SpellEntry const* m_spellInfo;
+    SpellSchoolMask   SchoolMask();
+
+    // Damage divide
     uint32 damage;
     uint32 absorb;
     uint32 resist;
-    uint32 blocked_amount;
+    uint32 blocked;
+    int32 cleanDamage;          // Used only for rage calculation
+
+    // Various types
+    WeaponAttackType attackType;
+    DamageEffectType damageType;
     uint32 HitInfo;
     uint32 TargetState;
-    // Helper
-    WeaponAttackType attackType; //
+    MeleeHitOutcome hitOutCome;  // TODO: remove this field (need use TargetState)
+
+    // Proc states
     uint32 procAttacker;
     uint32 procVictim;
     uint32 procEx;
-    uint32 cleanDamage;          // Used only for rage calculation
-    MeleeHitOutcome hitOutCome;  // TODO: remove this field (need use TargetState)
+
+    // Helpers
+    bool   physicalLog;
+    bool   unused;
+    bool   IsMeleeDamage() { return !m_spellInfo; };
 };
 
 // Spell damage info structure based on structure sending in SMSG_SPELLNONMELEEDAMAGELOG opcode
@@ -908,7 +967,7 @@ struct SpellPeriodicAuraLogInfo
     bool   critical;
 };
 
-uint32 createProcExtendMask(SpellNonMeleeDamage* damageInfo, SpellMissInfo missCondition);
+uint32 createProcExtendMask(DamageInfo* damageInfo, SpellMissInfo missCondition);
 
 enum SpellAuraProcResult
 {
@@ -917,7 +976,7 @@ enum SpellAuraProcResult
     SPELL_AURA_PROC_CANT_TRIGGER    = 2                     // aura can't trigger - skip charges taking, move to next aura if exists
 };
 
-typedef SpellAuraProcResult(Unit::*pAuraProcHandler)(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+typedef SpellAuraProcResult(Unit::*pAuraProcHandler)(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
 extern pAuraProcHandler AuraProcHandler[TOTAL_AURAS];
 
 #define MAX_DECLINED_NAME_CASES 5
@@ -1457,13 +1516,16 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         uint16 GetMaxSkillValueForLevel(Unit const* target = NULL) const { return (target ? GetLevelForTarget(target) : getLevel()) * 5; }
         void DealDamageMods(Unit* pVictim, uint32& damage, uint32* absorb);
-        uint32 DealDamage(Unit* pVictim, uint32 damage, CleanDamage const* cleanDamage, DamageEffectType damagetype, SpellSchoolMask damageSchoolMask, SpellEntry const* spellProto, bool durabilityLoss);
-        int32 DealHeal(Unit* pVictim, uint32 addhealth, SpellEntry const* spellProto, bool critical = false, uint32 absorb = 0);
+        uint32 DealDamage(Unit *pVictim, uint32 damage, DamageInfo* cleanDamage, DamageEffectType damagetype, SpellSchoolMask damageSchoolMask, SpellEntry const *spellProto, bool durabilityLoss);
+        uint32 DealDamage(Unit* pVictim, DamageInfo* damageInfo, bool durabilityLoss);
+        int32  DealHeal(Unit* pVictim, uint32 addhealth, SpellEntry const* spellProto, bool critical = false, uint32 absorb = 0);
 
         void PetOwnerKilledUnit(Unit* pVictim);
 
+        void ProcDamageAndSpell(DamageInfo* damageInfo);
+        void ProcDamageAndSpellFor(bool isVictim, DamageInfo* damage);
+        // wrapper for old proc methods
         void ProcDamageAndSpell(Unit* pVictim, uint32 procAttacker, uint32 procVictim, uint32 procEx, uint32 amount, WeaponAttackType attType = BASE_ATTACK, SpellEntry const* procSpell = NULL);
-        void ProcDamageAndSpellFor(bool isVictim, Unit* pTarget, uint32 procFlag, uint32 procExtra, WeaponAttackType attType, SpellEntry const* procSpell, uint32 damage);
 
         void HandleEmote(uint32 emote_id);                  // auto-select command/state
         void HandleEmoteCommand(uint32 emote_id);
@@ -1472,13 +1534,13 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         float MeleeMissChanceCalc(const Unit* pVictim, WeaponAttackType attType) const;
 
-        void CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* damageInfo, WeaponAttackType attackType = BASE_ATTACK);
-        void DealMeleeDamage(CalcDamageInfo* damageInfo, bool durabilityLoss);
+        void CalculateMeleeDamage(Unit* pVictim, uint32 damage, DamageInfo* damageInfo, WeaponAttackType attackType = BASE_ATTACK);
+        void DealMeleeDamage(DamageInfo* damageInfo, bool durabilityLoss);
 
         bool IsAllowedDamageInArea(Unit* pVictim) const;
 
-        void CalculateSpellDamage(SpellNonMeleeDamage* damageInfo, int32 damage, SpellEntry const* spellInfo, WeaponAttackType attackType = BASE_ATTACK);
-        void DealSpellDamage(SpellNonMeleeDamage* damageInfo, bool durabilityLoss);
+        void CalculateSpellDamage(DamageInfo* damageInfo, int32 damage, SpellEntry const *spellInfo, WeaponAttackType attackType = BASE_ATTACK, float DamageMultiplier = 1.0f);
+        void DealSpellDamage(DamageInfo* damageInfo, bool durabilityLoss);
 
         // player or player's pet resilience (-1%)
         float GetMeleeCritChanceReduction() const { return GetCombatRatingReduction(CR_CRIT_TAKEN_MELEE); }
@@ -1596,9 +1658,8 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         void DeMorph();
 
-        void SendAttackStateUpdate(CalcDamageInfo* damageInfo);
-        void SendAttackStateUpdate(uint32 HitInfo, Unit* target, uint8 SwingType, SpellSchoolMask damageSchoolMask, uint32 Damage, uint32 AbsorbDamage, uint32 Resist, VictimState TargetState, uint32 BlockedAmount);
-        void SendSpellNonMeleeDamageLog(SpellNonMeleeDamage* log);
+        void SendAttackStateUpdate(DamageInfo* damageInfo);
+        void SendSpellNonMeleeDamageLog(DamageInfo *log);
         void SendSpellNonMeleeDamageLog(Unit* target, uint32 SpellID, uint32 Damage, SpellSchoolMask damageSchoolMask, uint32 AbsorbedDamage, uint32 Resist, bool PhysicalDamage, uint32 Blocked, bool CriticalHit = false);
         void SendPeriodicAuraLog(SpellPeriodicAuraLogInfo* pInfo);
         void SendSpellMiss(Unit* target, uint32 spellID, SpellMissInfo missInfo);
@@ -1982,37 +2043,41 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         bool IsTriggeredAtSpellProcEvent(Unit* pVictim, SpellAuraHolder* holder, SpellEntry const* procSpell, uint32 procFlag, uint32 procExtra, WeaponAttackType attType, bool isVictim, SpellProcEventEntry const*& spellProcEvent);
         // Aura proc handlers
-        SpellAuraProcResult HandleDummyAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleHasteAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleSpellCritChanceAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleProcTriggerSpellAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleProcTriggerDamageAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleOverrideClassScriptAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleMendingAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleModCastingSpeedNotStackAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleReflectSpellsSchoolAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleModPowerCostSchoolAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleMechanicImmuneResistanceAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleModDamageFromCasterAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleAddFlatModifierAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleAddPctModifierAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleModDamagePercentDoneAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleModRating(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleSpellMagnetAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleManaShieldAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleModResistanceAuraProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleRemoveByDamageChanceProc(Unit* pVictim, uint32 damage, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleNULLProc(Unit* /*pVictim*/, uint32 /*damage*/, Aura* /*triggeredByAura*/, SpellEntry const* /*procSpell*/, uint32 /*procFlag*/, uint32 /*procEx*/, uint32 /*cooldown*/)
+        SpellAuraProcResult HandleDummyAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleHasteAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleSpellCritChanceAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleProcTriggerSpellAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleProcTriggerDamageAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleOverrideClassScriptAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleMendingAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleModCastingSpeedNotStackAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleReflectSpellsSchoolAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleModPowerCostSchoolAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleMechanicImmuneResistanceAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleModDamageFromCasterAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleAddFlatModifierAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleAddPctModifierAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleModDamagePercentDoneAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandlePeriodicDummyAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleModRating(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleRemoveByDamageProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleSpellMagnetAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleManaShieldAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleModResistanceAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleRemoveByDamageChanceProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleNULLProc(Unit* /*pVictim*/, DamageInfo* /*damage*/, Aura* /*triggeredByAura*/, SpellEntry const* /*procSpell*/, uint32 /*procFlag*/, uint32 /*procEx*/, uint32 /*cooldown*/)
         {
             // no proc handler for this aura type
             return SPELL_AURA_PROC_OK;
         }
-        SpellAuraProcResult HandleCantTrigger(Unit* /*pVictim*/, uint32 /*damage*/, Aura* /*triggeredByAura*/, SpellEntry const* /*procSpell*/, uint32 /*procFlag*/, uint32 /*procEx*/, uint32 /*cooldown*/)
+        SpellAuraProcResult HandleCantTrigger(Unit* /*pVictim*/, DamageInfo* /*damage*/, Aura* /*triggeredByAura*/, SpellEntry const* /*procSpell*/, uint32 /*procFlag*/, uint32 /*procEx*/, uint32 /*cooldown*/)
         {
             // this aura type can't proc
             return SPELL_AURA_PROC_CANT_TRIGGER;
         }
-
+        SpellAuraProcResult HandleDamageShieldAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleDropChargeByDamageProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleIgnoreUnitStateAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
         void SetLastManaUse()
         {
             if (GetTypeId() == TYPEID_PLAYER && !IsUnderLastManaUseEffect())
@@ -2034,7 +2099,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         uint32 CalcArmorReducedDamage(Unit* pVictim, const uint32 damage);
         void CalculateDamageAbsorbAndResist(Unit* pCaster, SpellSchoolMask schoolMask, DamageEffectType damagetype, const uint32 damage, uint32* absorb, uint32* resist, bool canReflect = false);
-        void CalculateAbsorbResistBlock(Unit* pCaster, SpellNonMeleeDamage* damageInfo, SpellEntry const* spellProto, WeaponAttackType attType = BASE_ATTACK);
+        void CalculateAbsorbResistBlock(Unit* pCaster, DamageInfo* damageInfo, SpellEntry const* spellProto, WeaponAttackType attType = BASE_ATTACK);
         void CalculateHealAbsorb(uint32 heal, uint32* absorb);
 
         void  UpdateSpeed(UnitMoveType mtype, bool forced, float ratio = 1.0f);
