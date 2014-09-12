@@ -734,15 +734,16 @@ void Creature::RegenerateHealth()
 
 void Creature::DoFleeToGetAssistance()
 {
-    if (!getVictim())
-        return;
-
     float radius = sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_FLEE_ASSISTANCE_RADIUS);
-    if (radius > 0)
+    if (radius > 0.0f)
     {
+        Unit* pVictim = getVictim();
+        if (!pVictim)
+            return;
+
         Creature* pCreature = NULL;
 
-        MaNGOS::NearestAssistCreatureInCreatureRangeCheck u_check(this, getVictim(), radius);
+        MaNGOS::NearestAssistCreatureInCreatureRangeCheck u_check(this, pVictim, radius);
         MaNGOS::CreatureLastSearcher<MaNGOS::NearestAssistCreatureInCreatureRangeCheck> searcher(pCreature, u_check);
         Cell::VisitGridObjects(this, searcher, radius);
 
@@ -750,7 +751,7 @@ void Creature::DoFleeToGetAssistance()
         UpdateSpeed(MOVE_RUN, false);
 
         if (!pCreature)
-            SetFeared(true, getVictim()->GetObjectGuid(), 0 , sWorld.getConfig(CONFIG_UINT32_CREATURE_FAMILY_FLEE_DELAY));
+            SetFeared(true, pVictim->GetObjectGuid(), 0, sWorld.getConfig(CONFIG_UINT32_CREATURE_FAMILY_FLEE_DELAY));
         else
         {
             SetTargetGuid(ObjectGuid());        // creature flee loose its target
@@ -1867,25 +1868,31 @@ void Creature::SendAIReaction(AiReaction reactionType)
 void Creature::CallAssistance()
 {
     // FIXME: should player pets call for assistance?
-    if (!m_AlreadyCallAssistance && getVictim() && !isCharmed())
+    if (m_AlreadyCallAssistance || isCharmed())
+        return;
+    
+    if (Unit* pVictim = getVictim())
     {
         SetNoCallAssistance(true);
 
         if (GetCreatureInfo()->ExtraFlags & CREATURE_FLAG_EXTRA_NO_CALL_ASSIST)
             return;
 
-        AI()->SendAIEventAround(AI_EVENT_CALL_ASSISTANCE, getVictim(), sWorld.getConfig(CONFIG_UINT32_CREATURE_FAMILY_ASSISTANCE_DELAY), sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS));
+        AI()->SendAIEventAround(AI_EVENT_CALL_ASSISTANCE, pVictim, sWorld.getConfig(CONFIG_UINT32_CREATURE_FAMILY_ASSISTANCE_DELAY), sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS));
     }
 }
 
 void Creature::CallForHelp(float fRadius)
 {
-    if (fRadius <= 0.0f || !getVictim() || IsPet() || isCharmed())
+    if (fRadius <= 0.0f || IsPet() || isCharmed())
         return;
 
-    MaNGOS::CallOfHelpCreatureInRangeDo u_do(this, getVictim(), fRadius);
-    MaNGOS::CreatureWorker<MaNGOS::CallOfHelpCreatureInRangeDo> worker(this, u_do);
-    Cell::VisitGridObjects(this, worker, fRadius);
+    if (Unit* pVictim = getVictim())
+    {
+        MaNGOS::CallOfHelpCreatureInRangeDo u_do(this, pVictim, fRadius);
+        MaNGOS::CreatureWorker<MaNGOS::CallOfHelpCreatureInRangeDo> worker(this, u_do);
+        Cell::VisitGridObjects(this, worker, fRadius);
+    }
 }
 
 /// if enemy provided, check for initial combat help against enemy

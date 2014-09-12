@@ -2556,8 +2556,8 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, UnitList&
             // some spell at client send caster
             if (m_targets.getUnitTarget() && m_targets.getUnitTarget() != m_caster)
                 pTarget = m_targets.getUnitTarget();
-            else if (m_caster->getVictim())
-                pTarget = m_caster->getVictim();
+            else if (Unit* pVictim = m_caster->getVictim())
+                pTarget = pVictim;
             else if (m_caster->GetTypeId() == TYPEID_PLAYER)
                 pTarget = ObjectAccessor::GetUnit(*m_caster, ((Player*)m_caster)->GetSelectionGuid());
             else if (m_targets.getUnitTarget())

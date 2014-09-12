@@ -380,8 +380,8 @@ void Object::BuildMovementUpdate(ByteBuffer* data, uint16 updateFlags) const
     // 0x4
     if (updateFlags & UPDATEFLAG_HAS_ATTACKING_TARGET)      // packed guid (current target guid)
     {
-        if (((Unit*)this)->getVictim())
-            *data << ((Unit*)this)->getVictim()->GetPackGUID();
+        if (Unit* pVictim = ((Unit*)this)->getVictim())
+            *data << pVictim->GetPackGUID();
         else
             data->appendPackGUID(0);
     }
@@ -1303,9 +1303,11 @@ void WorldObject::UpdateAllowedPositionZ(float x, float y, float& z) const
         {
             // non fly unit don't must be in air
             // non swim unit must be at ground (mostly speedup, because it don't must be in water and water level check less fast
-            if (!((Creature const*)this)->CanFly())
+            Creature const* pVictim = ((Creature const*)this);
+
+            if (!pVictim->CanFly())
             {
-                bool canSwim = ((Creature const*)this)->CanSwim();
+                bool canSwim = pVictim->CanSwim();
                 float ground_z = z;
                 float max_z = canSwim
                               ? GetTerrain()->GetWaterOrGroundLevel(x, y, z, &ground_z, !((Unit const*)this)->HasAuraType(SPELL_AURA_WATER_WALK))

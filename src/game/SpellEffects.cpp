@@ -4106,8 +4106,8 @@ void Spell::EffectJump(SpellEffectIndex eff_idx)
             Unit* pTarget = NULL;
             if (m_targets.getUnitTarget() && m_targets.getUnitTarget() != m_caster)
                 pTarget = m_targets.getUnitTarget();
-            else if (unitTarget->getVictim())
-                pTarget = m_caster->getVictim();
+            else if (Unit* pVictim = m_caster->getVictim())
+                pTarget = pVictim;
             else if (m_caster->GetTypeId() == TYPEID_PLAYER)
                 pTarget = m_caster->GetMap()->GetUnit(((Player*)m_caster)->GetSelectionGuid());
 
@@ -4218,8 +4218,8 @@ void Spell::EffectTeleportUnits(SpellEffectIndex eff_idx)   // TODO - Use target
             // some spell at client send caster
             if (m_targets.getUnitTarget() && m_targets.getUnitTarget() != unitTarget)
                 pTarget = m_targets.getUnitTarget();
-            else if (unitTarget->getVictim())
-                pTarget = unitTarget->getVictim();
+            else if (Unit* pVictim = unitTarget->getVictim())
+                pTarget = pVictim;
             else if (unitTarget->GetTypeId() == TYPEID_PLAYER)
                 pTarget = unitTarget->GetMap()->GetUnit(((Player*)unitTarget)->GetSelectionGuid());
 
@@ -8807,8 +8807,8 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     unitTarget->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
                     unitTarget->CastSpell(unitTarget, 64474, true);
 
-                    if (m_caster->getVictim())
-                        ((Creature*)unitTarget)->AI()->AttackStart(m_caster->getVictim());
+                    if (Unit* pVictim = m_caster->getVictim())
+                        ((Creature*)unitTarget)->AI()->AttackStart(pVictim);
                     return;
                 }
                 case 62524:                                 // Attuned to Nature 2 Dose Reduction

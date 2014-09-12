@@ -161,9 +161,11 @@ Player* World::FindPlayerInZone(uint32 zone)
     {
         if (!itr->second)
             continue;
+
         Player* player = itr->second->GetPlayer();
         if (!player)
             continue;
+
         if (player->IsInWorld() && player->GetZoneId() == zone)
         {
             // Used by the weather system. We return the player to broadcast the change weather message to him and all players in the zone.
@@ -1763,6 +1765,34 @@ void World::SendDefenseMessage(uint32 zoneId, int32 textId)
             itr->second->SendPacket(&data);
         }
     }
+}
+
+/// Send a packet to all players (or players selected team) in the zone (except self if mentioned)
+bool World::SendZoneMessage(uint32 zone, WorldPacket* packet, WorldSession* self /*= NULL*/, Team team /*= TEAM_NONE*/) const
+{
+    bool foundPlayerToSend = false;
+    for (SessionMap::const_iterator itr = m_sessions.begin(); itr != m_sessions.end(); ++itr)
+    {
+        if (itr->second &&
+            itr->second->GetPlayer() &&
+            itr->second->GetPlayer()->IsInWorld() &&
+            itr->second->GetPlayer()->GetZoneId() == zone &&
+            itr->second != self &&
+            (team == TEAM_NONE || itr->second->GetPlayer()->GetTeam() == team))
+        {
+            itr->second->SendPacket(packet);
+            foundPlayerToSend = true;
+        }
+    }
+    return foundPlayerToSend;
+}
+
+/// Send a System Message to all players in the zone (except self if mentioned)
+void World::SendZoneText(uint32 zone, const char* text, WorldSession* self /*= NULL*/, Team team /*= TEAM_NONE*/)
+{
+    WorldPacket data;
+    ChatHandler::BuildChatPacket(data, CHAT_MSG_SYSTEM, text, LANG_UNIVERSAL);
+    SendZoneMessage(zone, &data, self, team);
 }
 
 /// Kick (and save) all players
