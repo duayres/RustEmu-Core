@@ -1283,7 +1283,9 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
          * @param flat_mod The same as sent to Unit::GetCombatReach
          * @return true if we can reach pVictim with a melee attack
          */
-        bool CanReachWithMeleeAttack(Unit const* pVictim, float flat_mod = 0.0f) const;
+
+        float GetMeleeAttackDistance(Unit* pVictim = NULL) const;
+        bool CanReachWithMeleeAttack(Unit* pVictim, float flat_mod = 0.0f) const;
         uint32 m_extraAttacks;
 
         void _addAttacker(Unit* pAttacker)                  //< (Internal Use) must be called only from Unit::Attack(Unit*)

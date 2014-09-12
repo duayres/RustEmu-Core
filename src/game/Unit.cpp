@@ -491,11 +491,21 @@ float Unit::GetCombatDistance(Unit const* target, bool forMeleeRange) const
     return (dist > 0.0f ? dist : 0.0f);
 }
 
-bool Unit::CanReachWithMeleeAttack(Unit const* pVictim, float flat_mod /*= 0.0f*/) const
+float Unit::GetMeleeAttackDistance(Unit* pVictim /* NULL */) const
+{
+    // The measured values show BASE_MELEE_OFFSET in (1.3224, 1.342)
+    float dist = GetFloatValue(UNIT_FIELD_COMBATREACH) +
+    (pVictim ? pVictim->GetFloatValue(UNIT_FIELD_COMBATREACH) : 0.0f) +
+    BASE_MELEERANGE_OFFSET;
+    
+    return (dist < ATTACK_DISTANCE) ? ATTACK_DISTANCE : dist;
+}
+
+bool Unit::CanReachWithMeleeAttack(Unit* pVictim, float flat_mod /*= 0.0f*/) const
 {
     MANGOS_ASSERT(pVictim);
 
-    float reach = GetCombatReach(pVictim, true, flat_mod);
+    float reach = GetMeleeAttackDistance(pVictim) + flat_mod;
 
     // This check is not related to bounding radius
     float dx = GetPositionX() - pVictim->GetPositionX();
