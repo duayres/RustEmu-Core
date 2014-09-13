@@ -590,13 +590,21 @@ uint32 Unit::DealDamage(Unit* pVictim, uint32 damage, DamageInfo* damageInfo, Da
 {
     // wrapper for old method of damage calculation (mostly for scripts)
     if (!damageInfo)
-        damageInfo = &DamageInfo(this, pVictim, spellProto);
-    
-    damageInfo->cleanDamage = damageInfo->damage;
-    damageInfo->damage = damage;
-    damageInfo->damageType = damagetype;
-    
-    return DealDamage(pVictim, damageInfo, durabilityLoss);
+    {
+        DamageInfo tmpdamageInfo = DamageInfo(this, pVictim, spellProto);
+        tmpdamageInfo.cleanDamage = damage;
+        tmpdamageInfo.damage = damage;
+        tmpdamageInfo.damageType = damagetype;
+        return DealDamage(pVictim, &tmpdamageInfo, durabilityLoss);
+    }
+    else
+    {
+        damageInfo->m_spellInfo = spellProto;
+        damageInfo->cleanDamage = damageInfo->damage;
+        damageInfo->damage = damage;
+        damageInfo->damageType = damagetype;
+        return DealDamage(pVictim, damageInfo, durabilityLoss);
+    }
 }
 
 uint32 Unit::DealDamage(Unit *pVictim, DamageInfo* damageInfo, bool durabilityLoss)
@@ -2563,26 +2571,26 @@ void Unit::CalculateDamageAbsorbAndResist(Unit* pCaster, SpellSchoolMask schoolM
                 continue;
 
             // Damage can be splitted only if aura has an alive caster
-            Unit* caster = (*i)->GetCaster();
+            Unit *caster = (*i)->GetCaster();
             if (!caster || caster == this || !caster->IsInWorld() || !caster->isAlive())
                 continue;
 
-            int32 currentAbsorb;
+            DamageInfo damageInfo = DamageInfo(pCaster, caster, (*i)->GetSpellProto());
+            damageInfo.CleanDamage(0, 0, BASE_ATTACK, MELEE_HIT_NORMAL);
+            damageInfo.damageType = DIRECT_DAMAGE;
+
             if (RemainingDamage >= (*i)->GetModifier()->m_amount)
-                currentAbsorb = (*i)->GetModifier()->m_amount;
+                damageInfo.damage = (*i)->GetModifier()->m_amount;
             else
-                currentAbsorb = RemainingDamage;
+                damageInfo.damage = RemainingDamage;
 
-            RemainingDamage -= currentAbsorb;
+            RemainingDamage -= damageInfo.damage;
 
-            uint32 splitted = currentAbsorb;
-            uint32 splitted_absorb = 0;
-            pCaster->DealDamageMods(caster, splitted, &splitted_absorb);
+            pCaster->DealDamageMods(caster, damageInfo.damage, &damageInfo.absorb);
 
-            pCaster->SendSpellNonMeleeDamageLog(caster, (*i)->GetSpellProto()->Id, splitted, schoolMask, splitted_absorb, 0, false, 0, false);
-
-            DamageInfo cleanDamage = DamageInfo(0);
-            cleanDamage.CleanDamage(splitted, 0, BASE_ATTACK, MELEE_HIT_NORMAL);
+            pCaster->SendSpellNonMeleeDamageLog(caster, (*i)->GetSpellProto()->Id, damageInfo.damage, schoolMask, damageInfo.absorb, 0, false, 0, false);
+            damageInfo.cleanDamage = damageInfo.damage - damageInfo.absorb;
+            pCaster->DealDamage(caster, &damageInfo, false);
         }
 
         AuraList const& vSplitDamagePct = GetAurasByType(SPELL_AURA_SPLIT_DAMAGE_PCT);
