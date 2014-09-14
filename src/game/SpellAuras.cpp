@@ -7380,7 +7380,7 @@ void Aura::PeriodicTick()
             if (pCaster->GetTypeId() == TYPEID_PLAYER)
                 damageInfo.damage -= target->GetSpellDamageReduction(damageInfo.damage);
 
-            target->CalculateDamageAbsorbAndResist(pCaster, damageInfo.SchoolMask(), DOT, damageInfo.damage, &damageInfo.absorb, &damageInfo.resist, !(GetSpellProto()->AttributesEx & SPELL_ATTR_EX_CANT_REFLECTED));
+            target->CalculateDamageAbsorbAndResist(pCaster, &damageInfo, !(GetSpellProto()->AttributesEx & SPELL_ATTR_EX_CANT_REFLECTED));
 
             DETAIL_FILTER_LOG(LOG_FILTER_PERIODIC_AFFECTS, "PeriodicTick: %s attacked %s for %u dmg inflicted by %u abs is %u",
                 GetCasterGuid().GetString().c_str(), target->GetGuidStr().c_str(), damageInfo.damage, GetId(), damageInfo.absorb);
@@ -7477,7 +7477,7 @@ void Aura::PeriodicTick()
             if (GetCasterGuid().IsPlayer())
                 damageInfo.damage -= target->GetSpellDamageReduction(damageInfo.damage);
 
-            target->CalculateDamageAbsorbAndResist(pCaster, GetSpellSchoolMask(spellProto), DOT, damageInfo.damage, &damageInfo.absorb, &damageInfo.resist, !(spellProto->AttributesEx & SPELL_ATTR_EX_CANT_REFLECTED));
+            target->CalculateDamageAbsorbAndResist(pCaster, &damageInfo, !(spellProto->AttributesEx & SPELL_ATTR_EX_CANT_REFLECTED));
 
             DETAIL_FILTER_LOG(LOG_FILTER_PERIODIC_AFFECTS, "PeriodicTick: %s health leech of %s for %u dmg inflicted by %u abs is %u",
                 GetCasterGuid().GetString().c_str(), target->GetGuidStr().c_str(), damageInfo.damage, GetId(), damageInfo.absorb);

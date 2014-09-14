@@ -1443,6 +1443,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         uint32 GetResistance(SpellSchools school) const { return GetUInt32Value(UNIT_FIELD_RESISTANCES + school); }
         void SetResistance(SpellSchools school, int32 val) { SetStatInt32Value(UNIT_FIELD_RESISTANCES + school, val); }
+        uint32 GetResistance(SpellSchoolMask schoolMask) const;
 
         uint32 GetHealth()    const { return GetUInt32Value(UNIT_FIELD_HEALTH); }
         uint32 GetMaxHealth() const { return GetUInt32Value(UNIT_FIELD_MAXHEALTH); }
@@ -1534,7 +1535,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         float MeleeMissChanceCalc(const Unit* pVictim, WeaponAttackType attType) const;
 
-        void CalculateMeleeDamage(Unit* pVictim, uint32 damage, DamageInfo* damageInfo, WeaponAttackType attackType = BASE_ATTACK);
+        void CalculateMeleeDamage(DamageInfo *damageInfo);
         void DealMeleeDamage(DamageInfo* damageInfo, bool durabilityLoss);
 
         bool IsAllowedDamageInArea(Unit* pVictim) const;
@@ -1961,6 +1962,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         Aura* GetAura(uint32 spellId, SpellEffectIndex effindex);
         Aura* GetAura(AuraType type, SpellFamily family, uint64 familyFlag, uint32 familyFlag2 = 0, ObjectGuid casterGuid = ObjectGuid());
+        Aura* GetAuraByEffectMask(AuraType type, SpellFamily family, ClassFamilyMask const& classMask, ObjectGuid casterGuid = ObjectGuid());
         Aura* GetTriggeredByClientAura(uint32 spellId) const;
         SpellAuraHolder* GetSpellAuraHolder(uint32 spellid) const;
         SpellAuraHolder* GetSpellAuraHolder(uint32 spellid, ObjectGuid casterGUID) const;
@@ -2098,7 +2100,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         virtual bool IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex index, bool castOnSelf) const;
 
         uint32 CalcArmorReducedDamage(Unit* pVictim, const uint32 damage);
-        void CalculateDamageAbsorbAndResist(Unit* pCaster, SpellSchoolMask schoolMask, DamageEffectType damagetype, const uint32 damage, uint32* absorb, uint32* resist, bool canReflect = false);
+        void CalculateDamageAbsorbAndResist(Unit *pCaster, DamageInfo* damageInfo, bool canReflect = false);
         void CalculateAbsorbResistBlock(Unit* pCaster, DamageInfo* damageInfo, SpellEntry const* spellProto, WeaponAttackType attType = BASE_ATTACK);
         void CalculateHealAbsorb(uint32 heal, uint32* absorb);
 
@@ -2115,8 +2117,8 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         int32 CalculateSpellDamage(Unit const* target, SpellEntry const* spellProto, SpellEffectIndex effect_index, int32 const* basePoints = NULL);
 
-        uint32 CalcNotIgnoreAbsorbDamage(uint32 damage, SpellSchoolMask damageSchoolMask, SpellEntry const* spellInfo = NULL);
-        uint32 CalcNotIgnoreDamageReduction(uint32 damage, SpellSchoolMask damageSchoolMask);
+        uint32 CalcNotIgnoreAbsorbDamage(DamageInfo* damageInfo);
+        uint32 CalcNotIgnoreDamageReduction(DamageInfo* damageInfo);
         int32 CalculateAuraDuration(SpellEntry const* spellProto, uint32 effectMask, int32 duration, Unit const* caster);
 
         float CalculateLevelPenalty(SpellEntry const* spellProto) const;

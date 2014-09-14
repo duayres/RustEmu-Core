@@ -23,6 +23,7 @@
 #include "DBCEnums.h"
 #include "Path.h"
 #include "Platform/Define.h"
+#include "SpellClassMask.h"
 #include "SharedDefines.h"
 
 #include <map>
@@ -1577,6 +1578,30 @@ struct SoundEntriesEntry
     // 29       m_soundEntriesAdvancedID
 };
 
+// template arguments for declaration
+#define CFM_ARGS_1  ClassFlag N1
+#define CFM_ARGS_2  CFM_ARGS_1, ClassFlag N2
+#define CFM_ARGS_3  CFM_ARGS_2, ClassFlag N3
+#define CFM_ARGS_4  CFM_ARGS_3, ClassFlag N4
+#define CFM_ARGS_5  CFM_ARGS_4, ClassFlag N5
+#define CFM_ARGS_6  CFM_ARGS_5, ClassFlag N6
+#define CFM_ARGS_7  CFM_ARGS_6, ClassFlag N7
+#define CFM_ARGS_8  CFM_ARGS_7, ClassFlag N8
+#define CFM_ARGS_9  CFM_ARGS_8, ClassFlag N9
+#define CFM_ARGS_10 CFM_ARGS_9, ClassFlag N10
+
+// template values for function calls
+#define CFM_VALUES_1  N1
+#define CFM_VALUES_2  CFM_VALUES_1, N2
+#define CFM_VALUES_3  CFM_VALUES_2, N3
+#define CFM_VALUES_4  CFM_VALUES_3, N4
+#define CFM_VALUES_5  CFM_VALUES_4, N5
+#define CFM_VALUES_6  CFM_VALUES_5, N6
+#define CFM_VALUES_7  CFM_VALUES_6, N7
+#define CFM_VALUES_8  CFM_VALUES_7, N8
+#define CFM_VALUES_9  CFM_VALUES_8, N9
+#define CFM_VALUES_10 CFM_VALUES_9, N10
+
 struct ClassFamilyMask
 {
     uint64 Flags;
@@ -1584,9 +1609,13 @@ struct ClassFamilyMask
 
     ClassFamilyMask() : Flags(0), Flags2(0) {}
     explicit ClassFamilyMask(uint64 familyFlags, uint32 familyFlags2 = 0) : Flags(familyFlags), Flags2(familyFlags2) {}
+    ClassFamilyMask(uint32 f0, uint32 f1, uint32 f2) : Flags(uint64(f0) | (uint64(f1) << 32)), Flags2(f2) {}
+
+    // predefined empty object for safe return by reference
+    static ClassFamilyMask const Null;
 
     bool Empty() const { return Flags == 0 && Flags2 == 0; }
-    bool operator!() const { return Empty(); }
+    bool operator! () const { return Empty(); }
     operator void const* () const { return Empty() ? NULL : this; }// for allow normal use in if(mask)
 
     bool IsFitToFamilyMask(uint64 familyFlags, uint32 familyFlags2 = 0) const
@@ -1599,17 +1628,300 @@ struct ClassFamilyMask
         return (Flags & mask.Flags) || (Flags2 & mask.Flags2);
     }
 
-    uint64 operator& (uint64 mask) const                    // possible will removed at finish convertion code use IsFitToFamilyMask
+    uint64 operator& (uint64 mask) const                     // possible will removed at finish convertion code use IsFitToFamilyMask
     {
         return Flags & mask;
     }
 
-    ClassFamilyMask& operator|= (ClassFamilyMask const& mask)
+    // test if specified bits are set (run-time)
+    bool test(size_t offset) const
     {
-        Flags |= mask.Flags;
-        Flags2 |= mask.Flags2;
+        return reinterpret_cast<uint8 const*>(this)[offset >> 3] & (uint8(1) << (offset & 7));
+    }
+
+    // test if specified bits are set (compile-time)
+    template <CFM_ARGS_1>
+    bool test() const
+    {
+        return (Flags  & BitMask<uint64, true, CFM_VALUES_1>::value) ||
+            (Flags2 & BitMask<uint32, false, CFM_VALUES_1>::value);
+    }
+
+    template <CFM_ARGS_2>
+    bool test() const
+    {
+        return (Flags  & BitMask<uint64, true, CFM_VALUES_2>::value) ||
+            (Flags2 & BitMask<uint32, false, CFM_VALUES_2>::value);
+    }
+
+    template <CFM_ARGS_3>
+    bool test() const
+    {
+        return (Flags  & BitMask<uint64, true, CFM_VALUES_3>::value) ||
+            (Flags2 & BitMask<uint32, false, CFM_VALUES_3>::value);
+    }
+
+    template <CFM_ARGS_4>
+    bool test() const
+    {
+        return (Flags  & BitMask<uint64, true, CFM_VALUES_4>::value) ||
+            (Flags2 & BitMask<uint32, false, CFM_VALUES_4>::value);
+    }
+
+    template <CFM_ARGS_5>
+    bool test() const
+    {
+        return (Flags  & BitMask<uint64, true, CFM_VALUES_5>::value) ||
+            (Flags2 & BitMask<uint32, false, CFM_VALUES_5>::value);
+    }
+
+    template <CFM_ARGS_6>
+    bool test() const
+    {
+        return (Flags  & BitMask<uint64, true, CFM_VALUES_6>::value) ||
+            (Flags2 & BitMask<uint32, false, CFM_VALUES_6>::value);
+    }
+
+    template <CFM_ARGS_7>
+    bool test() const
+    {
+        return (Flags  & BitMask<uint64, true, CFM_VALUES_7>::value) ||
+            (Flags2 & BitMask<uint32, false, CFM_VALUES_7>::value);
+    }
+
+    template <CFM_ARGS_8>
+    bool test() const
+    {
+        return (Flags  & BitMask<uint64, true, CFM_VALUES_8>::value) ||
+            (Flags2 & BitMask<uint32, false, CFM_VALUES_8>::value);
+    }
+
+    template <CFM_ARGS_9>
+    bool test() const
+    {
+        return (Flags  & BitMask<uint64, true, CFM_VALUES_9>::value) ||
+            (Flags2 & BitMask<uint32, false, CFM_VALUES_9>::value);
+    }
+
+    template <CFM_ARGS_10>
+    bool test() const
+    {
+        return (Flags  & BitMask<uint64, true, CFM_VALUES_10>::value) ||
+            (Flags2 & BitMask<uint32, false, CFM_VALUES_10>::value);
+    }
+
+    // named constructors (compile-time)
+    template <CFM_ARGS_1>
+    static ClassFamilyMask create()
+    {
+        return ClassFamilyMask(BitMask<uint64, true, CFM_VALUES_1>::value,
+            BitMask<uint32, false, CFM_VALUES_1>::value);
+    }
+
+    template <CFM_ARGS_2>
+    static ClassFamilyMask create()
+    {
+        return ClassFamilyMask(BitMask<uint64, true, CFM_VALUES_2>::value,
+            BitMask<uint32, false, CFM_VALUES_2>::value);
+    }
+
+    template <CFM_ARGS_3>
+    static ClassFamilyMask create()
+    {
+        return ClassFamilyMask(BitMask<uint64, true, CFM_VALUES_3>::value,
+            BitMask<uint32, false, CFM_VALUES_3>::value);
+    }
+
+    template <CFM_ARGS_4>
+    static ClassFamilyMask create()
+    {
+        return ClassFamilyMask(BitMask<uint64, true, CFM_VALUES_4>::value,
+            BitMask<uint32, false, CFM_VALUES_4>::value);
+    }
+
+    template <CFM_ARGS_5>
+    static ClassFamilyMask create()
+    {
+        return ClassFamilyMask(BitMask<uint64, true, CFM_VALUES_5>::value,
+            BitMask<uint32, false, CFM_VALUES_5>::value);
+    }
+
+    template <CFM_ARGS_6>
+    static ClassFamilyMask create()
+    {
+        return ClassFamilyMask(BitMask<uint64, true, CFM_VALUES_6>::value,
+            BitMask<uint32, false, CFM_VALUES_6>::value);
+    }
+
+    template <CFM_ARGS_7>
+    static ClassFamilyMask create()
+    {
+        return ClassFamilyMask(BitMask<uint64, true, CFM_VALUES_7>::value,
+            BitMask<uint32, false, CFM_VALUES_7>::value);
+    }
+
+    template <CFM_ARGS_8>
+    static ClassFamilyMask create()
+    {
+        return ClassFamilyMask(BitMask<uint64, true, CFM_VALUES_8>::value,
+            BitMask<uint32, false, CFM_VALUES_8>::value);
+    }
+
+    template <CFM_ARGS_9>
+    static ClassFamilyMask create()
+    {
+        return ClassFamilyMask(BitMask<uint64, true, CFM_VALUES_9>::value,
+            BitMask<uint32, false, CFM_VALUES_9>::value);
+    }
+
+    template <CFM_ARGS_10>
+    static ClassFamilyMask create()
+    {
+        return ClassFamilyMask(BitMask<uint64, true, CFM_VALUES_10>::value,
+            BitMask<uint32, false, CFM_VALUES_10>::value);
+    }
+
+    // comparison operators
+    bool operator== (ClassFamilyMask const& rhs) const
+    {
+        return Flags == rhs.Flags && Flags2 == rhs.Flags2;
+    }
+
+    bool operator!= (ClassFamilyMask const& rhs) const
+    {
+        return Flags != rhs.Flags || Flags2 != rhs.Flags2;
+    }
+
+    // bitwise operators
+    ClassFamilyMask operator& (ClassFamilyMask const& rhs) const
+    {
+        return ClassFamilyMask(Flags & rhs.Flags, Flags2 & rhs.Flags2);
+    }
+
+    ClassFamilyMask operator| (ClassFamilyMask const& rhs) const
+    {
+        return ClassFamilyMask(Flags | rhs.Flags, Flags2 | rhs.Flags2);
+    }
+
+    ClassFamilyMask operator^ (ClassFamilyMask const& rhs) const
+    {
+        return ClassFamilyMask(Flags ^ rhs.Flags, Flags2 ^ rhs.Flags2);
+    }
+
+    ClassFamilyMask operator~ () const
+    {
+        return ClassFamilyMask(~Flags, ~Flags2);
+    }
+
+    // assignation operators
+    ClassFamilyMask& operator= (ClassFamilyMask const& rhs)
+    {
+        Flags = rhs.Flags;
+        Flags2 = rhs.Flags2;
         return *this;
     }
+
+    ClassFamilyMask& operator&= (ClassFamilyMask const& rhs)
+    {
+        Flags &= rhs.Flags;
+        Flags2 &= rhs.Flags2;
+        return *this;
+    }
+
+    ClassFamilyMask& operator|= (ClassFamilyMask const& rhs)
+    {
+        Flags |= rhs.Flags;
+        Flags2 |= rhs.Flags2;
+        return *this;
+    }
+
+    ClassFamilyMask& operator^= (ClassFamilyMask const& rhs)
+    {
+        Flags ^= rhs.Flags;
+        Flags2 ^= rhs.Flags2;
+        return *this;
+    }
+
+    // templates used for compile-time mask calculation
+private:
+    enum { LOW_WORD_SIZE = 64 };
+
+    template <typename T, int Val, bool IsLow, bool InRange>
+    struct DoShift
+    {
+        static T const value = T(1) << Val;
+    };
+
+    template <typename T, int Val>
+    struct DoShift<T, Val, false, true>
+    {
+        static T const value = T(1) << (Val - LOW_WORD_SIZE);
+    };
+
+    template <typename T, int Val, bool IsLow>
+    struct DoShift<T, Val, IsLow, false>
+    {
+        static T const value = 0;
+    };
+
+    template <int N, bool IsLow>
+    struct IsInRange
+    {
+        static bool const value = IsLow ? N < LOW_WORD_SIZE : N >= LOW_WORD_SIZE;
+    };
+
+    template <typename T, bool IsLow, int N1, int N2 = -1, int N3 = -1, int N4 = -1, int N5 = -1, int N6 = -1, int N7 = -1, int N8 = -1, int N9 = -1, int N10 = -1>
+    struct BitMask
+    {
+        static T const value = DoShift<T, N1, IsLow, IsInRange<N1, IsLow>::value>::value | BitMask<T, IsLow, N2, N3, N4, N5, N6, N7, N8, N9, N10, -1>::value;
+    };
+
+    template <typename T, bool IsLow>
+    struct BitMask<T, IsLow, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1>
+    {
+        static T const value = 0;
+    };
+};
+
+struct MANGOS_DLL_SPEC SpellEntry;
+
+struct SpellEffectEntry
+{
+    SpellEffectEntry(SpellEntry const* spellEntry, SpellEffectIndex i);
+    SpellEffectEntry() {};
+    SpellEffectEntry(SpellEffectEntry const& effect);
+
+    //uint32        Id;                                         // 0        m_ID
+    uint32        Effect;                                       // 73-75    m_effect
+    float         EffectMultipleValue;                          // 106-108  m_effectAmplitude
+    uint32        EffectApplyAuraName;                          // 100-102  m_effectAura
+    uint32        EffectAmplitude;                              // 103-105  m_effectAuraPeriod
+    int32         EffectBasePoints;                             // 82-84    m_effectBasePoints (don't must be used in spell/auras explicitly, must be used cached Spell::m_currentBasePoints)
+    //float         unk_320_4;                                  // 169-171  3.2.0
+    float         DmgMultiplier;                                // 156-158  m_effectChainAmplitude
+    uint32        EffectChainTarget;                            // 109-111  m_effectChainTargets
+    int32         EffectDieSides;                               // 76-78    m_effectDieSides
+    uint32        EffectItemType;                               // 112-114  m_effectItemType
+    uint32        EffectMechanic;                               // 85-87    m_effectMechanic
+    int32         EffectMiscValue;                              // 115-117  m_effectMiscValue
+    int32         EffectMiscValueB;                             // 118-120  m_effectMiscValueB
+    float         EffectPointsPerComboPoint;                    // 124-126  m_effectPointsPerCombo
+    uint32        EffectRadiusIndex;                            // 94-96    m_effectRadiusIndex - spellradius.dbc
+    //uint32        EffectRadiusMaxIndex;                       // 97-99    4.0.0
+    float         EffectRealPointsPerLevel;                     // 79-81    m_effectRealPointsPerLevel
+    ClassFamilyMask EffectSpellClassMask;                       // 127-129  m_effectSpellClassMask
+    uint32        EffectTriggerSpell;                           // 121-123  m_effectTriggerSpell
+    uint32        EffectImplicitTargetA;                        // 88-90    m_implicitTargetA
+    uint32        EffectImplicitTargetB;                        // 91-93    m_implicitTargetB
+    uint32        EffectSpellId;                                // new 4.0.0
+    uint32        EffectIndex;                                  // new 4.0.0
+    //uint32        unk;                                        // 24 - 4.2.0
+    // helpers
+
+    int32 CalculateSimpleValue() const { return EffectBasePoints; };
+
+    void Initialize(const SpellEntry* spellEntry, SpellEffectIndex i);
+
 };
 
 #define MAX_SPELL_REAGENTS 8
@@ -1737,7 +2049,7 @@ struct SpellEntry
 
         bool IsFitToFamilyMask(uint64 familyFlags, uint32 familyFlags2 = 0) const
         {
-            return SpellFamilyFlags.IsFitToFamilyMask(familyFlags, familyFlags2);
+            return GetSpellFamilyFlags().IsFitToFamilyMask(familyFlags, familyFlags2);
         }
 
         bool IsFitToFamily(SpellFamily family, uint64 familyFlags, uint32 familyFlags2 = 0) const
@@ -1747,7 +2059,7 @@ struct SpellEntry
 
         bool IsFitToFamilyMask(ClassFamilyMask const& mask) const
         {
-            return SpellFamilyFlags.IsFitToFamilyMask(mask);
+            return GetSpellFamilyFlags().IsFitToFamilyMask(mask);
         }
 
         bool IsFitToFamily(SpellFamily family, ClassFamilyMask const& mask) const
@@ -1755,14 +2067,118 @@ struct SpellEntry
             return SpellFamily(SpellFamilyName) == family && IsFitToFamilyMask(mask);
         }
 
-        inline bool HasAttribute(SpellAttributes attribute) const { return Attributes & attribute; }
-        inline bool HasAttribute(SpellAttributesEx attribute) const { return AttributesEx & attribute; }
-        inline bool HasAttribute(SpellAttributesEx2 attribute) const { return AttributesEx2 & attribute; }
-        inline bool HasAttribute(SpellAttributesEx3 attribute) const { return AttributesEx3 & attribute; }
-        inline bool HasAttribute(SpellAttributesEx4 attribute) const { return AttributesEx4 & attribute; }
-        inline bool HasAttribute(SpellAttributesEx5 attribute) const { return AttributesEx5 & attribute; }
-        inline bool HasAttribute(SpellAttributesEx6 attribute) const { return AttributesEx6 & attribute; }
-        inline bool HasAttribute(SpellAttributesEx7 attribute) const { return AttributesEx7 & attribute; }
+        // compile time version
+        template <SpellFamily family, CFM_ARGS_1>
+        bool IsFitToFamily() const
+        {
+            return SpellFamily(SpellFamilyName) == family && GetSpellFamilyFlags().test<CFM_VALUES_1>();
+        }
+
+        template <SpellFamily family, CFM_ARGS_2>
+        bool IsFitToFamily() const
+        {
+            return SpellFamily(SpellFamilyName) == family && GetSpellFamilyFlags().test<CFM_VALUES_2>();
+        }
+
+        template <SpellFamily family, CFM_ARGS_3>
+        bool IsFitToFamily() const
+        {
+            return SpellFamily(SpellFamilyName) == family && GetSpellFamilyFlags().test<CFM_VALUES_3>();
+        }
+
+        template <SpellFamily family, CFM_ARGS_4>
+        bool IsFitToFamily() const
+        {
+            return SpellFamily(SpellFamilyName) == family && GetSpellFamilyFlags().test<CFM_VALUES_4>();
+        }
+
+        template <SpellFamily family, CFM_ARGS_5>
+        bool IsFitToFamily() const
+        {
+            return SpellFamily(SpellFamilyName) == family && GetSpellFamilyFlags().test<CFM_VALUES_5>();
+        }
+
+        template <SpellFamily family, CFM_ARGS_6>
+        bool IsFitToFamily() const
+        {
+            return SpellFamily(SpellFamilyName) == family && GetSpellFamilyFlags().test<CFM_VALUES_6>();
+        }
+
+        template <SpellFamily family, CFM_ARGS_7>
+        bool IsFitToFamily() const
+        {
+            return SpellFamily(SpellFamilyName) == family && GetSpellFamilyFlags().test<CFM_VALUES_7>();
+        }
+
+        template <SpellFamily family, CFM_ARGS_8>
+        bool IsFitToFamily() const
+        {
+            return SpellFamily(SpellFamilyName) == family && GetSpellFamilyFlags().test<CFM_VALUES_8>();
+        }
+
+        template <SpellFamily family, CFM_ARGS_9>
+        bool IsFitToFamily() const
+        {
+            return SpellFamily(SpellFamilyName) == family && GetSpellFamilyFlags().test<CFM_VALUES_9>();
+        }
+
+        template <SpellFamily family, CFM_ARGS_10>
+        bool IsFitToFamily() const
+        {
+            return SpellFamily(SpellFamilyName) == family && GetSpellFamilyFlags().test<CFM_VALUES_10>();
+        }
+
+        inline uint32 GetAttributes() const        { return Attributes; };
+        inline uint32 GetAttributesEx() const      { return AttributesEx; };
+        inline uint32 GetAttributesEx2() const     { return AttributesEx2; };
+        inline uint32 GetAttributesEx3() const     { return AttributesEx3; };
+        inline uint32 GetAttributesEx4() const     { return AttributesEx4; };
+        inline uint32 GetAttributesEx5() const     { return AttributesEx5; };
+        inline uint32 GetAttributesEx6() const     { return AttributesEx6; };
+        inline uint32 GetAttributesEx7() const     { return AttributesEx7; };
+        //inline uint32 GetAttributesEx8() const     { return AttributesEx8; };
+        //inline uint32 GetAttributesEx9() const     { return AttributesEx9; };
+        //inline uint32 GetAttributesEx10() const     { return AttributesEx10; };
+        //inline uint32 GetAttributesEx11() const     { return AttributesEx11; };
+
+        inline bool HasAttribute(SpellAttributes attribute) const { return GetAttributes() & attribute; }
+        inline bool HasAttribute(SpellAttributesEx attribute) const { return GetAttributesEx() & attribute; }
+        inline bool HasAttribute(SpellAttributesEx2 attribute) const { return GetAttributesEx2() & attribute; }
+        inline bool HasAttribute(SpellAttributesEx3 attribute) const { return GetAttributesEx3() & attribute; }
+        inline bool HasAttribute(SpellAttributesEx4 attribute) const { return GetAttributesEx4() & attribute; }
+        inline bool HasAttribute(SpellAttributesEx5 attribute) const { return GetAttributesEx5() & attribute; }
+        inline bool HasAttribute(SpellAttributesEx6 attribute) const { return GetAttributesEx6() & attribute; }
+        inline bool HasAttribute(SpellAttributesEx7 attribute) const { return GetAttributesEx7() & attribute; }
+        //inline bool HasAttribute(SpellAttributesEx8 attribute) const { return GetAttributesEx8() & attribute; } 
+        //inline bool HasAttribute(SpellAttributesEx9 attribute) const { return GetAttributesEx9() & attribute; } 
+        //inline bool HasAttribute(SpellAttributesEx10 attribute) const { return GetAttributesEx10() & attribute; }
+        //inline bool HasAttribute(SpellAttributesEx11 attribute) const { return GetAttributesEx11() & attribute; }
+
+        inline uint32 GetMechanic() const { return Mechanic; };
+        inline uint32 GetManaCost() const { return manaCost; };
+        inline uint32 GetSpellFamilyName() const { return SpellFamilyName; };
+        inline uint32 GetRecoveryTime() const { return RecoveryTime; };
+        inline uint32 GetCategoryRecoveryTime() const { return CategoryRecoveryTime; };
+        inline uint32 GetAuraInterruptFlags() const { return AuraInterruptFlags; };
+        inline uint32 GetStackAmount() const { return StackAmount; };
+        inline uint32 GetEffectImplicitTargetAByIndex(SpellEffectIndex j) const { return EffectImplicitTargetA[j]; };
+        inline uint32 GetEffectImplicitTargetBByIndex(SpellEffectIndex j) const { return EffectImplicitTargetB[j]; };
+        inline uint32 GetEffectApplyAuraNameByIndex(SpellEffectIndex j) const   { return EffectApplyAuraName[j]; };
+        inline uint32 GetEffectMiscValue(SpellEffectIndex j) const              { return EffectMiscValue[j]; };
+        inline uint32 GetEffectMiscValueB(SpellEffectIndex j) const              { return EffectMiscValueB[j]; };
+        inline ClassFamilyMask GetSpellFamilyFlags() const                      { return SpellFamilyFlags; };
+
+        inline uint32 GetCastingTimeIndex() const        { return CastingTimeIndex; };
+        inline uint32 GetDurationIndex() const           { return DurationIndex; };
+        inline SpellRangeIndex GetRangeIndex() const     { return SpellRangeIndex(rangeIndex); };
+        inline float  GetSpeed() const                   { return speed; };
+        inline uint32 GetSpellVisual(uint8 idx = 0) const { return SpellVisual[idx]; };
+        inline uint32 GetSpellIconID() const             { return SpellIconID; };
+        inline uint32 GetActiveIconID() const            { return activeIconID; };
+        inline SpellSchoolMask GetSchoolMask() const     { return SpellSchoolMask(SchoolMask); };
+        inline Powers GetPowerType() const               { return Powers(powerType); };
+
+        SpellEffectEntry const* GetSpellEffect(SpellEffectIndex j) const;
 
     private:
         // prevent creating custom entries (copy data from original in fact)

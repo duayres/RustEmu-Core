@@ -394,6 +394,7 @@ set(SRC_GRP_WORLD_HANDLERS
     SpellAuraDefines.h
     SpellAuras.cpp
     SpellAuras.h
+    SpellClassMask.h
     SpellEffects.cpp
     SpellHandler.cpp
     TaxiHandler.cpp

@@ -657,6 +657,9 @@
     <ClInclude Include="..\..\src\game\SpellAuras.h">
       <Filter>World/Handlers</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\game\SpellClassMask.h">
+      <Filter>World/Handlers</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\src\game\Transports.h">
       <Filter>World/Handlers</Filter>
     </ClInclude>
