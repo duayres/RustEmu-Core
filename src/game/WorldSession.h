@@ -332,7 +332,7 @@ class MANGOS_DLL_SPEC WorldSession
 
         // Account Data
         AccountData* GetAccountData(AccountDataType type) { return &m_accountData[type]; }
-        void SetAccountData(AccountDataType type, time_t time_, std::string data);
+        void SetAccountData(AccountDataType type, time_t time_, const std::string &data);
         void SendAccountDataTimes(uint32 mask);
         void LoadGlobalAccountData();
         void LoadAccountData(QueryResult* result, uint32 mask);
@@ -704,8 +704,8 @@ class MANGOS_DLL_SPEC WorldSession
         void HandleQuestPushResult(WorldPacket& recvPacket);
 
         bool processChatmessageFurtherAfterSecurityChecks(std::string&, uint32);
-        void SendPlayerNotFoundNotice(std::string name);
-        void SendPlayerAmbiguousNotice(std::string name);
+        void SendPlayerNotFoundNotice(const std::string &name);
+        void SendPlayerAmbiguousNotice(const std::string &name);
         void SendWrongFactionNotice();
         void SendChatRestrictedNotice(ChatRestrictionType restriction);
         void HandleMessagechatOpcode(WorldPacket& recvPacket);
