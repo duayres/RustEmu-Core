@@ -29,10 +29,7 @@
 
 #include <boost/thread/recursive_mutex.hpp>
 #include <boost/thread/lock_guard.hpp>
-
-#if !defined (ACE_LACKS_PRAGMA_ONCE)
-#pragma once
-#endif /* ACE_LACKS_PRAGMA_ONCE */
+#include <chrono>
 
 #include "Common.h"
 #include "Auth/AuthCrypt.h"
@@ -122,7 +119,7 @@ private:
     bool AppendPacket(const WorldPacket &pct);
 
     /// Time in which the last ping was received
-    ACE_Time_Value m_LastPingTime;
+    std::chrono::system_clock::time_point m_LastPingTime;
 
     /// Keep track of over-speed pings ,to prevent ping flood.
     uint32 m_OverSpeedPings;

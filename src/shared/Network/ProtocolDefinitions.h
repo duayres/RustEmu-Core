@@ -24,8 +24,6 @@
 #include <boost/asio.hpp>
 #include <boost/shared_ptr.hpp>
 
-#include <ace/Message_Block.h>
-
 namespace protocol
 {
     typedef boost::asio::ip::tcp::acceptor Acceptor;
@@ -37,8 +35,6 @@ namespace protocol
     const uint32 READ_BUFFER_SIZE = 4096;
     const uint32 SEND_BUFFER_SIZE = 65536;
 }
-
-typedef ACE_Message_Block NetworkBuffer;
 
 class Socket;
 typedef boost::shared_ptr<Socket> SocketPtr;

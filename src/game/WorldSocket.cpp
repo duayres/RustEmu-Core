@@ -32,15 +32,17 @@
 #include "Log.h"
 #include "DBCStores.h"
 
+#include <chrono>
 #include <boost/bind.hpp>
 #include <boost/thread.hpp>
-#include <boost/date_time/posix_time/posix_time_duration.hpp>
 
 #if defined( __GNUC__ )
 #pragma pack(1)
 #else
 #pragma pack(push,1)
 #endif
+
+using namespace std::chrono;
 
 struct ServerPktHeader
 {
@@ -101,7 +103,6 @@ struct ClientPktHeader
 #endif
 
 WorldSocket::WorldSocket(NetworkManager& socketMrg,NetworkThread& owner) : Socket(socketMrg, owner),
-    m_LastPingTime(ACE_Time_Value::zero),
     m_OverSpeedPings(0),
     m_Session(0),
     m_RecvWPct(0),
@@ -174,8 +175,8 @@ bool WorldSocket::process_incoming_data()
         {
             // need to receive the header
             const size_t to_header = (m_ReadBuffer->length() > m_Header.space() ? m_Header.space() : m_ReadBuffer->length());
-            m_Header.copy(m_ReadBuffer->rd_ptr(), to_header);
-            m_ReadBuffer->rd_ptr(to_header);
+            m_Header.Write(m_ReadBuffer->read_data(), to_header);
+            m_ReadBuffer->Consume(to_header);
             
             if (m_Header.space() > 0)
             {
@@ -204,8 +205,8 @@ bool WorldSocket::process_incoming_data()
         {
             // need more data in the payload
             const size_t to_data = (m_ReadBuffer->length() > m_RecvPct.space() ? m_RecvPct.space() : m_ReadBuffer->length());
-            m_RecvPct.copy(m_ReadBuffer->rd_ptr(), to_data);
-            m_ReadBuffer->rd_ptr(to_data);
+            m_RecvPct.Write(m_ReadBuffer->read_data(), to_data);
+            m_ReadBuffer->Consume(to_data);
 
             if (m_RecvPct.space() > 0)
             {
@@ -229,9 +230,9 @@ int WorldSocket::handle_input_header(void)
 
     MANGOS_ASSERT(m_Header.length() == sizeof(ClientPktHeader));
 
-    m_Crypt.DecryptRecv((uint8*) m_Header.rd_ptr(), sizeof(ClientPktHeader));
+    m_Crypt.DecryptRecv(m_Header.read_data(), sizeof(ClientPktHeader));
 
-    ClientPktHeader& header = *((ClientPktHeader*) m_Header.rd_ptr());
+    ClientPktHeader& header = *((ClientPktHeader*)m_Header.read_data());
 
     header.Convert();
 
@@ -251,7 +252,7 @@ int WorldSocket::handle_input_header(void)
     if (header.size > 0)
     {
         m_RecvWPct->resize(header.size);
-        m_RecvPct.base((char*) m_RecvWPct->contents(), m_RecvWPct->size());
+        m_RecvPct.AssignBuffer((uint8*)m_RecvWPct->contents(), m_RecvWPct->size());
     }
     else
     {
@@ -272,11 +273,10 @@ int WorldSocket::handle_input_payload(void)
 
     const int ret = ProcessIncoming(m_RecvWPct);
 
-    m_RecvPct.base(NULL, 0);
-    m_RecvPct.reset();
+    m_RecvPct.UnassignBuffer();
     m_RecvWPct = NULL;
 
-    m_Header.reset();
+    m_Header.Reset();
 
     if (ret == -1)
         errno = EINVAL;
@@ -289,7 +289,7 @@ int WorldSocket::ProcessIncoming(WorldPacket* new_pct)
     // manage memory ;)
     std::auto_ptr<WorldPacket> aptr(new_pct);
 
-    const ACE_UINT16 opcode = new_pct->GetOpcode();
+    const uint16 opcode = new_pct->GetOpcode();
 
     if (opcode >= NUM_MSG_TYPES)
     {
@@ -588,16 +588,15 @@ int WorldSocket::HandlePing(WorldPacket& recvPacket)
     recvPacket >> ping;
     recvPacket >> latency;
 
-    if (m_LastPingTime == ACE_Time_Value::zero)
-        m_LastPingTime = ACE_OS::gettimeofday();            // for 1st ping
+    if (m_LastPingTime.time_since_epoch().count() == 0)
+        m_LastPingTime = system_clock::now();            // for 1st ping
     else
     {
-        ACE_Time_Value cur_time = ACE_OS::gettimeofday();
-        ACE_Time_Value diff_time(cur_time);
-        diff_time -= m_LastPingTime;
+        system_clock::time_point cur_time = system_clock::now();
+        system_clock::duration diff_time = cur_time - m_LastPingTime;
         m_LastPingTime = cur_time;
 
-        if (diff_time < ACE_Time_Value(27))
+        if (diff_time < seconds(27))
         {
             ++m_OverSpeedPings;
 
@@ -653,8 +652,13 @@ bool WorldSocket::AppendPacket(const WorldPacket &pct)
     if (m_OutBuffer->space() >= pct.size() + header.getHeaderLength())
     {
         // Put the packet on the buffer.
-        if ((m_OutBuffer->copy((char*)header.header, header.getHeaderLength()) == -1) ||
-        (!pct.empty() && (m_OutBuffer->copy((char*)pct.contents(), pct.size()) == -1)))
+        if (!m_OutBuffer->Write(header.header, header.getHeaderLength()))
+        {
+            MANGOS_ASSERT(false);
+            return false;
+        }
+        
+        if (!pct.empty() && !m_OutBuffer->Write(pct.contents(), pct.size()))
         {
             MANGOS_ASSERT(false);
             return false;

@@ -55,15 +55,17 @@ x86 boost libs placed into %BOOST_ROOT%/stage/lib (default location)
 cmake based build not affected by this and appropriate libs expected to be
 in default boost lib place for OS
 
-For generated x64 boost libs in starge/x86/lib (without damage default x86
+For generated x64 boost libs in stage/x86/lib (without damage default x86
 boost libs) you can add to boost build command line tail:
 
   address-model=64 --stagedir=stage\x64
   
-  
-for windows x64 
-(for visual studio 2013 = msvc-12.0, for 2012 = msvc-11.0 and etc.)
 
+--  If Windows OS:  
+
+for windows x64 
+
+(for visual studio 2013 = msvc-12.0, for 2012 = msvc-11.0 and etc.)
 
 bjam --build-type=complete toolset=msvc-12.0 threading=multi link=static address-model=64 --stagedir=stage\x64
 
