@@ -91,7 +91,7 @@ void InitScriptLibrary()
 
     // Get configuration file
     bool configFailure = false;
-    if (!SD2Config.SetSource(_SCRIPTDEV2_CONFIG))
+    if (!SD2Config.SetSource(_SCRIPTDEV2_CONFIG, "ScriptDev2Conf"))
         configFailure = true;
     else
         outstring_log("SD2: Using configuration file %s", _SCRIPTDEV2_CONFIG);

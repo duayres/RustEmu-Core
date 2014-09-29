@@ -37,6 +37,7 @@ foreach(SRC ${mangosscript_SRCS})
 endforeach(SRC)
 
 include_directories(
+  ${Boost_ROOT}
   ${CMAKE_CURRENT_SOURCE_DIR}/base
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_SOURCE_DIR}/src/shared
@@ -57,6 +58,10 @@ endif()
 add_library(mangosscript SHARED
   ${mangosscript_SRCS}
 )
+
+target_link_libraries(mangosscript
+  ${Boost_LIBRARIES}
+  )
 
 if(WIN32)
   target_link_libraries(mangosscript
