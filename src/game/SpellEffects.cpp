@@ -10282,8 +10282,9 @@ void Spell::EffectLeapForward(SpellEffectIndex eff_idx)
     {
         if ((((Player*)unitTarget)->HasMovementFlag(MOVEFLAG_FALLING) && (z - cz > 3.0f)) && (!unitTarget->GetTerrain()->IsInWater(x, y, z)))
         {
-            //sLog.outError("Blink number 2, from falling");
-            unitTarget->NearTeleportTo(destx, desty, colz, unitTarget->GetOrientation(), unitTarget == m_caster);
+            //float range = sqrt((desty - y)*(desty - y) + (destx - x)*(destx - x));
+            //sLog.outError("Blink number 2, from falling, distance of blink = %f", range);
+            unitTarget->NearTeleportTo(destx, desty, floor, unitTarget->GetOrientation(), unitTarget == m_caster);
         }
         else
         {
@@ -10304,7 +10305,8 @@ void Spell::EffectLeapForward(SpellEffectIndex eff_idx)
             destx -= 0.6 * cos(orientation);
             desty -= 0.6 * sin(orientation);
             }
-            //sLog.outError("Blink number 3, from height to abyss");
+            float range = sqrt((desty - y)*(desty - y) + (destx - x)*(destx - x));
+            //sLog.outError("Blink number 3, from height to abyss, distance of blink = %f", range);
             unitTarget->NearTeleportTo(destx, desty, destz, unitTarget->GetOrientation(), unitTarget == m_caster);
             }
             else
@@ -10315,7 +10317,8 @@ void Spell::EffectLeapForward(SpellEffectIndex eff_idx)
     }
     else
     {
-        //sLog.outError("Blink number 5, in falling but on hight");
+        //float range = sqrt((desty - y)*(desty - y) + (destx - x)*(destx - x));
+        //sLog.outError("Blink number 5, in falling but on hight, distance of blink = %f", range);
         unitTarget->NearTeleportTo(destx, desty, z, unitTarget->GetOrientation(), unitTarget == m_caster);
     }
 }

@@ -11210,6 +11210,9 @@ void Unit::Blinkway(uint32 mapid, float x, float y, float z, float dist)
             if (fabs(destz - prevZ) > fabs(destz2 - prevZ)) // recheck allow to blink on nearest floor,level
                 destz = destz2;
 
+            if (GetTerrain()->IsInWater(destx, desty, destz2)) // recheck collide on top water 
+                destz = prevZ;
+
             break;
         }
         // we have correct destz now
@@ -11220,7 +11223,7 @@ void Unit::Blinkway(uint32 mapid, float x, float y, float z, float dist)
     if (j < 10)
       sLog.outError("Blink number 4, standart, cycle checking coordinates not finalized, collide with ground, distance of blink = %f", range);
     else
-      sLog.outError("Blink number 4, standart, cycle checking coordinates finalized, distance of blink = %f", range);*/
+        sLog.outError("Blink number 4, standart, cycle checking coordinates finalized, distance of blink = %f", range); */
 
     unitTarget->NearTeleportTo(destx, desty, destz + 0.5f, unitTarget->GetOrientation());
 }
