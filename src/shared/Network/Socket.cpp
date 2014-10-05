@@ -27,99 +27,77 @@
 
 const std::string Socket::UNKNOWN_NETWORK_ADDRESS = "<unknown>";
 
-Socket::Socket( NetworkManager& socketMrg, 
-                NetworkThread& owner ) :
-    m_manager(socketMrg),
-    m_owner(owner),
-    m_socket(owner.service()),
-    m_OutBufferSize(protocol::SEND_BUFFER_SIZE),
-    m_OutActive(false),
-    m_closing(true),
-    m_Address(UNKNOWN_NETWORK_ADDRESS)
+Socket::Socket(NetworkManager& manager, NetworkThread& owner) : m_manager(manager), m_owner(owner), m_socket(owner.service()),
+    m_outgoingBufferSize(protocol::SEND_BUFFER_SIZE), m_writeOperation(false), m_closed(true), m_address(UNKNOWN_NETWORK_ADDRESS)
 {
 
 }
 
 Socket::~Socket(void)
 {
-    close();
-}
-
-bool Socket::IsClosed(void) const
-{
-    return m_closing;
+    Close();
 }
 
 void Socket::CloseSocket(void)
 {
-    if( IsClosed() )
+    if (m_closed)
         return;
 
-    close();
+    Close();
 
-    m_manager.OnSocketClose( shared_from_this() );
+    m_manager.OnSocketClose(shared_from_this());
 }
 
-const std::string& Socket::GetRemoteAddress(void) const
+bool Socket::Open()
 {
-    return m_Address;
-}
-
-bool Socket::open()
-{
-    // Prevent double call to this func.
-    if ( m_OutBuffer.get() )
+    if (m_outBuffer.get())
         return false;
 
-    // Store peer address.
-    m_Address = obtain_remote_address();
-    if( m_Address == UNKNOWN_NETWORK_ADDRESS )
+    m_address = ObtainRemoteAddress();
+    if (m_address == UNKNOWN_NETWORK_ADDRESS)
         return false;
 
-    // Hook for the manager.
-    if ( !m_manager.OnSocketOpen( shared_from_this() ) )
+    if (!m_manager.OnSocketOpen(shared_from_this()))
         return false;
 
-    m_closing = false;
+    m_closed = false;
 
-    // Allocate buffers.
-    m_OutBuffer.reset( new NetworkBuffer(m_OutBufferSize) );
-    m_ReadBuffer.reset( new NetworkBuffer( protocol::READ_BUFFER_SIZE ) );
+    m_outBuffer.reset(new NetworkBuffer(m_outgoingBufferSize));
+    m_readBuffer.reset(new NetworkBuffer(protocol::READ_BUFFER_SIZE));
 
-    // Start reading data from client
-    start_async_read();
+    StartAsyncRead();
 
     return true;
 }
 
-void Socket::close()
+void Socket::Close()
 {
-    if( IsClosed() )
+    if (IsClosed())
         return;
 
-    m_closing = true;
+    m_closed = true;
 
     try
     {
-        if( m_socket.is_open() )
+        if (m_socket.is_open())
         {
-            m_socket.shutdown( boost::asio::socket_base::shutdown_both );
+            m_socket.shutdown(boost::asio::socket_base::shutdown_both);
             m_socket.close();
         }
     }
-    catch( boost::system::error_code& e)
+    catch (boost::system::error_code& e)
     {
         sLog.outError("Socket::close: error occurred while closing socket = %s", e.message().c_str());
     }
 }
 
-bool Socket::EnableTCPNoDelay( bool enable )
+bool Socket::EnableTCPNoDelay(bool enable)
 {
     try
     {
-        m_socket.set_option( boost::asio::ip::tcp::no_delay(enable) );
+        m_socket.set_option(boost::asio::ip::tcp::no_delay(enable));
     }
-    catch( boost::system::error_code& error )
+    catch (boost::system::error_code& error)
     {
         sLog.outError("Socket::SetTCPNoDelay: set_option TCP_NODELAY errno = %s", error.message().c_str());
         return false;
@@ -128,13 +106,13 @@ bool Socket::EnableTCPNoDelay( bool enable )
     return true;
 }
 
-bool Socket::SetSendBufferSize( int size )
+bool Socket::SetSendBufferSize(int size)
 {
     try
     {
-        m_socket.set_option( boost::asio::socket_base::send_buffer_size(size) );
+        m_socket.set_option(boost::asio::socket_base::send_buffer_size(size));
     }
-    catch( boost::system::error_code& error )
+    catch (boost::system::error_code& error)
     {
         sLog.outError("Socket::SetSendBufferSize set_option SO_SNDBUF with size %i errno = %s", size, error.message().c_str());
         return false;
@@ -143,104 +121,101 @@ bool Socket::SetSendBufferSize( int size )
     return true;
 }
 
-void Socket::SetOutgoingBufferSize( size_t size )
+void Socket::SetOutgoingBufferSize(size_t size)
 {
-    m_OutBufferSize = size;
+    m_outgoingBufferSize = size;
 }
 
 uint32 Socket::native_handle() 
 {
-    return uint32( m_socket.native_handle() );
+    return uint32(m_socket.native_handle());
 }
 
-void Socket::start_async_send()
+void Socket::StartAsyncSend()
 {
-    if( IsClosed() )
+    if (m_closed)
         return;
 
-    if( m_OutActive )
+    if (m_writeOperation)
         return;
     
-    if ( m_OutBuffer->length() == 0 )
+    if (m_outBuffer->length() == 0)
     {
-        m_OutActive = false;
+        m_writeOperation = false;
         return;
     }
 
-    m_OutActive = true;
+    m_writeOperation = true;
 
-    m_socket.async_write_some(boost::asio::buffer(m_OutBuffer->read_data(), m_OutBuffer->length()),
-        boost::bind(&Socket::on_write_complete, shared_from_this(), boost::asio::placeholders::error,
+    m_socket.async_write_some(boost::asio::buffer(m_outBuffer->read_data(), m_outBuffer->length()),
+        boost::bind(&Socket::OnWriteComplete, shared_from_this(), boost::asio::placeholders::error,
         boost::asio::placeholders::bytes_transferred));
 }
 
-void Socket::on_write_complete( const boost::system::error_code& error,
-                                     size_t bytes_transferred )
+void Socket::OnWriteComplete(const boost::system::error_code& error, size_t bytes_transferred)
 {
-    if( error )
+    if (error)
     {
-        OnError( error );
+        OnError(error);
         return;
     }
 
-    GuardType Lock(m_OutBufferLock);
+    GuardType Lock(m_outBufferLock);
 
-    m_OutActive = false;
+    m_writeOperation = false;
+    m_outBuffer->Consume(bytes_transferred);
+    m_outBuffer->Prepare();
 
-    m_OutBuffer->Consume(bytes_transferred);
-    m_OutBuffer->Prepare();
-
-    start_async_send();
+    StartAsyncSend();
 }
 
-void Socket::start_async_read()
+void Socket::StartAsyncRead()
 {
-    if( IsClosed() )
+    if (IsClosed())
         return;
 
-    m_ReadBuffer->Prepare();
+    m_readBuffer->Prepare();
 
-    m_socket.async_read_some(boost::asio::buffer(m_ReadBuffer->write_data(), m_ReadBuffer->space()),
-        boost::bind(&Socket::on_read_complete, shared_from_this(), boost::asio::placeholders::error,
+    m_socket.async_read_some(boost::asio::buffer(m_readBuffer->write_data(), m_readBuffer->space()),
+        boost::bind(&Socket::OnReadComplete, shared_from_this(), boost::asio::placeholders::error,
         boost::asio::placeholders::bytes_transferred));
 }
 
-void Socket::on_read_complete( const boost::system::error_code& error,
-                                    size_t bytes_transferred )
+void Socket::OnReadComplete(const boost::system::error_code& error, size_t bytes_transferred)
 {
-    if( error )
+    if (error)
     {
-        OnError( error );
+        OnError(error);
         return;
     }
 
-    if( bytes_transferred > 0 )
+    if (bytes_transferred > 0)
     {
-        m_ReadBuffer->Commit(bytes_transferred);
+        m_readBuffer->Commit(bytes_transferred);
 
-        if( !process_incoming_data() )
+        if (!ProcessIncomingData())
         {
             CloseSocket();
             return;
         }
     }
 
-    start_async_read();
+    StartAsyncRead();
 }
 
-void Socket::OnError( const boost::system::error_code& error )
+void Socket::OnError(const boost::system::error_code& error)
 {
-    if( !error )
+    if (!error)
         return;
 
     CloseSocket();
 
-    //don't log EOF errors since they notify about remote client connection close
+    // Don't log EOF errors since they notify about remote client connection close
     if( error != boost::asio::error::eof )
         sLog.outError("Network error occurred = %s. Closing connection", error.message().c_str());
 }
 
-std::string Socket::obtain_remote_address() const
+std::string Socket::ObtainRemoteAddress() const
 {
     try
     {

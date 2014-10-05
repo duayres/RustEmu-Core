@@ -18,66 +18,55 @@
 
 #include "NetworkThread.h"
 #include "Database/DatabaseEnv.h"
+#include "Socket.h"
 
-NetworkThread::NetworkThread() :
-    m_Connections(0)
+NetworkThread::NetworkThread() : m_connections(0), m_threadName("Unknown")
 {
-    m_work.reset( new protocol::Service::work(m_networkingService));
+
 }
 
 NetworkThread::~NetworkThread()
 {
     Stop();
-    Wait();
-}
-
-void NetworkThread::Stop()
-{
-    m_work.reset();
-    m_networkingService.stop();
-
-    Wait();
 }
 
 void NetworkThread::Start()
 {
-    m_thread.reset(new boost::thread(boost::bind(&NetworkThread::svc, this)));
+    m_serviceWork.reset(new protocol::Service::work(m_service));
+    m_thread.reset(new boost::thread(boost::bind(&NetworkThread::Work, this)));
 }
 
-void NetworkThread::Wait()
+void NetworkThread::Stop()
 {
-    if(m_thread.get())
+    m_serviceWork.reset();
+    m_service.stop();
+
+    if (m_thread.get())
     {
         m_thread->join();
         m_thread.reset();
     }
 }
 
-void NetworkThread::AddSocket( const SocketPtr& sock )
+void NetworkThread::AddSocket(const SocketPtr& socket)
 {
-    ++m_Connections;
-
-    boost::lock_guard<boost::mutex> lock(m_SocketsLock);
-    m_Sockets.insert(sock);
+    ++m_connections;
+    boost::lock_guard<boost::mutex> lock(m_mutex);
+    m_sockets.insert(socket);
 }
 
-void NetworkThread::RemoveSocket( const SocketPtr& sock )
+void NetworkThread::RemoveSocket(const SocketPtr& socket)
 {
-    --m_Connections;
-
-    boost::lock_guard<boost::mutex> lock(m_SocketsLock);
-    m_Sockets.erase(sock);
+    --m_connections;
+    boost::lock_guard<boost::mutex> lock(m_mutex);
+    m_sockets.erase(socket);
 }
 
-void NetworkThread::svc()
+void NetworkThread::Work()
 {
-    DEBUG_LOG("Network Thread Starting");
-
+    DEBUG_LOG("Starting %s network thread.", m_threadName.c_str());
     LoginDatabase.ThreadStart();
-
-    m_networkingService.run();
-
+    m_service.run();
     LoginDatabase.ThreadEnd();
-
-    DEBUG_LOG("Network Thread Exitting");
+    DEBUG_LOG("%s network thread exitting.", m_threadName.c_str());
 }

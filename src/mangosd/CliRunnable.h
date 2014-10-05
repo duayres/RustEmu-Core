@@ -26,11 +26,11 @@
 #include "Common.h"
 #include "Threading.h"
 
-/// Command Line Interface handling thread
+/// Thread for handling the command line interface
 class CliRunnable : public MaNGOS::Runnable
 {
-    public:
-        void run() override;
+public:
+    void run() override;
 };
 #endif
 /// @}

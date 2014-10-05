@@ -19,7 +19,7 @@
 #include "SessionManager.h"
 #include "AuthSocket.h"
 
-SessionManager::SessionManager()
+SessionManager::SessionManager() : NetworkManager("SessionMgr")
 {
 
 }
@@ -29,11 +29,14 @@ SessionManager::~SessionManager()
 
 }
 
-bool SessionManager::StartNetworkIO(boost::uint16_t port, const char* address)
+bool SessionManager::StartNetwork(boost::uint16_t port, std::string address)
 {
-    m_NetThreadsCount = 2;
+    if (m_running)
+        return false;
+    
+    m_networkThreadsCount = 2;
 
-    return NetworkManager::StartNetworkIO(port, address);
+    return NetworkManager::StartNetwork(port, address);
 }
 
 SocketPtr SessionManager::CreateSocket(NetworkThread& owner)

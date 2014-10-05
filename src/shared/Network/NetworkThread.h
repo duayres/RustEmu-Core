@@ -19,11 +19,10 @@
 #ifndef NETWORK_THREAD_H
 #define NETWORK_THREAD_H
 
-#include "ProtocolDefinitions.h"
-
+#include <set>
 #include <boost/thread.hpp>
 #include <boost/atomic.hpp>
-#include <set>
+#include "ProtocolDefinitions.h"
 
 class NetworkThread : public boost::noncopyable
 {
@@ -32,41 +31,29 @@ public:
 
     virtual ~NetworkThread();
 
+    void Start();
     void Stop();
 
-    void Start();
+    void AddSocket(const SocketPtr& socket);
+    void RemoveSocket(const SocketPtr& socket);
 
-    void Wait();
-
-    long Connections() const
-    {
-        return m_Connections;
-    }
-
-    void AddSocket( const SocketPtr& sock );
-
-    void RemoveSocket( const SocketPtr& sock );
-
-    protocol::Service& service()
-    {
-        return m_networkingService;
-    }
+    inline long Connections() const { return m_connections; }
+    inline protocol::Service& service() { return m_service; }
+    inline void SetName(std::string const& threadName) { m_threadName = threadName; };
 
 private:
+    virtual void Work();
+    typedef std::set<SocketPtr>             SocketSet;
+    SocketSet                               m_sockets;
 
-    virtual void svc();
+    boost::atomic_long                      m_connections;
 
-    typedef std::set<SocketPtr> SocketSet;
+    protocol::Service                       m_service;
+    std::auto_ptr<protocol::Service::work>  m_serviceWork;
 
-    boost::atomic_long m_Connections;
-    std::auto_ptr<boost::thread> m_thread;
-
-    SocketSet m_Sockets;
-    boost::mutex m_SocketsLock;
-
-    protocol::Service m_networkingService;
-    std::auto_ptr<protocol::Service::work> m_work;
+    std::auto_ptr<boost::thread>            m_thread;
+    boost::mutex                            m_mutex;
+    std::string                             m_threadName;
 };
 
-
-#endif
+#endif // NETWORK_THREAD_H

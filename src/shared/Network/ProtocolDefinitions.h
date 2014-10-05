@@ -20,7 +20,6 @@
 #define PROTOCOL_DEFINITIONS_H
 
 #include "Platform/Define.h"
-
 #include <boost/asio.hpp>
 #include <boost/shared_ptr.hpp>
 

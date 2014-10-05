@@ -1,4 +1,6 @@
 // add here most rarely modified headers to speed up debug build compilation
+#include "Common.h"
+
 #include <boost/config.hpp>
 #include <boost/version.hpp>
 #include <boost/asio.hpp>
@@ -18,8 +20,6 @@
 #include <boost/thread/shared_mutex.hpp>
 #include <boost/thread/shared_lock_guard.hpp>
 #include <boost/thread/tss.hpp>
-
-#include "Common.h"
 
 #include "MapManager.h"
 #include "Log.h"

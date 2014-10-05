@@ -21,65 +21,44 @@
 
 #include <string>
 #include <boost/scoped_array.hpp>
-
 #include "ProtocolDefinitions.h"
 
 class NetworkThread;
 
-/// Manages all sockets connected to peers and network threads
 class NetworkManager
 {
 public:
     friend class Socket;
 
-    /// Start network, listen at address:port .
-    bool StartNetwork( boost::uint16_t port, std::string& address );
-
-    /// Stops all network threads, It will wait for all running threads .
+    virtual bool StartNetwork(boost::uint16_t port, std::string address);
     void StopNetwork();
 
-    /// Wait until all network threads have "joined" .
-    void Wait();
-
-    const std::string& GetBindAddress() { return m_addr; }
-
+    const std::string& GetBindAddress() { return m_address; }
     boost::uint16_t GetBindPort() { return m_port; }
 
 protected:
-
-    NetworkManager();
+    NetworkManager(std::string const& mname);
     virtual ~NetworkManager();
 
-    virtual bool StartNetworkIO( boost::uint16_t port, const char* address );
+    virtual SocketPtr CreateSocket(NetworkThread& owner) = 0;
 
-    virtual SocketPtr CreateSocket( NetworkThread& owner ) = 0;
+    virtual bool OnSocketOpen(const SocketPtr& socket);
+    virtual void OnSocketClose(const SocketPtr& socket);
 
-    virtual bool OnSocketOpen( const SocketPtr& sock );
-
-    virtual void OnSocketClose( const SocketPtr& sock);
-
-    size_t m_NetThreadsCount;
+    size_t  m_networkThreadsCount;
+    bool    m_running;
 
 private:
-
-    void accept_next_connection();
-
+    void AcceptNewConnection();
+    void OnNewConnection(SocketPtr connection, const boost::system::error_code& error);
     NetworkThread& get_acceptor_thread();
-
     NetworkThread& get_network_thread_for_new_connection();
 
-    void OnNewConnection( SocketPtr connection,
-        const boost::system::error_code& error );
-
-    void Stop();
-
-    std::string m_addr;
-    boost::uint16_t m_port;
-
-    std::auto_ptr<protocol::Acceptor> m_acceptor;
-    boost::scoped_array<NetworkThread> m_NetThreads;
-
-    bool m_isRunning;
+    std::string                        m_address;
+    boost::uint16_t                    m_port;
+    std::string                        m_managerName;
+    std::auto_ptr<protocol::Acceptor>  m_acceptor;
+    boost::scoped_array<NetworkThread> m_networkThreads;
 };
 
-#endif
+#endif // NETWORK_MANAGER_H
