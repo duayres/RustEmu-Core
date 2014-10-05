@@ -47,7 +47,6 @@ include_directories(
   ${CMAKE_SOURCE_DIR}/src/game
   ${CMAKE_SOURCE_DIR}/dep/include
   ${CMAKE_BINARY_DIR}
-  ${ACE_INCLUDE_DIR}
   ${MYSQL_INCLUDE_DIR}
 )
 
@@ -64,16 +63,11 @@ add_library(mangosscript SHARED
 if(WIN32)
   target_link_libraries(mangosscript
     mangosd # FIXME: could this be done for unix? because unix won't generate exe.libs
-    ${ACE_LIBRARIES}
     debug ${WIN_DEBUGLIBS}
   )
 endif()
 
 add_dependencies(mangosscript revision.h)
-if(NOT ACE_USE_EXTERNAL)
-  add_dependencies(mangosscript ACE_Project)
-# add_dependencies(mangosscript ace)
-endif()
 
 if(UNIX)
   set(mangosscript_LINK_FLAGS "-pthread")
