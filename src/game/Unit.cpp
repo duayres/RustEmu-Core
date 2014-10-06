@@ -11096,9 +11096,9 @@ void Unit::Blinkway(uint32 mapid, float x, float y, float z, float dist)
     float destx = x + dist * cos(orientation);
     float desty = y + dist * sin(orientation);
 
-    float destz, tstX, tstY, tstZ, prevX, prevY, prevZ, pground, pfloor, beforewaterz;
+    float destz, tstX, tstY, tstZ, prevX, prevY, prevZ, pground, pfloor, beforewaterz, travelDistZ;
     float tstZ1, tstZ2, tstZ3, destz1, destz2, destz3, srange1, srange2, srange3;
-    float travelDistZ = 2.8f;
+    float maxtravelDistZ = 2.8f;
     const float step = 2.0f;
     const uint8 numChecks = ceil(fabs(dist / step));
     const float DELTA_X = (destx - x) / numChecks;
@@ -11122,6 +11122,7 @@ void Unit::Blinkway(uint32 mapid, float x, float y, float z, float dist)
             prevZ = tstZ;
         }                
 
+        travelDistZ = sqrt((tstY - prevY)*(tstY - prevY) + (tstX - prevX)*(tstX - prevX));
         tstZ = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ + travelDistZ, true);
 
         if (!GetTerrain()->IsInWater(x, y, z))
@@ -11143,8 +11144,6 @@ void Unit::Blinkway(uint32 mapid, float x, float y, float z, float dist)
             tstZ = z;
         }
 
-        destz = tstZ;
-
         if (!GetTerrain()->IsInWater(tstX, tstY, tstZ))  // second safety check z for blink way if on the ground
         {
             // highest available point
@@ -11154,7 +11153,7 @@ void Unit::Blinkway(uint32 mapid, float x, float y, float z, float dist)
             //lower than floor
             tstZ3 = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ - travelDistZ, true);
 
-            //distance of rays, will select a short
+            //distance of rays, will select the shortest in 3D
             srange1 = sqrt((tstY - prevY)*(tstY - prevY) + (tstX - prevX)*(tstX - prevX) + (tstZ1 - prevZ)*(tstZ1 - prevZ));
             srange2 = sqrt((tstY - prevY)*(tstY - prevY) + (tstX - prevX)*(tstX - prevX) + (tstZ2 - prevZ)*(tstZ2 - prevZ));
             srange3 = sqrt((tstY - prevY)*(tstY - prevY) + (tstX - prevX)*(tstX - prevX) + (tstZ3 - prevZ)*(tstZ3 - prevZ));
@@ -11167,14 +11166,17 @@ void Unit::Blinkway(uint32 mapid, float x, float y, float z, float dist)
                 tstZ = tstZ2;
         }
 
+        destz = tstZ;
+
         bool col = VMAP::VMapFactory::createOrGetVMapManager()->getObjectHitPos(mapid, prevX, prevY, prevZ + 0.5f, tstX, tstY, tstZ + 0.5f, tstX, tstY, tstZ, -0.5f);
         // collision occured
-        if (col || (fabs(prevZ - tstZ) > travelDistZ))
+        if (col || (fabs(prevZ - tstZ) > maxtravelDistZ))
         {
             // move back a bit
             destx = tstX - (0.6 * cos(orientation));
             desty = tstY - (0.6 * sin(orientation));
 
+            travelDistZ = sqrt((desty - prevY)*(desty - prevY) + (destx - prevX)*(destx - prevX));
             // highest available point
             destz1 = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ + travelDistZ + 2.0f, true);
             // upper or floor
@@ -11182,7 +11184,7 @@ void Unit::Blinkway(uint32 mapid, float x, float y, float z, float dist)
             //lower than floor
             destz3 = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ - travelDistZ, true);
 
-            //distance of rays, will select a short
+            //distance of rays, will select the shortest in 3D
             srange1 = sqrt((desty - prevY)*(desty - prevY) + (destx - prevX)*(destx - prevX) + (destz1 - prevZ)*(destz1 - prevZ));
             srange2 = sqrt((desty - prevY)*(desty - prevY) + (destx - prevX)*(destx - prevX) + (destz2 - prevZ)*(destz2 - prevZ));
             srange3 = sqrt((desty - prevY)*(desty - prevY) + (destx - prevX)*(destx - prevX) + (destz3 - prevZ)*(destz3 - prevZ));
