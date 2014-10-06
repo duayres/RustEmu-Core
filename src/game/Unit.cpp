@@ -11096,7 +11096,7 @@ void Unit::Blinkway(uint32 mapid, float x, float y, float z, float dist)
     float destx = x + dist * cos(orientation);
     float desty = y + dist * sin(orientation);
 
-    float destz, tstX, tstY, tstZ, prevX, prevY, prevZ, pground, pfloor, beforewaterz, travelDistZ;
+    float destz, tstX, tstY, tstZ, prevX, prevY, prevZ, beforewaterz, travelDistZ;
     float tstZ1, tstZ2, tstZ3, destz1, destz2, destz3, srange1, srange2, srange3;
     float maxtravelDistZ = 2.8f;
     const float step = 2.0f;
@@ -11113,9 +11113,7 @@ void Unit::Blinkway(uint32 mapid, float x, float y, float z, float dist)
 
         if (j < 2)
         {
-            pground = GetTerrain()->GetHeightStatic(prevX, prevY, MAX_HEIGHT, true);
-            pfloor = GetTerrain()->GetHeightStatic(prevX, prevY, z, true);
-            prevZ = fabs(pground - z) <= fabs(pfloor - z) ? pground : pfloor;
+            prevZ = z;
         }
         else
         {
