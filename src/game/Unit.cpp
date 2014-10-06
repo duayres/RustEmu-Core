@@ -11096,7 +11096,9 @@ void Unit::Blinkway(uint32 mapid, float x, float y, float z, float dist)
     float destx = x + dist * cos(orientation);
     float desty = y + dist * sin(orientation);
 
-    float destz, tstX, tstY, tstZ, prevX, prevY, prevZ, pground, pfloor, tground, tfloor, beforewaterz, travelDistZ;
+    float destz, tstX, tstY, tstZ, prevX, prevY, prevZ, pground, pfloor, beforewaterz;
+    float tstZ1, tstZ2, tstZ3, destz1, destz2, destz3, srange1, srange2, srange3;
+    float travelDistZ = 2.8f;
     const float step = 2.0f;
     const uint8 numChecks = ceil(fabs(dist / step));
     const float DELTA_X = (destx - x) / numChecks;
@@ -11106,6 +11108,8 @@ void Unit::Blinkway(uint32 mapid, float x, float y, float z, float dist)
     {
         prevX = x + (float(j - 1)*DELTA_X);
         prevY = y + (float(j - 1)*DELTA_Y);
+        tstX = x + (float(j)*DELTA_X);
+        tstY = y + (float(j)*DELTA_Y);
 
         if (j < 2)
         {
@@ -11116,13 +11120,9 @@ void Unit::Blinkway(uint32 mapid, float x, float y, float z, float dist)
         else
         {
             prevZ = tstZ;
-        }
+        }                
 
-        tstX = x + (float(j)*DELTA_X);
-        tstY = y + (float(j)*DELTA_Y);
-        tground = GetTerrain()->GetHeightStatic(tstX, tstY, MAX_HEIGHT, true);
-        tfloor = GetTerrain()->GetHeightStatic(tstX, tstY, z, true);
-        tstZ = fabs(tground - prevZ) <= fabs(tfloor - prevZ) ? tground : tfloor;
+        tstZ = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ + travelDistZ, true);
 
         if (!GetTerrain()->IsInWater(x, y, z))
         {
@@ -11143,74 +11143,58 @@ void Unit::Blinkway(uint32 mapid, float x, float y, float z, float dist)
             tstZ = z;
         }
 
+        destz = tstZ;
+
         if (!GetTerrain()->IsInWater(tstX, tstY, tstZ))  // second safety check z for blink way if on the ground
         {
-            travelDistZ = sqrt((tstY - prevY)*(tstY - prevY) + (tstX - prevX)*(tstX - prevX));
-            // The fastest way to get an accurate result 90% of the time.
-            // Better result can be obtained like 99% accuracy with a ray light, but the cost is too high and the code is too long.
-            tstZ = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ + travelDistZ - 2.0f, true);
+            // highest available point
+            tstZ1 = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ + travelDistZ + 2.0f, true);
+            // upper or floor
+            tstZ2 = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ + travelDistZ, true);
+            //lower than floor
+            tstZ3 = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ - travelDistZ, true);
 
-            float destz2 = fabs(tground - prevZ) <= fabs(tfloor - prevZ) ? tground : tfloor;
+            //distance of rays, will select a short
+            srange1 = sqrt((tstY - prevY)*(tstY - prevY) + (tstX - prevX)*(tstX - prevX) + (tstZ1 - prevZ)*(tstZ1 - prevZ));
+            srange2 = sqrt((tstY - prevY)*(tstY - prevY) + (tstX - prevX)*(tstX - prevX) + (tstZ2 - prevZ)*(tstZ2 - prevZ));
+            srange3 = sqrt((tstY - prevY)*(tstY - prevY) + (tstX - prevX)*(tstX - prevX) + (tstZ3 - prevZ)*(tstZ3 - prevZ));
 
-            //sLog.outError("step 1, distance of blink = %f", travelDistZ);
-            if (fabs(tstZ - prevZ) > travelDistZ)              // Map check
-            {
-                // Vmap Horizontal or above
-                tstZ = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ, true);
-                //sLog.outError("step 2, distance of blink = %f", travelDistZ);
-                if (fabs(tstZ - prevZ) > travelDistZ)
-                {
-                    // Vmap Higher
-                    tstZ = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ + travelDistZ + 2.0f, true);
-                    // let's forget this bad coords where a z cannot be find and retry at next tick
-                    //sLog.outError("step 3, distance of blink = %f", travelDistZ);
-                }
-            }
-
-            if (fabs(tstZ - prevZ) > fabs(destz2 - prevZ))
-            {
-                // recheck allow to blink on nearest floor,level
-                tstZ = destz2;
-                //sLog.outError("step 4");
-            }
+            if (srange1 < srange2)
+                tstZ = tstZ1;
+            else if (srange3 < srange2)
+                tstZ = tstZ3;
+            else
+                tstZ = tstZ2;
         }
-
-        destz = tstZ;
 
         bool col = VMAP::VMapFactory::createOrGetVMapManager()->getObjectHitPos(mapid, prevX, prevY, prevZ + 0.5f, tstX, tstY, tstZ + 0.5f, tstX, tstY, tstZ, -0.5f);
         // collision occured
-        if (col || (fabs(prevZ - tstZ) > 2.8))
+        if (col || (fabs(prevZ - tstZ) > travelDistZ))
         {
             // move back a bit
             destx = tstX - (0.6 * cos(orientation));
             desty = tstY - (0.6 * sin(orientation));
 
-            // The fastest way to get an accurate result 90% of the time.
-            // Better result can be obtained like 99% accuracy with a ray light, but the cost is too high and the code is too long.
-            travelDistZ = sqrt((desty - prevY)*(desty - prevY) + (destx - prevX)*(destx - prevX));
+            // highest available point
+            destz1 = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ + travelDistZ + 2.0f, true);
+            // upper or floor
+            destz2 = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ + travelDistZ, true);
+            //lower than floor
+            destz3 = GetTerrain()->GetHeightStatic(tstX, tstY, prevZ - travelDistZ, true);
 
-            destz = GetTerrain()->GetHeightStatic(destx, desty, prevZ + travelDistZ - 2.0f, true);
+            //distance of rays, will select a short
+            srange1 = sqrt((desty - prevY)*(desty - prevY) + (destx - prevX)*(destx - prevX) + (destz1 - prevZ)*(destz1 - prevZ));
+            srange2 = sqrt((desty - prevY)*(desty - prevY) + (destx - prevX)*(destx - prevX) + (destz2 - prevZ)*(destz2 - prevZ));
+            srange3 = sqrt((desty - prevY)*(desty - prevY) + (destx - prevX)*(destx - prevX) + (destz3 - prevZ)*(destz3 - prevZ));
 
-            float ground = GetTerrain()->GetHeightStatic(destx, desty, MAX_HEIGHT, true);
-            float floor = GetTerrain()->GetHeightStatic(destx, desty, prevZ, true);
-            float destz2 = fabs(ground - prevZ) <= fabs(floor - prevZ) ? ground : floor;
-
-            if (fabs(destz - prevZ) > travelDistZ)              // Map check
-            {
-                // Vmap Horizontal or above
-                destz = GetTerrain()->GetHeightStatic(destx, desty, prevZ, true);
-
-                if (fabs(destz - prevZ) > travelDistZ)
-                {
-                    // Vmap Higher
-                    destz = GetTerrain()->GetHeightStatic(destx, desty, prevZ + travelDistZ + 2.0f, true);
-                }
-            }
-
-            if (fabs(destz - prevZ) > fabs(destz2 - prevZ)) // recheck allow to blink on nearest floor,level
+            if (srange1 < srange2)
+                destz = destz1;
+            else if (srange3 < srange2)
+                destz = destz3;
+            else
                 destz = destz2;
 
-            if (GetTerrain()->IsInWater(destx, desty, destz2)) // recheck collide on top water 
+            if (GetTerrain()->IsInWater(destx, desty, destz)) // recheck collide on top water 
                 destz = prevZ;
 
             break;
