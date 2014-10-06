@@ -10305,7 +10305,7 @@ void Spell::EffectLeapForward(SpellEffectIndex eff_idx)
             destx -= 0.6 * cos(orientation);
             desty -= 0.6 * sin(orientation);
             }
-            float range = sqrt((desty - y)*(desty - y) + (destx - x)*(destx - x));
+            //float range = sqrt((desty - y)*(desty - y) + (destx - x)*(destx - x));
             //sLog.outError("Blink number 3, from height to abyss, distance of blink = %f", range);
             unitTarget->NearTeleportTo(destx, desty, destz, unitTarget->GetOrientation(), unitTarget == m_caster);
             }

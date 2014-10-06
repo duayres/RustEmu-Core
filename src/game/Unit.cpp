@@ -11098,7 +11098,7 @@ void Unit::Blinkway(uint32 mapid, float x, float y, float z, float dist)
 
     float destz, tstX, tstY, tstZ, prevX, prevY, prevZ, beforewaterz, travelDistZ;
     float tstZ1, tstZ2, tstZ3, destz1, destz2, destz3, srange1, srange2, srange3;
-    float maxtravelDistZ = 2.8f;
+    float maxtravelDistZ = 2.65f;
     const float step = 2.0f;
     const uint8 numChecks = ceil(fabs(dist / step));
     const float DELTA_X = (destx - x) / numChecks;
