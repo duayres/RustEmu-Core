@@ -2403,6 +2403,19 @@ SpellAuraProcResult Unit::HandleDummyAuraProc(Unit* pVictim, DamageInfo* damageI
                     basepoints[0] = int32(triggerAmount * damage / 100) / GetSpellAuraMaxTicks(triggered_spell_id);
                     break;
                 }
+                // Item - Shaman T10 Elemental 2P Bonus
+                case 70811:
+                {
+                    if (GetTypeId() != TYPEID_PLAYER)
+                        return SPELL_AURA_PROC_FAILED;
+                    if (procSpell->SpellFamilyFlags.test<CF_SHAMAN_CHAIN_LIGHTNING>()
+                        || procSpell->SpellFamilyFlags.test<CF_SHAMAN_CHAIN_LIGHTNING>())
+                    {
+                        ((Player*)this)->SendModifyCooldown(16166, triggerAmount);
+                        return SPELL_AURA_PROC_OK;
+                    }
+                    return SPELL_AURA_PROC_FAILED;
+                }
                 // Item - Shaman T10 Restoration 4P Bonus
                 case 70808:
                 {

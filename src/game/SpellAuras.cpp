@@ -7267,6 +7267,14 @@ void Aura::HandleSchoolAbsorb(bool apply, bool Real)
                 }
             }
         }
+        else if (caster && caster->GetTypeId() == TYPEID_PLAYER && spellProto->Id == 47788 &&
+            m_removeMode == AURA_REMOVE_BY_EXPIRE)
+        {
+            if (Aura *aur = caster->GetAura(63231, EFFECT_INDEX_0))
+            {
+                ((Player*)caster)->SendModifyCooldown(spellProto->Id, -aur->GetSpellProto()->CalculateSimpleValue(EFFECT_INDEX_0)*IN_MILLISECONDS);
+            }
+        }
     }
 }
 
