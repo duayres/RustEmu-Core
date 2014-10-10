@@ -14,6 +14,10 @@
 #include "G3D/Array.h"
 #include <cstring>
 
+#if COMPILER == COMPILER_MICROSOFT
+#  pragma warning( disable : 4267 )                         // conversion from 'size_t' to 'int', possible loss of data
+#endif
+
 namespace G3D {
 
 extern const char* NEWLINE;

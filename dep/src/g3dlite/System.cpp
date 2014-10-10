@@ -33,6 +33,10 @@
 #include <cstring>
 #include <cstdio>
 
+#if COMPILER == COMPILER_MICROSOFT
+#  pragma warning( disable : 4267 )                         // conversion from 'size_t' to 'int', possible loss of data
+#endif
+
 // Uncomment the following line to turn off G3D::System memory
 // allocation and use the operating system's malloc.
 //#define NO_BUFFERPOOL

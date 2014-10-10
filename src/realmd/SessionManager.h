@@ -16,8 +16,8 @@
 * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-#ifndef SESSION_MANAGER_H
-#define SESSION_MANAGER_H
+#ifndef _SESSION_MANAGER_H
+#define _SESSION_MANAGER_H
 
 #include <string>
 #include "Network/NetworkManager.h"
@@ -34,4 +34,4 @@ protected:
     virtual SocketPtr CreateSocket(NetworkThread& owner);
 };
 
-#endif // SESSION_MANAGER_H
+#endif

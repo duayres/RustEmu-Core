@@ -16,8 +16,12 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef REALM_LIST_H
-#define REALM_LIST_H
+/// \addtogroup realmd
+/// @{
+/// \file
+
+#ifndef REALMLIST_H
+#define REALMLIST_H
 
 #include "Common.h"
 
@@ -39,7 +43,7 @@ struct Realm
 {
     std::string address;
     uint8 icon;
-    RealmFlags realmflags;
+    RealmFlags realmflags;                                  // realmflags
     uint8 timezone;
     uint32 m_ID;
     AccountTypes allowedSecurityLevel; // Current allowed join security level (show as locked for not fit accounts)
@@ -53,9 +57,9 @@ class RealmList
 {
 public:
     typedef std::map<std::string, Realm> RealmMap;
-
+    
     static RealmList& Instance();
-
+    
     RealmList();
     ~RealmList() {}
 
@@ -68,7 +72,7 @@ public:
 
 private:
     void UpdateRealms(bool init);
-    void UpdateRealm(uint32 ID, const std::string& name, const std::string& address, uint32 port, uint8 icon, RealmFlags realm_flags, 
+    void UpdateRealm(uint32 ID, const std::string& name, const std::string& address, uint32 port, uint8 icon, RealmFlags realm_flags,
         uint8 timezone, AccountTypes allowed_security_level, float population, const std::string& builds);
 
     // Internal map of realms
@@ -80,4 +84,5 @@ private:
 
 #define sRealmList RealmList::Instance()
 
-#endif // REALM_LIST_H
+#endif
+/// @}

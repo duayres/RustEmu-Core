@@ -16,6 +16,10 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+/** \file
+  \ingroup realmd
+  */
+
 #include <boost/bind.hpp>
 #include <boost/filesystem/operations.hpp>
 #include "AuthCodes.h"
@@ -119,8 +123,8 @@ void PatchCache::LoadPatchesInfo()
 
                 if (itr->path().filename().string().length() >= MIN_FILENAME_LENGTH
                     && itr->path().filename().extension().string() == ".mpq")
-                        LoadPatchMD5(itr->path());
-                
+                    LoadPatchMD5(itr->path());
+
             }
         }
     }
@@ -157,6 +161,7 @@ bool PatchHandler::Open()
 
     timer_.async_wait(boost::bind(&PatchHandler::OnTimeout, shared_from_this(), boost::asio::placeholders::error));
     return true;
+    
 }
 
 void PatchHandler::OnTimeout(const boost::system::error_code& error)
@@ -177,7 +182,7 @@ void PatchHandler::TransmitFile()
     if (size <= 0)
         return;
 
-    data->data_size = (uint16) size;
+    data->data_size = (uint16)size;
     send_buffer_.Commit(size_t(size) + offset());
 
     StartAsyncWrite();
@@ -205,3 +210,4 @@ void PatchHandler::OnWriteComplete(const boost::system::error_code& error, size_
 
     TransmitFile();
 }
+

@@ -16,6 +16,10 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+/// \addtogroup realmd
+/// @{
+/// \file
+
 #ifndef AUTH_SOCKET_H
 #define AUTH_SOCKET_H
 
@@ -25,13 +29,14 @@
 #include "Auth/BigNumber.h"
 #include "Auth/Sha1.h"
 #include "ByteBuffer.h"
+
 #include "Network/Socket.h"
 
 class NetworkManager;
 class NetworkThread;
 
 /// Handles authentication service packets
-class AuthSocket: public Socket
+class AuthSocket : public Socket
 {
 public:
     const static int s_BYTE_SIZE = 32;
@@ -66,7 +71,7 @@ private:
 
     // Make the SRP6 calculation based on the hash in the database
     void SetVSFields(const std::string& rI);
-
+        
     // SRP6
     BigNumber N, s, g, v;
     BigNumber b, B;
@@ -87,5 +92,5 @@ private:
 
     boost::filesystem::fstream patch_;
 };
-
-#endif // AUTH_SOCKET_H
+#endif
+/// @}

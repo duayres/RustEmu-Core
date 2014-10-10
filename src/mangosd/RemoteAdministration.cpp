@@ -31,7 +31,7 @@
 bool RemoteAdminSocketMgr::StartNetwork(boost::uint16_t port, std::string address)
 {
     ///- Get the config parameters
-    if (m_running)
+    if (running_)
         return false;
     
     return NetworkManager::StartNetwork(port, address);
@@ -83,7 +83,7 @@ bool RASocket::ProcessIncomingData()
     while (1)
     {
         uint8 byte;
-        if (!m_readBuffer->ReadNoConsume(&byte, 1))
+        if (!read_buffer_->ReadNoConsume(&byte, 1))
             return true;
 
         if (std::iscntrl(byte))
@@ -113,7 +113,7 @@ bool RASocket::ProcessIncomingData()
                 default:
                     break;                                
             }
-            m_readBuffer->Consume(1);
+            read_buffer_->Consume(1);
             continue;            
         }
         
@@ -228,9 +228,9 @@ bool RASocket::SendString(std::string str)
 
 bool RASocket::SendPacket(const char* buf, size_t len)
 {
-    GuardType Guard(m_outBufferLock);
+    GuardType Guard(out_buffer_lock_);
 
-    if (m_outBuffer->Write((uint8*)buf, len))
+    if (out_buffer_->Write((uint8*)buf, len))
     {
         StartAsyncSend();
         return true;
@@ -243,12 +243,12 @@ bool RASocket::SendPacket(const char* buf, size_t len)
 
 size_t RASocket::ReceivedDataLength(void) const
 {
-    return m_readBuffer->length();
+    return read_buffer_->length();
 }
 
 bool RASocket::Read(char* buf, size_t len)
 {
-    return m_readBuffer->Read((uint8*)buf, len);
+    return read_buffer_->Read((uint8*)buf, len);
 }
 
 void RASocket::zprint(void* callbackArg, const char* szText)

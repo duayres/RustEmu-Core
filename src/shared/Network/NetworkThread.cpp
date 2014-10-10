@@ -18,55 +18,57 @@
 
 #include "NetworkThread.h"
 #include "Database/DatabaseEnv.h"
-#include "Socket.h"
 
-NetworkThread::NetworkThread() : m_connections(0), m_threadName("Unknown")
+NetworkThread::NetworkThread() : connections_(0), m_threadName("Unknown")
 {
-
 }
 
 NetworkThread::~NetworkThread()
 {
-    Stop();
+    Stop();    
 }
 
 void NetworkThread::Start()
 {
-    m_serviceWork.reset(new protocol::Service::work(m_service));
-    m_thread.reset(new boost::thread(boost::bind(&NetworkThread::Work, this)));
+    service_work_.reset(new protocol::Service::work(service_));
+    thread_.reset(new boost::thread(boost::bind(&NetworkThread::Work, this)));
 }
 
 void NetworkThread::Stop()
 {
-    m_serviceWork.reset();
-    m_service.stop();
-
-    if (m_thread.get())
+    service_work_.reset();
+    service_.stop();
+    
+    if (thread_.get())
     {
-        m_thread->join();
-        m_thread.reset();
+        thread_->join();
+        thread_.reset();
     }
 }
 
 void NetworkThread::AddSocket(const SocketPtr& socket)
 {
-    ++m_connections;
-    boost::lock_guard<boost::mutex> lock(m_mutex);
-    m_sockets.insert(socket);
+    ++connections_;
+    boost::lock_guard<boost::mutex> lock(mutex_);
+    sockets_.insert(socket);
 }
 
 void NetworkThread::RemoveSocket(const SocketPtr& socket)
 {
-    --m_connections;
-    boost::lock_guard<boost::mutex> lock(m_mutex);
-    m_sockets.erase(socket);
+    --connections_;
+    boost::lock_guard<boost::mutex> lock(mutex_);
+    sockets_.erase(socket);
 }
 
 void NetworkThread::Work()
 {
     DEBUG_LOG("Starting %s network thread.", m_threadName.c_str());
+
     LoginDatabase.ThreadStart();
-    m_service.run();
+
+    service_.run();
+
     LoginDatabase.ThreadEnd();
+
     DEBUG_LOG("%s network thread exitting.", m_threadName.c_str());
 }

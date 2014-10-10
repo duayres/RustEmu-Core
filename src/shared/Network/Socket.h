@@ -19,15 +19,12 @@
 #ifndef SOCKET_H
 #define SOCKET_H
 
+#include "ProtocolDefinitions.h"
+
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/lock_guard.hpp>
 #include "NetworkBuffer.h"
-#include "ProtocolDefinitions.h"
-
-#if !defined (ACE_LACKS_PRAGMA_ONCE)
-#   pragma once
-#endif
 
 #include "Common.h"
 #include "Auth/AuthCrypt.h"
@@ -38,56 +35,82 @@ class NetworkManager;
 
 class Socket : public boost::enable_shared_from_this<Socket>
 {
+
 public:
+    /// Declare some friends
     friend class NetworkManager;
 
     Socket(NetworkManager& manager, NetworkThread& owner);
+
     virtual ~Socket(void);
 
+    /// Check if socket is closed.
+    bool IsClosed(void) const { return closed_; }
+
+    /// Close the socket.
     virtual void CloseSocket(void);
 
-    bool IsClosed(void) const { return m_closed; }
-    inline const std::string& GetRemoteAddress(void) const { return m_address; }
+    /// Get address of connected peer.
+    const std::string& GetRemoteAddress(void) const { return address_; }
 
+    /// Enable TcpNoDelay
     bool EnableTCPNoDelay(bool enable);
+
+    /// Set SO_SDNBUF variable 
     bool SetSendBufferSize(int size);
+
+    /// Set custom value for outgoing buffer size
     void SetOutgoingBufferSize(size_t size);
 
-    inline protocol::Socket& socket() { return m_socket; }
-    inline NetworkThread& owner() { return m_owner; }
+    /// Get underlying socket object
+    protocol::Socket& socket() { return socket_; }
+    NetworkThread& owner() { return owner_; }
 
 protected:
+
+    /// Called on open ,the void* is the acceptor.
     virtual bool Open();
+    
+    /// Schedule asynchronous send operation
     void StartAsyncSend();
     virtual bool ProcessIncomingData() = 0;
-    uint32 native_handle();
 
-    typedef boost::mutex                LockType;
+    uint32 native_handle();
+     
+    /// Mutex type used for various synchronizations.
+    typedef boost::mutex LockType;
     typedef boost::lock_guard<LockType> GuardType;
 
-    LockType                     m_outBufferLock;
-    std::auto_ptr<NetworkBuffer> m_outBuffer;
-    std::auto_ptr<NetworkBuffer> m_readBuffer;
+    /// Mutex for protecting output related data.
+    LockType out_buffer_lock_;
 
-    NetworkManager& m_manager;
-    NetworkThread& m_owner;
+    /// Buffer used for writing output.
+    std::auto_ptr<NetworkBuffer> out_buffer_;
+
+    /// Buffer used for receiving input
+    std::auto_ptr<NetworkBuffer> read_buffer_;
+
+    NetworkManager& manager_;
+    NetworkThread& owner_;
 
 private:
+
     void StartAsyncRead();
     void Close();
 
     void OnWriteComplete(const boost::system::error_code& error, size_t bytes_transferred);
     void OnReadComplete(const boost::system::error_code& error, size_t bytes_transferred);
     void OnError(const boost::system::error_code& error);
+
     std::string ObtainRemoteAddress() const;
 
-    protocol::Socket  m_socket;
-    size_t            m_outgoingBufferSize;
-    std::string       m_address;
-    bool              m_writeOperation;
-    bool              m_closed;
+    protocol::Socket socket_;
+    size_t outgoing_buffer_size_;
+    std::string address_;
+    bool write_operation_;
+    bool closed_;
 
     static const std::string UNKNOWN_NETWORK_ADDRESS;;
 };
 
-#endif // SOCKET_H
+#endif

@@ -16,8 +16,12 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef PATCH_HANDLER_H
-#define PATCH_HANDLER_H
+/** \file
+  \ingroup realmd
+  */
+
+#ifndef PATCHHANDLER_H
+#define PATCHHANDLER_H
 
 #include <map>
 #include <boost/filesystem/fstream.hpp>
@@ -29,10 +33,13 @@
 #include "Network/ProtocolDefinitions.h"
 #include "Policies/Singleton.h"
 
-/// Caches MD5 hash of client patches present on the server
+/**
+ * @brief Caches MD5 hash of client patches present on the server
+ */
 class PatchCache
 {
 public:
+
     PatchCache();
     ~PatchCache();
 
@@ -58,7 +65,6 @@ public:
 
 private:
     void LoadPatchesInfo();
-
     Patches patches_;
 };
 
@@ -71,14 +77,14 @@ public:
     virtual ~PatchHandler();
 
     bool Open();
-
+        
 protected:
     void TransmitFile();
     void StartAsyncWrite();
-
+        
     void OnWriteComplete(const boost::system::error_code& error, size_t bytes_transferred);
     void OnTimeout(const boost::system::error_code& error);
-
+        
 private:
     size_t offset() const;
 
@@ -92,4 +98,5 @@ private:
 
 typedef boost::shared_ptr<PatchHandler> PatchHandlerPtr;
 
-#endif // PATCH_HANDLER_H
+#endif /* _BK_PATCHHANDLER_H__ */
+

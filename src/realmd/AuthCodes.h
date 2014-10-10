@@ -16,8 +16,12 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef AUTH_CODES_H
-#define AUTH_CODES_H
+/** \file
+    \ingroup realmd
+*/
+
+#ifndef AUTHCODES_H
+#define AUTHCODES_H
 
 enum AuthClientCommand
 {
@@ -34,7 +38,7 @@ enum AuthClientCommand
     CMD_XFER_CANCEL                 = 0x34
 };
 
-// Unused
+// not used by us currently
 enum AuthServerCommand
 {
     CMD_GRUNT_AUTH_CHALLENGE        = 0x0,
@@ -84,4 +88,4 @@ enum AuthResult
     // WOW_FAIL_OTHER
 };
 
-#endif // AUTH_CODES_H
+#endif

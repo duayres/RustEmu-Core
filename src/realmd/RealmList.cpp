@@ -16,6 +16,10 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+/** \file
+    \ingroup realmd
+*/
+
 #include "AuthCodes.h"
 #include "Common.h"
 #include "Database/DatabaseEnv.h"
@@ -27,13 +31,13 @@ INSTANTIATE_SINGLETON_1(RealmList);
 
 extern DatabaseType LoginDatabase;
 
-// Will only support WoW 1.12.1/1.12.2/1.12.3 , WoW:TBC 2.4.3 and official release for WoW:WotLK and later, client builds 10505, 8606, 6141, 6005, 5875
-// If you need more from old build then add it in cases in realmd sources code
-// List sorted from high to low build and first build used as low bound for accepted by default range (any > it will accepted by realmd at least)
+// will only support WoW 1.12.1/1.12.2/1.12.3 , WoW:TBC 2.4.3 and official release for WoW:WotLK and later, client builds 10505, 8606, 6141, 6005, 5875
+// if you need more from old build then add it in cases in realmd sources code
+// list sorted from high to low build and first build used as low bound for accepted by default range (any > it will accepted by realmd at least)
 
 static RealmBuildInfo ExpectedRealmdClientBuilds[] =
 {
-    {12340, 3, 3, 5, 'a'},   // Highest supported build, also auto accept all above for simplify future supported builds testing
+    {12340, 3, 3, 5, 'a'},                                  // highest supported build, also auto accept all above for simplify future supported builds testing
     {11723, 3, 3, 3, 'a'},
     {11403, 3, 3, 2, ' '},
     {11159, 3, 3, 0, 'a'},
@@ -42,21 +46,21 @@ static RealmBuildInfo ExpectedRealmdClientBuilds[] =
     {6141,  1, 12, 3, ' '},
     {6005,  1, 12, 2, ' '},
     {5875,  1, 12, 1, ' '},
-    {0,     0, 0, 0, ' '}    // Terminator
+    {0,     0, 0, 0, ' '}                                   // terminator
 };
 
 RealmBuildInfo const* FindBuildInfo(uint16 _build)
 {
-    // First build is low bound of always accepted range
+    // first build is low bound of always accepted range
     if (_build >= ExpectedRealmdClientBuilds[0].build)
         return &ExpectedRealmdClientBuilds[0];
 
-    // Continue from 1 with explicit equal check
+    // continue from 1 with explicit equal check
     for (int i = 1; ExpectedRealmdClientBuilds[i].build; ++i)
         if (_build == ExpectedRealmdClientBuilds[i].build)
             return &ExpectedRealmdClientBuilds[i];
 
-    // No appropriate build
+    // none appropriate build
     return NULL;
 }
 
@@ -75,14 +79,14 @@ void RealmList::Initialize(uint32 update_interval)
 {
     update_interval_ = update_interval;
 
-    // Get the content of the realmlist table in the database
+    ///- Get the content of the realmlist table in the database
     UpdateRealms(true);
 }
 
 void RealmList::UpdateRealm(uint32 ID, const std::string& name, const std::string& address, uint32 port, uint8 icon, RealmFlags realm_flags,
     uint8 timezone, AccountTypes allowed_security_level, float population, const std::string& builds)
 {
-    // Create new if not exist or update existed
+    ///- Create new if not exist or update existed
     Realm& realm = realms_[name];
 
     realm.m_ID       = ID;
@@ -114,7 +118,7 @@ void RealmList::UpdateRealm(uint32 ID, const std::string& name, const std::strin
             if (bInfo->build == first_build)
                 realm.realmBuildInfo = *bInfo;
 
-    // Append port to IP address.
+    ///- Append port to IP address.
     std::ostringstream ss;
     ss << address << ":" << port;
     realm.address   = ss.str();
@@ -122,7 +126,7 @@ void RealmList::UpdateRealm(uint32 ID, const std::string& name, const std::strin
 
 void RealmList::UpdateIfNeed()
 {
-    // Maybe disabled or updated recently
+    // maybe disabled or updated recently
     if (!update_interval_ || next_update_time_ > time(NULL))
         return;
 
@@ -139,10 +143,10 @@ void RealmList::UpdateRealms(bool init)
 {
     DETAIL_LOG("Updating Realm List...");
 
-    //                                                 0   1     2        3     4     5           6         7                     8           9
+    ////                                               0   1     2        3     4     5           6         7                     8           9
     QueryResult* result = LoginDatabase.Query("SELECT id, name, address, port, icon, realmflags, timezone, allowedSecurityLevel, population, realmbuilds FROM realmlist WHERE (realmflags & 1) = 0 ORDER BY name");
 
-    // Circle through results and add them to the realm map
+    ///- Circle through results and add them to the realm map
     if (result)
     {
         do

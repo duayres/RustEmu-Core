@@ -23,7 +23,7 @@
 #include "Socket.h"
 #include "Log.h"
 
-NetworkManager::NetworkManager(std::string const& mname) : m_managerName(mname), m_networkThreadsCount(1), m_running(false)
+NetworkManager::NetworkManager(std::string const& mname) : m_managerName(mname), network_threads_count_(1), running_(false)
 {
 
 }
@@ -31,31 +31,32 @@ NetworkManager::NetworkManager(std::string const& mname) : m_managerName(mname),
 NetworkManager::~NetworkManager()
 {
     StopNetwork();
-    m_acceptor.reset();
-    m_networkThreads.reset();
+
+    acceptor_.reset();
+    network_threads_.reset();
 }
 
 bool NetworkManager::StartNetwork(boost::uint16_t port, std::string address)
 {
-    if (m_running)
+    if (running_)
         return false;
-
-    m_address = address;
-    m_port = port;
-
-    if (m_networkThreadsCount <= 0)
+    
+    address_ = address;
+    port_ = port;
+    
+    if (network_threads_count_ <= 0)
     {
-        sLog.outError("Number of network threads is incorrect = %i", m_networkThreadsCount);
+        sLog.outError("Number of network threads is incorrect = %i", network_threads_count_);
         return false;
     }
 
-    m_networkThreadsCount += 1;
-    m_networkThreads.reset(new NetworkThread[m_networkThreadsCount]);
+    network_threads_count_ += 1;
+    network_threads_.reset(new NetworkThread[network_threads_count_]);
 
     try
     {
-        protocol::Endpoint listen_address(protocol::IPAddress::from_string(m_address), m_port);
-        m_acceptor.reset(new protocol::Acceptor(get_acceptor_thread().service(), listen_address));
+        protocol::Endpoint listen_address(protocol::IPAddress::from_string(address_), port_);
+        acceptor_.reset(new protocol::Acceptor(get_acceptor_thread().service(), listen_address));
     }
     catch (boost::system::error_code&)
     {
@@ -63,23 +64,24 @@ bool NetworkManager::StartNetwork(boost::uint16_t port, std::string address)
         return false;
     }
 
-    m_running = true;
+    running_ = true;
 
     AcceptNewConnection();
 
     std::string threadName = "\"" + m_managerName + "\" Acceptor";
-    m_networkThreads[0].SetName(threadName);
+    network_threads_[0].SetName(threadName);
     threadName = "\"" + m_managerName + "\" Service";
-    for (size_t i = 0; i < m_networkThreadsCount; ++i)
+
+    for (size_t i = 0; i < network_threads_count_; ++i)
     {
         // set thread name
         if (i > 0)
         {
-            std::string tname = threadName;
-            m_networkThreads[i].SetName(threadName);
+            std::string tname = threadName + std::to_string(i);
+            network_threads_[i].SetName(threadName);
         }
-
-        m_networkThreads[i].Start();
+        
+        network_threads_[i].Start();        
     }
     
     return true;
@@ -87,16 +89,16 @@ bool NetworkManager::StartNetwork(boost::uint16_t port, std::string address)
 
 void NetworkManager::StopNetwork()
 {
-    if (m_running)
+    if (running_)
     {
-        m_running = false;
+        if (acceptor_.get())
+            acceptor_->cancel();
 
-        if (m_acceptor.get())
-            m_acceptor->cancel();
+        if (network_threads_)
+            for (size_t i = 0; i < network_threads_count_; ++i)
+                network_threads_[i].Stop();
 
-        if (m_networkThreads)
-            for (size_t i = 0; i < m_networkThreadsCount; ++i)
-                m_networkThreads[i].Stop();
+        running_ = false;
     }
 }
 
@@ -119,7 +121,7 @@ void NetworkManager::AcceptNewConnection()
     NetworkThread& worker = get_network_thread_for_new_connection();
     SocketPtr connection = CreateSocket(worker);
 
-    m_acceptor->async_accept(connection->socket(),
+    acceptor_->async_accept(connection->socket(),
         boost::bind(&NetworkManager::OnNewConnection, this, connection, boost::asio::placeholders::error));
 }
 
@@ -127,8 +129,7 @@ void NetworkManager::OnNewConnection(SocketPtr connection, const boost::system::
 {
     if (error)
     {
-        if (m_running) // avoid showing an error that may occur durring shutdown
-            sLog.outError("Error accepting new client connection!");
+        sLog.outError("Error accepting new client connection!");
         return;
     }
     
@@ -145,7 +146,7 @@ void NetworkManager::OnNewConnection(SocketPtr connection, const boost::system::
 
 NetworkThread& NetworkManager::get_acceptor_thread()
 {
-    return m_networkThreads[0];
+    return network_threads_[0];
 }
 
 NetworkThread& NetworkManager::get_network_thread_for_new_connection()
@@ -153,13 +154,13 @@ NetworkThread& NetworkManager::get_network_thread_for_new_connection()
     // Skip acceptor thread
     size_t min = 1;
 
-    MANGOS_ASSERT(m_networkThreadsCount > 1);
+    MANGOS_ASSERT(network_threads_count_ > 1);
 
-    for (size_t i = 1; i < m_networkThreadsCount; ++i)
+    for (size_t i = 1; i < network_threads_count_; ++i)
     {
-        if (m_networkThreads[i].Connections() < m_networkThreads[min].Connections())
+        if (network_threads_[i].Connections() < network_threads_[min].Connections())
             min = i;
     }
 
-    return m_networkThreads[min];
+    return network_threads_[min];
 }

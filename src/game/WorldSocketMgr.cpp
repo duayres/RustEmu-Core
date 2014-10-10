@@ -45,7 +45,7 @@ WorldSocketMgr::~WorldSocketMgr()
 
 bool WorldSocketMgr::StartNetwork(boost::uint16_t port, std::string address)
 {
-    if (m_running)
+    if (running_)
         return false;
 
     m_UseNoDelay = sConfig.GetBoolDefault("Network.TcpNodelay", true);
@@ -62,7 +62,7 @@ bool WorldSocketMgr::StartNetwork(boost::uint16_t port, std::string address)
         return false;
     }
 
-    m_networkThreadsCount = static_cast<size_t>(sConfig.GetIntDefault("Network.Threads", 1));
+    network_threads_count_ = static_cast<size_t>(sConfig.GetIntDefault("Network.Threads", 1));
 
     if (!NetworkManager::StartNetwork(port, address))
         return false;

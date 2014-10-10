@@ -19,7 +19,7 @@
 #include "SessionManager.h"
 #include "AuthSocket.h"
 
-SessionManager::SessionManager() : NetworkManager("SessionMgr")
+SessionManager::SessionManager() : NetworkManager("Realmd")
 {
 
 }
@@ -31,10 +31,10 @@ SessionManager::~SessionManager()
 
 bool SessionManager::StartNetwork(boost::uint16_t port, std::string address)
 {
-    if (m_running)
+    if (running_)
         return false;
     
-    m_networkThreadsCount = 2;
+    network_threads_count_ = 2;
 
     return NetworkManager::StartNetwork(port, address);
 }

@@ -18,22 +18,22 @@
 
 #include "NetworkBuffer.h"
 
-NetworkBuffer::NetworkBuffer() : m_writePosition(0), m_readPosition(0),
-m_size(0), m_dataAllocated(false)
+NetworkBuffer::NetworkBuffer() : write_position_(0), read_position_(0),
+size_(0), data_allocated_(false)
 {
 
 }
 
-NetworkBuffer::NetworkBuffer(const uint32 size) : m_writePosition(0), m_readPosition(0),
-m_size(size), m_dataAllocated(true)
+NetworkBuffer::NetworkBuffer(const uint32 size) : write_position_(0), read_position_(0),
+size_(size), data_allocated_(true)
 {
-    m_data = new uint8[size];
+    data_ = new uint8[size];
 }
 
-NetworkBuffer::NetworkBuffer(uint8* buffer, const uint32 size) : m_writePosition(0), m_readPosition(0),
-m_size(size), m_dataAllocated(false)
+NetworkBuffer::NetworkBuffer(uint8* buffer, const uint32 size) : write_position_(0), read_position_(0),
+size_(size), data_allocated_(false)
 {
-    m_data = buffer;
+    data_ = buffer;
 }
 
 NetworkBuffer::~NetworkBuffer()
@@ -43,92 +43,92 @@ NetworkBuffer::~NetworkBuffer()
 
 void NetworkBuffer::Allocate(const uint32 size)
 {
-    if (m_data == nullptr)
+    if (data_ == nullptr)
     {
-        m_size = size;
-        m_data = new uint8[size];
-        m_dataAllocated = true;
+        size_ = size;
+        data_ = new uint8[size];
+        data_allocated_ = true;
     }
 }
 
 void NetworkBuffer::Reallocate(const uint32 new_size)
 {
-    if (m_dataAllocated)
+    if (data_allocated_)
     {
-        delete[] m_data;
-        m_size = new_size;
-        m_data = new uint8[new_size];
+        delete[] data_;
+        size_ = new_size;
+        data_ = new uint8[new_size];
         Reset();
     }
 }
 
 void NetworkBuffer::Deallocate()
 {
-    if (m_dataAllocated)
+    if (data_allocated_)
     {
-        delete[] m_data;
-        m_dataAllocated = false;
+        delete[] data_;
+        data_allocated_ = false;
     }
 }
 
 void NetworkBuffer::AssignBuffer(uint8* buffer, const uint32 size)
 {
     Deallocate();
-    m_size = size;
-    m_data = buffer;
+    size_ = size;
+    data_ = buffer;
 }
 
 void NetworkBuffer::UnassignBuffer()
 {
-    if (!m_dataAllocated)
+    if (!data_allocated_)
     {
-        m_size = 0;
-        m_data = nullptr;
+        size_ = 0;
+        data_ = nullptr;
         Reset();
     }
 }
 
 bool NetworkBuffer::Write(const uint8* data, const size_t n)
 {
-    if (m_data == nullptr || data == nullptr || n > space())
+    if (data_ == nullptr || data == nullptr || n > space())
         return false;
 
-    std::memcpy(&m_data[m_writePosition], data, n);
+    std::memcpy(&data_[write_position_], data, n);
     Commit(n);
     return true;
 }
 
 bool NetworkBuffer::Read(uint8* data, const size_t n)
 {
-    if (m_data == nullptr || data == nullptr || n > length())
+    if (data_ == nullptr || data == nullptr || n > length())
         return false;
 
-    std::memcpy(data, &m_data[m_readPosition], n);
+    std::memcpy(data, &data_[read_position_], n);
     Consume(n);
     return true;
 }
 
 bool NetworkBuffer::ReadNoConsume(uint8* data, const size_t n)
 {
-    if (m_data == nullptr || data == nullptr || n > length())
+    if (data_ == nullptr || data == nullptr || n > length())
         return false;
 
-    std::memcpy(data, &m_data[m_readPosition], n);
+    std::memcpy(data, &data_[read_position_], n);
     return true;
 }
 
 void NetworkBuffer::Commit(const size_t n)
 {
-    uint32 pos = m_writePosition + n;
+    uint32 pos = write_position_ + n;
     if (capacity() >= pos)
-        m_writePosition = pos;
+        write_position_ = pos;
 }
 
 void NetworkBuffer::Consume(const size_t n)
 {
-    uint32 pos = m_readPosition + n;
+    uint32 pos = read_position_ + n;
     if (capacity() >= pos)
-        m_readPosition = pos;
+        read_position_ = pos;
 }
 
 void NetworkBuffer::Prepare()
@@ -139,15 +139,15 @@ void NetworkBuffer::Prepare()
 
 bool NetworkBuffer::Crunch()
 {
-    if (m_data != nullptr && length() != 0)
+    if (data_ != nullptr && length() != 0)
     {
-        if (m_readPosition > m_writePosition)
+        if (read_position_ > write_position_)
             return false;
 
         size_t len = length();
-        std::memmove(m_data, &m_data[m_readPosition], len);
-        m_writePosition = len;
-        m_readPosition = 0;
+        std::memmove(data_, &data_[read_position_], len);
+        write_position_ = len;
+        read_position_ = 0;
         return true;
     }
     return false;
@@ -155,36 +155,36 @@ bool NetworkBuffer::Crunch()
 
 void NetworkBuffer::Reset()
 {
-    m_writePosition = m_readPosition = 0;
+    write_position_ = read_position_ = 0;
 }
 
 uint8* NetworkBuffer::read_data() const
 {
-    if (m_data == nullptr)
+    if (data_ == nullptr)
         return nullptr;
 
-    return &m_data[m_readPosition];
+    return &data_[read_position_];
 }
 
 uint8* NetworkBuffer::write_data() const
 {
-    if (m_data == nullptr)
+    if (data_ == nullptr)
         return nullptr;
 
-    return &m_data[m_writePosition];
+    return &data_[write_position_];
 }
 
 const uint32 NetworkBuffer::length() const
 {
-    return m_writePosition - m_readPosition;
+    return write_position_ - read_position_;
 }
 
 const uint32 NetworkBuffer::space() const
 {
-    return m_size - m_writePosition;
+    return size_ - write_position_;
 }
 
 const uint32 NetworkBuffer::capacity() const
 {
-    return m_size;
+    return size_;
 }

@@ -16,6 +16,10 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+/// \addtogroup realmd Realm Daemon
+/// @{
+/// \file
+
 #include <sstream>
 #include <boost/date_time/posix_time/posix_time_duration.hpp>
 #include <boost/program_options.hpp>
@@ -62,15 +66,15 @@ DatabaseType LoginDatabase; // Accessor to the realm server database
 void HandleSignal(int signal)
 {
     switch (signal)
-    {
-    case SIGINT:
-    case SIGTERM:
+        {
+        case SIGINT:
+        case SIGTERM:
 #ifdef _WIN32
-    case SIGBREAK:
+        case SIGBREAK:
 #endif
-        stopEvent = true;
-        break;
-    }
+            stopEvent = true;
+            break;
+        }
 }
 
 /// Print out the usage string for this program on the console.
@@ -81,8 +85,10 @@ void usage(boost::program_options::options_description const& desc, const char* 
     sLog.outString("Usage: \n %s [<options>]\n%s", prog, ss.str().c_str());
 }
 
+/// Launch the realm server
 extern int main(int argc, char** argv)
 {
+    ///- Command line parsing
     std::string cfg_file;
     std::string serviceDaemonMode;
     
@@ -98,6 +104,7 @@ extern int main(int argc, char** argv)
 #endif
         ;
 
+    // parse option
     boost::program_options::variables_map vm;
 
     try 
@@ -155,8 +162,7 @@ extern int main(int argc, char** argv)
         }
     }
 
-    // Windows service command need execute before config read
-#ifdef WIN32
+#ifdef WIN32                                                // windows service command need execute before config read
     switch (serviceDaemonMode[0])
     {
         case 'i':
@@ -180,8 +186,7 @@ extern int main(int argc, char** argv)
         return 1;
     }
 
-    // Posix daemon commands need apply after config read
-#ifndef WIN32
+#ifndef WIN32                                               // posix daemon commands need apply after config read
     switch (serviceDaemonMode[0])
     {
         case 'r':
@@ -194,11 +199,12 @@ extern int main(int argc, char** argv)
 #endif
 
     sLog.Initialize();
+
     sLog.outString("%s [realm-daemon]", _FULLVERSION(REVISION_DATE, REVISION_TIME, REVISION_NR, REVISION_ID));
     sLog.outString("<Ctrl-C> to stop.\n");
     sLog.outString("Using configuration file %s.", cfg_file.c_str());
 
-    // Check the version of the configuration file
+    ///- Check the version of the configuration file
     uint32 confVersion = sConfig.GetIntDefault("ConfVersion", 0);
     if (confVersion < _REALMDCONFVERSION)
     {
@@ -216,10 +222,12 @@ extern int main(int argc, char** argv)
         DETAIL_LOG("WARNING: Outdated version of OpenSSL lib. Logins to server may not work!");
         DETAIL_LOG("WARNING: Minimal required version [OpenSSL 0.9.8k]");
     }
+
     DETAIL_LOG("Using BOOST: %i.%i.%i", BOOST_VERSION / 100000, BOOST_VERSION / 100 % 1000, BOOST_VERSION % 100);
+
     sLog.outBasic("Max allowed open files is %d", boost::asio::socket_base::max_connections);
 
-    // Realmd PID file creation
+    /// realmd PID file creation
     std::string pidfile = sConfig.GetStringDefault("PidFile", "");
     if (!pidfile.empty())
     {
@@ -234,14 +242,14 @@ extern int main(int argc, char** argv)
         sLog.outString("Daemon PID: %u\n", pid);
     }
 
-    // Initialize the database connection
+    ///- Initialize the database connection
     if (!StartDatabase())
     {
         Log::WaitBeforeContinueIfNeed();
         return 1;
     }
 
-    // Get the list of realms for the server
+    ///- Get the list of realms for the server
     sRealmList.Initialize(sConfig.GetIntDefault("RealmsStateUpdateDelay", 20));
     if (sRealmList.size() == 0)
     {
@@ -250,14 +258,15 @@ extern int main(int argc, char** argv)
         return 1;
     }
 
-    // Cleanup query
-    // Set expired bans to inactive
+    // cleanup query
+    // set expired bans to inactive
     LoginDatabase.BeginTransaction();
     LoginDatabase.Execute("UPDATE account_banned SET active = 0 WHERE unbandate<=UNIX_TIMESTAMP() AND unbandate<>bandate");
     LoginDatabase.Execute("DELETE FROM ip_banned WHERE unbandate<=UNIX_TIMESTAMP() AND unbandate<>bandate");
     LoginDatabase.CommitTransaction();
 
-    // Launch the listening network socket
+    ///- Launch the listening network socket
+
     uint16 rmport = sConfig.GetIntDefault("RealmServerPort", DEFAULT_REALMSERVER_PORT);
     std::string bind_ip = sConfig.GetStringDefault("BindIP", "0.0.0.0");
 
@@ -276,7 +285,7 @@ extern int main(int argc, char** argv)
     signal(SIGBREAK, HandleSignal);
 #endif
 
-    // Handle affinity for multiple processors and process priority on Windows
+    ///- Handle affinity for multiple processors and process priority on Windows
 #ifdef WIN32
     {
         HANDLE hProcess = GetCurrentProcess();
@@ -289,10 +298,12 @@ extern int main(int argc, char** argv)
 
             if (GetProcessAffinityMask(hProcess, &appAff, &sysAff))
             {
-                ULONG_PTR curAff = Aff & appAff; // Remove non accessible processors
+                ULONG_PTR curAff = Aff & appAff;            // remove non accessible processors
 
                 if (!curAff)
+                {
                     sLog.outError("Processors marked in UseProcessors bitmask (hex) %x not accessible for realmd. Accessible processors bitmask (hex): %x", Aff, appAff);
+                }
                 else
                 {
                     if (SetProcessAffinityMask(hProcess, curAff))
@@ -317,21 +328,20 @@ extern int main(int argc, char** argv)
     }
 #endif
 
-    // Server has started up successfully => enable async DB requests
+    // server has started up successfully => enable async DB requests
     LoginDatabase.AllowAsyncTransactions();
 
-    // Maximum counter for next ping
+    // maximum counter for next ping
     uint32 numLoops = (sConfig.GetIntDefault("MaxPingTime", 30) * (MINUTE * 1000000 / 100000));
     uint32 loopCounter = 0;
 
 #ifndef WIN32
     detachDaemon();
 #endif
-
-    // Wait for termination signal
+    ///- Wait for termination signal
     while (!stopEvent)
     {
-        // Dont move this outside the loop, the reactor will modify it
+        // dont move this outside the loop, the reactor will modify it
         boost::this_thread::sleep(boost::posix_time::milliseconds(10));
 
         if ((++loopCounter) == numLoops)
@@ -340,11 +350,10 @@ extern int main(int argc, char** argv)
             DETAIL_LOG("Ping MySQL to keep connection alive");
             LoginDatabase.Ping();
         }
-
 #ifdef WIN32
         if (serviceStatus == 0)
             stopEvent = true;
-
+        
         while (serviceStatus == 2)
             Sleep(1000);
 #endif
@@ -352,7 +361,7 @@ extern int main(int argc, char** argv)
 
     manager.reset();
 
-    // Wait for the delay thread to exit
+    ///- Wait for the delay thread to exit
     LoginDatabase.HaltDelayThread();
 
     sLog.outString("Halting process...");
@@ -379,10 +388,12 @@ bool StartDatabase()
 
     if (!LoginDatabase.CheckRequiredField("realmd_db_version", REVISION_DB_REALMD))
     {
-        // Wait for already started DB delay threads to end
+        ///- Wait for already started DB delay threads to end
         LoginDatabase.HaltDelayThread();
         return false;
     }
 
     return true;
 }
+
+/// @}
