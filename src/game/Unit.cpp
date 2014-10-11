@@ -1497,7 +1497,8 @@ uint32 Unit::SpellNonMeleeDamageLog(Unit* pVictim, uint32 spellID, uint32 damage
 {
     SpellEntry const* spellInfo = sSpellStore.LookupEntry(spellID);
     DamageInfo damageInfo(this, pVictim, spellInfo);
-    CalculateSpellDamage(&damageInfo, damage, spellInfo);
+    damageInfo.damage = damage;
+    CalculateSpellDamage(&damageInfo);
     damageInfo.target->CalculateAbsorbResistBlock(this, &damageInfo, spellInfo);
     DealDamageMods(damageInfo.target, damageInfo.damage, &damageInfo.absorb);
     SendSpellNonMeleeDamageLog(&damageInfo);
@@ -1505,83 +1506,93 @@ uint32 Unit::SpellNonMeleeDamageLog(Unit* pVictim, uint32 spellID, uint32 damage
     return damageInfo.damage;
 }
 
-void Unit::CalculateSpellDamage(DamageInfo* damageInfo, int32 _damage, SpellEntry const *spellInfo, WeaponAttackType attackType, float DamageMultiplier)
+void Unit::CalculateSpellDamage(DamageInfo* damageInfo, float DamageMultiplier)
 {
-    Unit* pVictim = damageInfo->target;
-
-    if (_damage < 0)
+    if (!damageInfo || damageInfo->damage < 0)
         return;
 
-    if (!this || !pVictim)
-        return;
-
-    if (!this->isAlive() || !pVictim->isAlive())
+    if (!damageInfo->target || !isAlive() || !damageInfo->target->isAlive())
         return;
 
     // Check spell crit chance
-    bool crit = IsSpellCrit(pVictim, spellInfo, damageInfo->SchoolMask(), attackType);
-
-    damageInfo->damage = _damage;
+    bool crit = IsSpellCrit(damageInfo->target, damageInfo->m_spellInfo, damageInfo->SchoolMask(), damageInfo->attackType);
 
     // damage bonus (per damage class)
-    switch (spellInfo->DmgClass)
+    switch (damageInfo->m_spellInfo->DmgClass)
     {
             // Melee and Ranged Spells
         case SPELL_DAMAGE_CLASS_RANGED:
         case SPELL_DAMAGE_CLASS_MELEE:
         {
             // Calculate damage bonus
-            damageInfo->damage = MeleeDamageBonusDone(pVictim, damageInfo->damage, attackType, spellInfo, SPELL_DIRECT_DAMAGE);
-            if (DamageMultiplier != 1.0f)
-                damageInfo->damage = int32(damageInfo->damage * DamageMultiplier);
-            damageInfo->damage = pVictim->MeleeDamageBonusTaken(this, damageInfo->damage, attackType, spellInfo, SPELL_DIRECT_DAMAGE);
+            damageInfo->damage = MeleeDamageBonusDone(damageInfo->target, damageInfo->damage, damageInfo->attackType, damageInfo->m_spellInfo, damageInfo->damageType);
+            if (fabs(DamageMultiplier - 1.0f) > M_NULL_F)
+                damageInfo->damage = floor((float)damageInfo->damage * DamageMultiplier);
             
+            damageInfo->damage = damageInfo->target->MeleeDamageBonusTaken(this, damageInfo->damage, damageInfo->attackType, damageInfo->m_spellInfo, damageInfo->damageType);
+
             // if crit add critical bonus
             if (crit)
             {
                 damageInfo->HitInfo |= SPELL_HIT_TYPE_CRIT;
-                damageInfo->damage = SpellCriticalDamageBonus(spellInfo, damageInfo->damage, pVictim);
+                damageInfo->damage = SpellCriticalDamageBonus(damageInfo->m_spellInfo, damageInfo->damage, damageInfo->target);
 
-                // Resilience - reduce crit damage
-                uint32 reduction_affected_damage = CalcNotIgnoreDamageReduction(damageInfo);
+                // Resilience - reduce crit damage (full or reduced)
+                uint32 reduction_affected_damage = sWorld.getConfig(CONFIG_BOOL_RESILIENCE_ALTERNATIVE_CALCULATION) ?
+                    damageInfo->damage :
+                    CalcNotIgnoreDamageReduction(damageInfo);
+                uint32 damageCritReduction = (damageInfo->attackType != RANGED_ATTACK) ?
+                    damageInfo->target->GetMeleeCritDamageReduction(reduction_affected_damage) :
+                    damageInfo->target->GetRangedCritDamageReduction(reduction_affected_damage);
 
-                if (attackType != RANGED_ATTACK)
-                    damageInfo->damage -= pVictim->GetMeleeCritDamageReduction(reduction_affected_damage);
-                else
-                    damageInfo->damage -= pVictim->GetRangedCritDamageReduction(reduction_affected_damage);
+                damageInfo->damage -= damageCritReduction;
             }
+            else
+                {
+                    damageInfo->HitInfo &= ~SPELL_HIT_TYPE_CRIT;
+                }
+                break;
         }
-        break;
+
         // Magical Attacks
         case SPELL_DAMAGE_CLASS_NONE:
         case SPELL_DAMAGE_CLASS_MAGIC:
         {
             // Calculate damage bonus
-            damageInfo->damage = SpellDamageBonusDone(pVictim, spellInfo, damageInfo->damage, SPELL_DIRECT_DAMAGE);
-            if (DamageMultiplier != 1.0f)
-                damageInfo->damage = int32(damageInfo->damage * DamageMultiplier);
-            damageInfo->damage = pVictim->SpellDamageBonusTaken(this, spellInfo, damageInfo->damage, SPELL_DIRECT_DAMAGE);
-            
+            damageInfo->damage = SpellDamageBonusDone(damageInfo->target, damageInfo->m_spellInfo, damageInfo->damage, damageInfo->damageType);
+            if (fabs(DamageMultiplier - 1.0f) > M_NULL_F)
+                damageInfo->damage = floor((float)damageInfo->damage * DamageMultiplier);
+            damageInfo->damage = damageInfo->target->SpellDamageBonusTaken(this, damageInfo->m_spellInfo, damageInfo->damage, damageInfo->damageType);
+
             // If crit add critical bonus
             if (crit)
             {
                 damageInfo->HitInfo |= SPELL_HIT_TYPE_CRIT;
-                damageInfo->damage = SpellCriticalDamageBonus(spellInfo, damageInfo->damage, pVictim);
+                damageInfo->damage = SpellCriticalDamageBonus(damageInfo->m_spellInfo, damageInfo->damage, damageInfo->target);
+                
+                // Resilience - reduce crit damage (full or reduced)
+                uint32 reduction_affected_damage = sWorld.getConfig(CONFIG_BOOL_RESILIENCE_ALTERNATIVE_CALCULATION) ?
+                damageInfo->damage :
+                CalcNotIgnoreDamageReduction(damageInfo);
 
-                // Resilience - reduce crit damage
-                uint32 reduction_affected_damage = CalcNotIgnoreDamageReduction(damageInfo);
-                damageInfo->damage -= pVictim->GetSpellCritDamageReduction(reduction_affected_damage);
+                damageInfo->damage -= damageInfo->target->GetSpellCritDamageReduction(reduction_affected_damage);
             }
+            else
+                {
+                    damageInfo->HitInfo &= ~SPELL_HIT_TYPE_CRIT;
+                }
+                break;
         }
-        break;
+        default:
+            sLog.outError("Unit::CalculateSpellDamage unknown damage class by caster: %s, spell %u", GetObjectGuid().GetString().c_str(), damageInfo->m_spellInfo->Id);
+            return;
     }
 
-    // only from players and their pets
-    if (GetTypeId() == TYPEID_PLAYER || GetObjectGuid().IsPet())
-    {
-        uint32 reduction_affected_damage = CalcNotIgnoreDamageReduction(damageInfo);
-        damageInfo->damage -= pVictim->GetSpellDamageReduction(reduction_affected_damage);
-    }
+    // Resilience - reduce regular damage (full or reduced)
+    uint32 reduction_affected_damage = sWorld.getConfig(CONFIG_BOOL_RESILIENCE_ALTERNATIVE_CALCULATION) ?
+        damageInfo->damage :
+        CalcNotIgnoreDamageReduction(damageInfo);
+    damageInfo->damage -= damageInfo->target->GetSpellDamageReduction(reduction_affected_damage);
 
     // damage mitigation
     if (damageInfo->damage > 0)
@@ -1590,7 +1601,7 @@ void Unit::CalculateSpellDamage(DamageInfo* damageInfo, int32 _damage, SpellEntr
         if (damageInfo->SchoolMask() & SPELL_SCHOOL_MASK_NORMAL)
         {
             uint32 armor_affected_damage = CalcNotIgnoreDamageReduction(damageInfo);
-            damageInfo->damage = damageInfo->damage - armor_affected_damage + CalcArmorReducedDamage(pVictim, armor_affected_damage);
+            damageInfo->damage = damageInfo->damage - armor_affected_damage + CalcArmorReducedDamage(damageInfo->target, armor_affected_damage);
         }
     }
     else
@@ -2809,7 +2820,7 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
     // attack can be redirected to another target
     pVictim = SelectMagnetTarget(pVictim);
 
-    DamageInfo damageInfo = DamageInfo(this, pVictim);
+    DamageInfo damageInfo = DamageInfo(this, pVictim, uint32(0), 0);
     damageInfo.attackType = attType;
 
     CalculateMeleeDamage(&damageInfo);
@@ -5542,8 +5553,7 @@ void Unit::SendSpellNonMeleeDamageLog(DamageInfo* log)
 
 void Unit::SendSpellNonMeleeDamageLog(Unit* target, uint32 SpellID, uint32 Damage, SpellSchoolMask damageSchoolMask, uint32 AbsorbedDamage, uint32 Resist, bool PhysicalDamage, uint32 Blocked, bool CriticalHit)
 {
-    DamageInfo log(this, target, SpellID);
-    log.damage = Damage - AbsorbedDamage - Resist - Blocked;
+    DamageInfo log(this, target, SpellID, (Damage - AbsorbedDamage - Resist - Blocked));
     log.absorb = AbsorbedDamage;
     log.resist = Resist;
     log.physicalLog = PhysicalDamage;
@@ -7663,26 +7673,33 @@ bool Unit::IsImmunedToDamage(SpellSchoolMask shoolMask)
     return false;
 }
 
-bool Unit::IsImmuneToSpell(SpellEntry const* spellInfo, bool /*castOnSelf*/)
+bool Unit::IsImmuneToSpell(SpellEntry const* spellInfo, bool isFriendly) const
 {
     if (!spellInfo)
         return false;
 
-    // TODO add spellEffect immunity checks!, player with flag in bg is immune to immunity buffs from other friendly players!
-    // SpellImmuneList const& dispelList = m_spellImmune[IMMUNITY_EFFECT];
+    uint32 effectMask = 0;
+    for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
+    {
+        if (!IsImmuneToSpellEffect(spellInfo, SpellEffectIndex(i)))
+            effectMask |= (1 << i);
+    }
+    if (!effectMask)
+        return true;
 
     SpellImmuneList const& dispelList = m_spellImmune[IMMUNITY_DISPEL];
     for (SpellImmuneList::const_iterator itr = dispelList.begin(); itr != dispelList.end(); ++itr)
         if (itr->type == spellInfo->Dispel)
             return true;
 
-    if (!spellInfo->HasAttribute(SPELL_ATTR_EX_UNAFFECTED_BY_SCHOOL_IMMUNE) &&          // unaffected by school immunity
-            !spellInfo->HasAttribute(SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY))           // can remove immune (by dispell or immune it)
+    if (!spellInfo->HasAttribute(SPELL_ATTR_UNAFFECTED_BY_INVULNERABILITY) &&
+        !spellInfo->HasAttribute(SPELL_ATTR_EX_UNAFFECTED_BY_SCHOOL_IMMUNE) &&         // unaffected by school immunity
+        !spellInfo->HasAttribute(SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY))              // can remove immune (by dispell or immune it)
     {
         SpellImmuneList const& schoolList = m_spellImmune[IMMUNITY_SCHOOL];
         for (SpellImmuneList::const_iterator itr = schoolList.begin(); itr != schoolList.end(); ++itr)
-            if (!(IsPositiveSpell(itr->spellId) && IsPositiveSpell(spellInfo->Id)) &&
-                    (itr->type & GetSpellSchoolMask(spellInfo)))
+            if ((!(IsPositiveSpell(itr->spellId) && IsPositiveSpell(spellInfo->Id)) || (!isFriendly && IsPositiveSpell(itr->spellId) && IsNonPositiveSpell(spellInfo)))
+                && (itr->type & GetSpellSchoolMask(spellInfo)))
                 return true;
     }
 
@@ -7695,21 +7712,35 @@ bool Unit::IsImmuneToSpell(SpellEntry const* spellInfo, bool /*castOnSelf*/)
 
         AuraList const& immuneAuraApply = GetAurasByType(SPELL_AURA_MECHANIC_IMMUNITY_MASK);
         for (AuraList::const_iterator iter = immuneAuraApply.begin(); iter != immuneAuraApply.end(); ++iter)
+        {
             if ((*iter)->GetModifier()->m_miscvalue & (1 << (mechanic - 1)))
                 return true;
+        }
     }
 
     return false;
 }
 
-bool Unit::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex index, bool /*castOnSelf*/) const
+bool Unit::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex index) const
 {
-    // If m_immuneToEffect type contain this effect type, IMMUNE effect.
-    uint32 effect = spellInfo->Effect[index];
-    SpellImmuneList const& effectList = m_spellImmune[IMMUNITY_EFFECT];
-    for (SpellImmuneList::const_iterator itr = effectList.begin(); itr != effectList.end(); ++itr)
-        if (itr->type == effect)
-            return true;
+    if (!spellInfo)
+        return false;
+
+    if (spellInfo->HasAttribute(SPELL_ATTR_UNAFFECTED_BY_INVULNERABILITY))
+        return false;
+
+    if (spellInfo->Effect[index] == SPELL_EFFECT_NONE)
+        return true;
+
+    if (!spellInfo->HasAttribute(SPELL_ATTR_UNAFFECTED_BY_INVULNERABILITY))
+    {
+        //If m_immuneToEffect type contain this effect type, IMMUNE effect.
+        uint32 effect = spellInfo->Effect[index];
+        SpellImmuneList const& effectList = m_spellImmune[IMMUNITY_EFFECT];
+        for (SpellImmuneList::const_iterator itr = effectList.begin(); itr != effectList.end(); ++itr)
+            if (itr->type == effect)
+                return true;
+    }
 
     if (uint32 mechanic = spellInfo->EffectMechanic[index])
     {
@@ -7720,8 +7751,10 @@ bool Unit::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex i
 
         AuraList const& immuneAuraApply = GetAurasByType(SPELL_AURA_MECHANIC_IMMUNITY_MASK);
         for (AuraList::const_iterator iter = immuneAuraApply.begin(); iter != immuneAuraApply.end(); ++iter)
+        {
             if ((*iter)->GetModifier()->m_miscvalue & (1 << (mechanic - 1)))
                 return true;
+        }
     }
 
     if (uint32 aura = spellInfo->EffectApplyAuraName[index])
@@ -7733,9 +7766,10 @@ bool Unit::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex i
 
         // Check for immune to application of harmful magical effects
         AuraList const& immuneAuraApply = GetAurasByType(SPELL_AURA_MOD_IMMUNE_AURA_APPLY_SCHOOL);
+
         if (!immuneAuraApply.empty() &&
-                spellInfo->Dispel == DISPEL_MAGIC &&        // Magic debuff)
-                !IsPositiveEffect(spellInfo, index))        // Harmful
+            spellInfo->Dispel == DISPEL_MAGIC &&            // Magic debuff)
+            !IsPositiveEffect(spellInfo, index))            // Harmful
         {
             // Check school
             SpellSchoolMask schoolMask = GetSpellSchoolMask(spellInfo);
@@ -11664,10 +11698,14 @@ void DamageInfo::Reset(uint32 _damage)
         SpellID = m_spellInfo->Id;
 
     damage = _damage;
+    baseDamage = _damage;
     cleanDamage = 0;
     absorb = 0;
     resist = 0;
     blocked = 0;
+    reduction = 0;
+    bonusDone = 0;
+    bonusTaken = 0;
     unused = false;
     HitInfo = HITINFO_NORMALSWING;
     TargetState = VICTIMSTATE_UNAFFECTED;

@@ -241,6 +241,16 @@ inline bool IsSpellRemoveAllMovementAndControlLossEffects(SpellEntry const* spel
             (SPELL_ATTR_EX5_USABLE_WHILE_CONFUSED|SPELL_ATTR_EX5_USABLE_WHILE_FEARED|SPELL_ATTR_EX5_USABLE_WHILE_STUNNED))*/;
 }
 
+bool IsEffectCauseDamage(SpellEntry const* spellInfo, SpellEffectIndex effecIdx);
+
+inline bool IsSpellCauseDamage(SpellEntry const* spellInfo)
+{
+    for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
+        if (IsEffectCauseDamage(spellInfo, SpellEffectIndex(i)))
+            return true;
+    return false;
+}
+
 inline bool IsDeathOnlySpell(SpellEntry const* spellInfo)
 {
     return spellInfo->HasAttribute(SPELL_ATTR_EX3_CAST_ON_DEAD) || spellInfo->Id == 2584;
@@ -260,6 +270,9 @@ bool IsPositiveSpell(uint32 spellId);
 bool IsPositiveSpell(SpellEntry const* spellproto);
 bool IsPositiveEffect(SpellEntry const* spellInfo, SpellEffectIndex effIndex);
 bool IsPositiveTarget(uint32 targetA, uint32 targetB);
+
+bool IsNonPositiveSpell(uint32 spellId);
+bool IsNonPositiveSpell(SpellEntry const* spellproto);
 
 bool IsExplicitPositiveTarget(uint32 targetA);
 bool IsExplicitNegativeTarget(uint32 targetA);

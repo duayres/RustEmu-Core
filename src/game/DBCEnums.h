@@ -433,12 +433,11 @@ enum SpellCastTargetFlags
 
 enum SpellEffectIndex
 {
-    EFFECT_INDEX_0     = 0,
-    EFFECT_INDEX_1     = 1,
-    EFFECT_INDEX_2     = 2
+    EFFECT_INDEX_0 = 0,
+    EFFECT_INDEX_1 = 1,
+    EFFECT_INDEX_2 = 2,
+    MAX_EFFECT_INDEX,
 };
-
-#define MAX_EFFECT_INDEX 3
 
 enum SpellFamily
 {

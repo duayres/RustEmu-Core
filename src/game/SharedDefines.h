@@ -488,7 +488,7 @@ enum SpellAttributesEx6
     SPELL_ATTR_EX6_UNK20                       = 0x00100000,// 20
     SPELL_ATTR_EX6_UNK21                       = 0x00200000,// 21
     SPELL_ATTR_EX6_UNK22                       = 0x00400000,// 22
-    SPELL_ATTR_EX6_UNK23                       = 0x00800000,// 23 not set in 3.0.3
+    SPELL_ATTR_EX6_NO_STACK_DEBUFF_MAJOR       = 0x00800000,// 23 only debuff and debuff-like spells in 3.3.5a
     SPELL_ATTR_EX6_UNK24                       = 0x01000000,// 24 not set in 3.0.3
     SPELL_ATTR_EX6_UNK25                       = 0x02000000,// 25 not set in 3.0.3
     SPELL_ATTR_EX6_UNK26                       = 0x04000000,// 26 not set in 3.0.3

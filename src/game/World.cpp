@@ -602,6 +602,8 @@ void World::LoadConfigSettings(bool reload)
 
     setConfigMinMax(CONFIG_UINT32_START_PLAYER_MONEY, "StartPlayerMoney", 0, 0, MAX_MONEY_AMOUNT);
 
+    setConfig(CONFIG_BOOL_RESILIENCE_ALTERNATIVE_CALCULATION, "ResilienceAlternativeCalculation", false);
+
     setConfig(CONFIG_UINT32_MAX_HONOR_POINTS, "MaxHonorPoints", 75000);
 
     setConfigMinMax(CONFIG_UINT32_START_HONOR_POINTS, "StartHonorPoints", 0, 0, getConfig(CONFIG_UINT32_MAX_HONOR_POINTS));

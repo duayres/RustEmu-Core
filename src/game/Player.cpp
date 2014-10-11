@@ -947,8 +947,7 @@ uint32 Player::EnvironmentalDamage(EnviromentalDamage type, uint32 damage)
         default:
             break;
         }
-    DamageInfo damageInfo = DamageInfo(this, this, spellID);
-    damageInfo.damage = damage;
+    DamageInfo damageInfo = DamageInfo(this, this, spellID, damage);
     damageInfo.damageType = SELF_DAMAGE;
     
     CalculateDamageAbsorbAndResist(this, &damageInfo);
@@ -22852,23 +22851,28 @@ void Player::SendDuelCountdown(uint32 counter)
     GetSession()->SendPacket(&data);
 }
 
-bool Player::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex index, bool castOnSelf) const
+bool Player::IsImmuneToSpell(SpellEntry const* spellInfo, bool isFriendly) const
+{
+    return Unit::IsImmuneToSpell(spellInfo, isFriendly);
+}
+
+bool Player::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex index) const
 {
     switch (spellInfo->Effect[index])
     {
-        case SPELL_EFFECT_ATTACK_ME:
-            return true;
-        default:
-            break;
+    case SPELL_EFFECT_ATTACK_ME:
+        return true;
+    default:
+        break;
     }
     switch (spellInfo->EffectApplyAuraName[index])
     {
-        case SPELL_AURA_MOD_TAUNT:
-            return true;
-        default:
-            break;
+    case SPELL_AURA_MOD_TAUNT:
+        return true;
+    default:
+        break;
     }
-    return Unit::IsImmuneToSpellEffect(spellInfo, index, castOnSelf);
+    return Unit::IsImmuneToSpellEffect(spellInfo, index);
 }
 
 void Player::SetHomebindToLocation(WorldLocation const& loc, uint32 area_id)

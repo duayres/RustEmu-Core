@@ -975,6 +975,30 @@ bool IsPositiveSpell(SpellEntry const* spellproto)
     return true;
 }
 
+bool IsNonPositiveSpell(uint32 spellId)
+{
+    SpellEntry const* spellProto = sSpellStore.LookupEntry(spellId);
+
+    if (!spellProto)
+        return false;
+
+    return IsNonPositiveSpell(spellProto);
+}
+
+bool IsNonPositiveSpell(SpellEntry const* spellProto)
+{
+    if (!spellProto)
+        return false;
+
+    if (spellProto->HasAttribute(SPELL_ATTR_EX6_NO_STACK_DEBUFF_MAJOR))
+        return true;
+
+    if (IsPositiveSpell(spellProto))
+        return false;
+
+    return true;
+}
+
 bool IsSingleTargetSpell(SpellEntry const* spellInfo)
 {
     // all other single target spells have if it has AttributesEx5
@@ -4735,4 +4759,33 @@ SpellEntry const* GetSpellEntryByDifficulty(uint32 id, Difficulty difficulty, bo
     }
 
     return NULL;
+}
+
+bool IsEffectCauseDamage(SpellEntry const* spellInfo, SpellEffectIndex effecIdx)
+{
+    if (!spellInfo)
+        return false;
+
+    switch (spellInfo->Effect[effecIdx])
+    {
+        // need much more correct effect definition in this check
+    case SPELL_EFFECT_NONE:
+    case SPELL_EFFECT_DISPEL:
+    case SPELL_EFFECT_TRIGGER_SPELL:
+    case SPELL_EFFECT_DISPEL_MECHANIC:
+    case SPELL_EFFECT_QUEST_COMPLETE:
+    case SPELL_EFFECT_KILL_CREDIT_PERSONAL:
+    case SPELL_EFFECT_KILL_CREDIT_GROUP:
+        return false;
+
+    case SPELL_EFFECT_SCHOOL_DAMAGE:
+    case SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL:
+    case SPELL_EFFECT_WEAPON_PERCENT_DAMAGE:
+    case SPELL_EFFECT_WEAPON_DAMAGE:
+    case SPELL_EFFECT_NORMALIZED_WEAPON_DMG:
+
+        // also all undefined (default mangos way)
+    default:
+        return true;
+    }
 }

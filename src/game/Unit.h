@@ -848,43 +848,36 @@ enum MeleeHitOutcome
 // Spell damage info structure based on structure sending in SMSG_SPELLNONMELEEDAMAGELOG opcode
 struct DamageInfo
 {
-    // Constructors for use with spell damage
-    DamageInfo(Unit *_attacker, Unit *_target, uint32 _SpellID)
+    // Constructors for use with spell and melee damage
+    DamageInfo(Unit *_attacker, Unit *_target, uint32 _SpellID, uint32 _damage)
         : attacker(_attacker), target(_target), SpellID(_SpellID), m_spellInfo(NULL)
     {
-        Reset();
+        Reset(_damage);
     };
 
-    DamageInfo(Unit *_attacker, Unit *_target, SpellEntry const* spellInfo)
+    DamageInfo(Unit *_attacker, Unit *_target, SpellEntry const* spellInfo, uint32 _damage = 0)
         : attacker(_attacker), target(_target), m_spellInfo(spellInfo), SpellID(0)
     {
-        Reset();
-    };
-
-    // Constructor for use with melee damage
-    DamageInfo(Unit *_attacker, Unit *_target)
-        : attacker(_attacker), target(_target), SpellID(0), m_spellInfo(NULL)
-    {
-        Reset();
+        Reset(_damage);
     };
 
     // Constructors for use on temporary operation
     DamageInfo(uint32 _damage)
         : attacker(NULL), target(NULL), SpellID(0), m_spellInfo(NULL)
     {
-        Reset();
+        Reset(_damage);
     };
 
     DamageInfo(uint32 _damage, uint32 _SpellID)
         : attacker(NULL), target(NULL), SpellID(_SpellID), m_spellInfo(NULL)
     {
-        Reset();
+        Reset(_damage);
     };
 
     DamageInfo(uint32 _damage, SpellEntry const* spellInfo)
         : attacker(NULL), target(NULL), m_spellInfo(spellInfo), SpellID(0)
     {
-        Reset();
+        Reset(_damage);
     };
 
     // main operations
@@ -905,6 +898,7 @@ struct DamageInfo
     // Spell parameters
     uint32            SpellID;
     SpellEntry const* m_spellInfo;
+    SpellEntry const* GetSpellProto() const { return m_spellInfo; }
     SpellSchoolMask   SchoolMask();
 
     // Damage divide
@@ -912,7 +906,17 @@ struct DamageInfo
     uint32 absorb;
     uint32 resist;
     uint32 blocked;
-    int32 cleanDamage;          // Used only for rage calculation
+    int32  cleanDamage;          // Used only for rage calculation
+    uint32 reduction;
+
+    // Damage calculation
+    uint32 baseDamage;
+    uint32 bonusDone;
+    uint32 bonusTaken;
+    uint32 Damage() {
+        return (baseDamage + bonusDone + bonusTaken
+            - reduction - absorb - resist - blocked);
+    };
 
     // Various types
     WeaponAttackType attackType;
@@ -1540,7 +1544,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         bool IsAllowedDamageInArea(Unit* pVictim) const;
 
-        void CalculateSpellDamage(DamageInfo* damageInfo, int32 damage, SpellEntry const *spellInfo, WeaponAttackType attackType = BASE_ATTACK, float DamageMultiplier = 1.0f);
+        void CalculateSpellDamage(DamageInfo* damageInfo, float DamageMultiplier = 1.0f);
         void DealSpellDamage(DamageInfo* damageInfo, bool durabilityLoss);
 
         // player or player's pet resilience (-1%)
@@ -2096,9 +2100,9 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         void ApplySpellImmune(uint32 spellId, uint32 op, uint32 type, bool apply);
         void ApplySpellDispelImmunity(const SpellEntry* spellProto, DispelType type, bool apply);
-        virtual bool IsImmuneToSpell(SpellEntry const* spellInfo, bool castOnSelf);
+        virtual bool IsImmuneToSpell(SpellEntry const* spellInfo, bool isFriendly) const;
         bool IsImmunedToDamage(SpellSchoolMask meleeSchoolMask);
-        virtual bool IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex index, bool castOnSelf) const;
+        virtual bool IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex index) const;
 
         uint32 CalcArmorReducedDamage(Unit* pVictim, const uint32 damage);
         void CalculateDamageAbsorbAndResist(Unit *pCaster, DamageInfo* damageInfo, bool canReflect = false);

@@ -839,7 +839,7 @@ void Spell::AddUnitTarget(Unit* pVictim, SpellEffectIndex effIndex)
         return;
 
     // Check for effect immune skip if immuned
-    bool immuned = pVictim->IsImmuneToSpellEffect(m_spellInfo, effIndex, pVictim == m_caster);
+    bool immuned = pVictim->IsImmuneToSpellEffect(m_spellInfo, effIndex);
 
     if (pVictim->GetTypeId() == TYPEID_UNIT && ((Creature*)pVictim)->IsTotem() && (m_spellFlags & SPELL_FLAG_REDIRECTED))
         immuned = false;
@@ -1000,10 +1000,11 @@ void Spell::AddItemTarget(Item* pitem, SpellEffectIndex effIndex)
     m_UniqueItemInfo.push_back(target);
 }
 
-void Spell::DoAllEffectOnTarget(TargetInfo* target)
+void Spell::DoAllEffectOnTarget(TargetInfo *target)
 {
-    if (target->processed)                                  // Check target
+    if (!target || target->processed)                       // Check target
         return;
+
     target->processed = true;                               // Target checked in apply effects procedure
 
     // Get mask of effects for target
@@ -1014,7 +1015,7 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
         return;
 
     // Get original caster (if exist) and calculate damage/healing from him data
-    Unit* real_caster = GetAffectiveCaster();
+    Unit *real_caster = GetAffectiveCaster();
     // FIXME: in case wild GO heal/damage spells will be used target bonuses
     Unit* caster = real_caster ? real_caster : m_caster;
 
@@ -1037,14 +1038,13 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
     // for example caster bonus or animation,
     // except miss case where will assigned PROC_EX_* flags later
     if (((damageInfo.procAttacker | damageInfo.procVictim) & NEGATIVE_TRIGGER_MASK) &&
-            !(target->effectMask & m_negativeEffectMask) && missInfo == SPELL_MISS_NONE)
+        !(target->effectMask & m_negativeEffectMask) && missInfo == SPELL_MISS_NONE)
     {
         damageInfo.procAttacker = PROC_FLAG_NONE;
         damageInfo.procVictim = PROC_FLAG_NONE;
     }
 
-    float speed = m_spellInfo->speed == 0.0f && m_triggeredBySpellInfo ? m_triggeredBySpellInfo->speed : m_spellInfo->speed;
-    if (speed > 0.0f)
+    if (m_spellInfo->speed > 0 || GetDelayStart())
     {
         // mark effects that were already handled in Spell::HandleDelayedSpellLaunch on spell launch as processed
         for (int32 i = 0; i < MAX_EFFECT_INDEX; ++i)
@@ -1055,13 +1055,25 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
         m_damage += target->damage;
     }
 
-    if (missInfo == SPELL_MISS_NONE)                        // In case spell hit target, do all effect on that target
+    // recheck for availability/visibility of target
+    if (((m_spellInfo->speed > 0.0f ||
+        (m_spellInfo->EffectImplicitTargetA[0] == TARGET_CHAIN_DAMAGE &&
+        GetSpellCastTime(m_spellInfo, this) > 0)) &&
+        (!unit->isVisibleForOrDetect(m_caster, m_caster, false) && !m_IsTriggeredSpell)))
+    {
+        caster->SendSpellMiss(unit, m_spellInfo->Id, SPELL_MISS_EVADE);
+        missInfo = SPELL_MISS_EVADE;
+        return;
+    }
+
+    if (missInfo == SPELL_MISS_NONE)                          // In case spell hit target, do all effect on that target
         DoSpellHitOnUnit(unit, mask);
     else if (missInfo == SPELL_MISS_REFLECT)                // In case spell reflect from target, do all effect on caster (if hit)
     {
         if (target->reflectResult == SPELL_MISS_NONE)       // If reflected spell hit caster -> do all effect on him
         {
             DoSpellHitOnUnit(m_caster, mask);
+            damageInfo.target = m_caster;
             unitTarget = m_caster;
         }
     }
@@ -1071,7 +1083,7 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
         {
             // can cause back attack (if detected)
             if (!m_spellInfo->HasAttribute(SPELL_ATTR_EX3_NO_INITIAL_AGGRO) && !IsPositiveSpell(m_spellInfo->Id) &&
-                    m_caster->isVisibleForOrDetect(unit, unit, false))
+                m_caster->isVisibleForOrDetect(unit, unit, false))
             {
                 if (!unit->isInCombat() && unit->GetTypeId() != TYPEID_PLAYER && ((Creature*)unit)->AI())
                     ((Creature*)unit)->AI()->AttackedBy(real_caster);
@@ -1082,6 +1094,7 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
             }
         }
     }
+
 
     // All calculated do it!
     // Do healing and triggers
@@ -1120,14 +1133,21 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
     {
         // Fill base damage struct (unitTarget - is real spell target)
 
-        if (speed > 0.0f)
+        if (m_spellInfo->speed > 0)
         {
             damageInfo.damage = m_damage;
             damageInfo.HitInfo = target->HitInfo;
         }
         // Add bonuses and fill damageInfo struct
         else
-            caster->CalculateSpellDamage(&damageInfo, m_damage, m_spellInfo, m_attackType);
+        {
+            float dmgMultiplier = 1.0f;
+            if (m_damageIndex >= 0 && (m_applyMultiplierMask & (1 << m_damageIndex)))
+                dmgMultiplier = m_damageMultipliers[m_damageIndex];
+
+            damageInfo.damage = m_damage;
+            caster->CalculateSpellDamage(&damageInfo, dmgMultiplier);
+        }
 
         unitTarget->CalculateAbsorbResistBlock(caster, &damageInfo, m_spellInfo);
 
@@ -1141,6 +1161,8 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
 
         if (damageInfo.absorb && damageInfo.damage == 0)
             damageInfo.procEx &= ~PROC_EX_DIRECT_DAMAGE;
+        else if (damageInfo.damage > 0)
+            damageInfo.procEx |= PROC_EX_DIRECT_DAMAGE;
 
         // Do triggers for unit (reflect triggers passed on hit phase for correct drop charge)
         if (m_canTrigger && missInfo != SPELL_MISS_REFLECT)
@@ -1153,33 +1175,36 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
 
         // trigger weapon enchants for weapon based spells; exclude spells that stop attack, because may break CC
         if (m_caster->GetTypeId() == TYPEID_PLAYER && m_spellInfo->EquippedItemClass == ITEM_CLASS_WEAPON &&
-                !m_spellInfo->HasAttribute(SPELL_ATTR_STOP_ATTACK_TARGET))
+            !m_spellInfo->HasAttribute(SPELL_ATTR_STOP_ATTACK_TARGET))
             ((Player*)m_caster)->CastItemCombatSpell(unitTarget, m_attackType);
 
         // Haunt (NOTE: for avoid use additional field damage stored in dummy value (replace unused 100%)
         // apply before deal damage because aura can be removed at target kill
         if (m_spellInfo->SpellFamilyName == SPELLFAMILY_WARLOCK && m_spellInfo->SpellIconID == 3172 &&
-                (m_spellInfo->SpellFamilyFlags & UI64LIT(0x0004000000000000)))
+            m_spellInfo->SpellFamilyFlags.test<CF_WARLOCK_HAUNT>())
             if (Aura* dummy = unitTarget->GetDummyAura(m_spellInfo->Id))
-                dummy->GetModifier()->m_amount = damageInfo.damage;
+                dummy->GetModifier()->m_amount = damageInfo.damage + damageInfo.absorb;
 
         caster->DealSpellDamage(&damageInfo, true);
 
         // Scourge Strike, here because needs to use final damage in second part of the spell
-        if (m_spellInfo->SpellFamilyName == SPELLFAMILY_DEATHKNIGHT && m_spellInfo->SpellFamilyFlags & UI64LIT(0x0800000000000000))
+        if (m_spellInfo->IsFitToFamily<SPELLFAMILY_DEATHKNIGHT, CF_DEATHKNIGHT_SCOURGE_STRIKE>())
         {
             uint32 count = 0;
             Unit::SpellAuraHolderMap const& auras = unitTarget->GetSpellAuraHolderMap();
             for (Unit::SpellAuraHolderMap::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
             {
                 if (itr->second->GetSpellProto()->Dispel == DISPEL_DISEASE &&
-                        itr->second->GetCasterGuid() == caster->GetObjectGuid())
+                    itr->second->GetCasterGuid() == caster->GetObjectGuid())
                     ++count;
             }
 
             if (count)
             {
                 int32 bp = count * CalculateDamage(EFFECT_INDEX_2, unitTarget) * damageInfo.damage / 100;
+                if (Aura* dummy = caster->GetDummyAura(64736)) // Item - Death Knight T8 Melee 4P Bonus
+                    bp *= ((float)dummy->GetModifier()->m_amount + 100.0f) / 100.0f;
+
                 if (bp)
                     caster->CastCustomSpell(unitTarget, 70890, &bp, NULL, NULL, true);
             }
@@ -1199,6 +1224,19 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
             damageInfo.procAttacker = saveAttacker;
         }
     }
+
+    // Update damage multipliers
+    for (uint8 effectNumber = 0; effectNumber < MAX_EFFECT_INDEX; ++effectNumber)
+        if ((mask & (1 << effectNumber)) && (m_applyMultiplierMask & (1 << effectNumber)))
+        {
+        // Get multiplier
+        float multiplier = m_spellInfo->DmgMultiplier[effectNumber];
+        // Apply multiplier mods
+        if (real_caster)
+            if (Player* modOwner = real_caster->GetSpellModOwner())
+                modOwner->ApplySpellMod(m_spellInfo->Id, SPELLMOD_EFFECT_PAST_FIRST, multiplier, this);
+        m_damageMultipliers[effectNumber] *= multiplier;
+        }
 
     // Call scripted function for AI if this spell is casted upon a creature
     if (unit->GetTypeId() == TYPEID_UNIT)
@@ -1222,16 +1260,30 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
 
 void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
 {
-    if (!unit || !effectMask)
+    if (!unit || (!effectMask && !damage))
         return;
 
     Unit* realCaster = GetAffectiveCaster();
 
+    // Recheck effect immune (only for delayed spells)
+    if (m_spellInfo->speed)
+    {
+        for (int effectNumber = 0; effectNumber < MAX_EFFECT_INDEX; ++effectNumber)
+        {
+            if (effectMask & (1 << effectNumber))
+            {
+                // don't handle effect to which target is immuned
+                if (unit->IsImmuneToSpellEffect(m_spellInfo, SpellEffectIndex(effectNumber)))
+                    effectMask &= ~(1 << effectNumber);
+            }
+        }
+    }
+
     // Recheck immune (only for delayed spells)
-    float speed = m_spellInfo->speed == 0.0f && m_triggeredBySpellInfo ? m_triggeredBySpellInfo->speed : m_spellInfo->speed;
-    if (speed && (
-                unit->IsImmunedToDamage(GetSpellSchoolMask(m_spellInfo)) ||
-                unit->IsImmuneToSpell(m_spellInfo, unit == realCaster)))
+    if (m_spellInfo->speed && (
+        (IsSpellCauseDamage(m_spellInfo) && unit->IsImmunedToDamage(GetSpellSchoolMask(m_spellInfo))) ||
+        unit->IsImmuneToSpell(m_spellInfo, GetAffectiveUnitCaster()->IsFriendlyTo(unit))) &&
+        !m_spellInfo->HasAttribute(SPELL_ATTR_UNAFFECTED_BY_INVULNERABILITY))
     {
         if (realCaster)
             realCaster->SendSpellMiss(unit, m_spellInfo->Id, SPELL_MISS_IMMUNE);
@@ -1240,21 +1292,21 @@ void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
         return;
     }
 
-    if (unit->GetTypeId() == TYPEID_PLAYER)
+    if (unit->GetTypeId() == TYPEID_PLAYER && unit->IsInWorld())
     {
         ((Player*)unit)->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_BE_SPELL_TARGET, m_spellInfo->Id);
         ((Player*)unit)->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_BE_SPELL_TARGET2, m_spellInfo->Id);
     }
 
-    if (realCaster && realCaster->GetTypeId() == TYPEID_PLAYER)
+    if (realCaster && realCaster->GetTypeId() == TYPEID_PLAYER && realCaster->IsInWorld())
         ((Player*)realCaster)->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_CAST_SPELL2, m_spellInfo->Id, 0, unit);
 
     if (realCaster && realCaster != unit)
     {
         // Recheck  UNIT_FLAG_NON_ATTACKABLE for delayed spells
-        if (speed > 0.0f &&
-                unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE) &&
-                unit->GetCharmerOrOwnerGuid() != m_caster->GetObjectGuid())
+        if (m_spellInfo->speed > 0.0f &&
+            unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE) &&
+            unit->GetCharmerOrOwnerGuid() != m_caster->GetObjectGuid())
         {
             realCaster->SendSpellMiss(unit, m_spellInfo->Id, SPELL_MISS_EVADE);
             ResetEffectDamageAndHeal();
@@ -1264,29 +1316,19 @@ void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
         if (!realCaster->IsFriendlyTo(unit))
         {
             // for delayed spells ignore not visible explicit target
-            if (speed > 0.0f && unit == m_targets.getUnitTarget() &&
-                    !unit->isVisibleForOrDetect(m_caster, m_caster, false))
+            if (m_spellInfo->GetSpeed() > M_NULL_F && unit == m_targets.getUnitTarget() &&
+                (!unit->isVisibleForOrDetect(m_caster, m_caster, false) && !m_IsTriggeredSpell))
             {
                 realCaster->SendSpellMiss(unit, m_spellInfo->Id, SPELL_MISS_EVADE);
                 ResetEffectDamageAndHeal();
                 return;
             }
 
-            // not break stealth by cast targeting
-            if (!m_spellInfo->HasAttribute(SPELL_ATTR_EX_NOT_BREAK_STEALTH))
-                unit->RemoveSpellsCausingAura(SPELL_AURA_MOD_STEALTH);
-
-            // can cause back attack (if detected), stealth removed at Spell::cast if spell break it
-            if (!m_spellInfo->HasAttribute(SPELL_ATTR_EX3_NO_INITIAL_AGGRO) && !IsPositiveSpell(m_spellInfo->Id) &&
-                    m_caster->isVisibleForOrDetect(unit, unit, false))
+            if (!m_spellInfo->HasAttribute(SPELL_ATTR_EX3_NO_INITIAL_AGGRO)
+                && !m_spellInfo->HasAttribute(SPELL_ATTR_EX_NO_THREAT)
+                && (!IsPositiveSpell(m_spellInfo->Id) || IsNonPositiveSpell(m_spellInfo))
+                && realCaster->isVisibleForOrDetect(unit, unit, false))
             {
-                // use speedup check to avoid re-remove after above lines
-                if (m_spellInfo->HasAttribute(SPELL_ATTR_EX_NOT_BREAK_STEALTH))
-                    unit->RemoveSpellsCausingAura(SPELL_AURA_MOD_STEALTH);
-
-                // caster can be detected but have stealth aura
-                m_caster->RemoveSpellsCausingAura(SPELL_AURA_MOD_STEALTH);
-
                 if (!unit->IsStandState() && !unit->hasUnitState(UNIT_STAT_STUNNED))
                     unit->SetStandState(UNIT_STAND_STATE_STAND);
 
@@ -1304,7 +1346,7 @@ void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
         else
         {
             // for delayed spells ignore negative spells (after duel end) for friendly targets
-            if (speed > 0.0f && !IsPositiveSpell(m_spellInfo->Id))
+            if (m_spellInfo->speed > 0.0f && !IsPositiveSpell(m_spellInfo->Id))
             {
                 realCaster->SendSpellMiss(unit, m_spellInfo->Id, SPELL_MISS_EVADE);
                 ResetEffectDamageAndHeal();
@@ -1324,12 +1366,16 @@ void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
     }
 
     // Get Data Needed for Diminishing Returns, some effects may have multiple auras, so this must be done on spell hit, not aura add
-    m_diminishGroup = GetDiminishingReturnsGroupForSpell(m_spellInfo, m_triggeredByAuraSpell);
-    m_diminishLevel = unit->GetDiminishing(m_diminishGroup);
-    // Increase Diminishing on unit, current informations for actually casts will use values above
-    if ((GetDiminishingReturnsGroupType(m_diminishGroup) == DRTYPE_PLAYER && unit->GetTypeId() == TYPEID_PLAYER) ||
-            GetDiminishingReturnsGroupType(m_diminishGroup) == DRTYPE_ALL)
-        unit->IncrDiminishing(m_diminishGroup);
+    // Diminishing must not affect spells, casted on self
+    if ((realCaster && unit && realCaster != unit) || (m_spellFlags & SPELL_FLAG_REFLECTED))
+    {
+        m_diminishGroup = GetDiminishingReturnsGroupForSpell(m_spellInfo, m_triggeredByAuraSpell);
+        m_diminishLevel = unit->GetDiminishing(m_diminishGroup);
+        // Increase Diminishing on unit, current informations for actually casts will use values above
+        if ((GetDiminishingReturnsGroupType(m_diminishGroup) == DRTYPE_PLAYER && unit->GetCharmerOrOwnerPlayerOrPlayerItself()) ||
+            GetDiminishingReturnsGroupType(m_diminishGroup) >= DRTYPE_ALL)
+            unit->IncrDiminishing(m_diminishGroup);
+    }
 
     // Apply additional spell effects to target
     CastPreCastSpells(unit);
@@ -1346,17 +1392,7 @@ void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
     {
         if (effectMask & (1 << effectNumber))
         {
-            HandleEffects(unit, NULL, NULL, SpellEffectIndex(effectNumber), m_damageMultipliers[effectNumber]);
-            if (m_applyMultiplierMask & (1 << effectNumber))
-            {
-                // Get multiplier
-                float multiplier = m_spellInfo->DmgMultiplier[effectNumber];
-                // Apply multiplier mods
-                if (realCaster)
-                    if (Player* modOwner = realCaster->GetSpellModOwner())
-                        modOwner->ApplySpellMod(m_spellInfo->Id, SPELLMOD_EFFECT_PAST_FIRST, multiplier, this);
-                m_damageMultipliers[effectNumber] *= multiplier;
-            }
+            HandleEffects(unit, NULL, NULL, SpellEffectIndex(effectNumber));
         }
     }
 
@@ -1399,8 +1435,9 @@ void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
 
 void Spell::DoAllEffectOnTarget(GOTargetInfo* target)
 {
-    if (target->processed)                                  // Check target
+    if (!target || target->processed)                       // Check target
         return;
+
     target->processed = true;                               // Target checked in apply effects procedure
 
     uint32 effectMask = target->effectMask;
@@ -1445,9 +1482,9 @@ void Spell::HandleDelayedSpellLaunch(TargetInfo* target)
         return;
 
     // Get original caster (if exist) and calculate damage/healing from him data
-    Unit* real_caster = GetAffectiveCaster();
+    Unit *real_caster = GetAffectiveCaster();
     // FIXME: in case wild GO heal/damage spells will be used target bonuses
-    Unit* caster = real_caster ? real_caster : m_caster;
+    Unit *caster = real_caster ? real_caster : m_caster;
 
     SpellMissInfo missInfo = target->missCondition;
     // Need init unitTarget by default unit (can changed in code on reflect)
@@ -1455,35 +1492,52 @@ void Spell::HandleDelayedSpellLaunch(TargetInfo* target)
     unitTarget = unit;
 
     // Reset damage/healing counter
-    m_damage = 0;
-    m_healing = 0; // healing maybe not needed at this point
+    ResetEffectDamageAndHeal(); // healing maybe not needed at this point
 
     // Fill base damage struct (unitTarget - is real spell target)
     DamageInfo damageInfo(caster, unitTarget, m_spellInfo);
+    damageInfo.attackType = m_attackType;
 
     // keep damage amount for reflected spells
     if (missInfo == SPELL_MISS_NONE || (missInfo == SPELL_MISS_REFLECT && target->reflectResult == SPELL_MISS_NONE))
     {
+        std::bitset<MAX_EFFECT_INDEX> update_mult;
+
         for (int32 effectNumber = 0; effectNumber < MAX_EFFECT_INDEX; ++effectNumber)
         {
-            if (mask & (1 << effectNumber) && IsEffectHandledOnDelayedSpellLaunch(m_spellInfo, SpellEffectIndex(effectNumber)))
+            if ((mask & (1 << effectNumber)) && IsEffectHandledOnDelayedSpellLaunch(m_spellInfo, SpellEffectIndex(effectNumber)))
             {
-                HandleEffects(unit, NULL, NULL, SpellEffectIndex(effectNumber), m_damageMultipliers[effectNumber]);
+                HandleEffects(unit, NULL, NULL, SpellEffectIndex(effectNumber));
                 if (m_applyMultiplierMask & (1 << effectNumber))
                 {
-                    // Get multiplier
-                    float multiplier = m_spellInfo->DmgMultiplier[effectNumber];
-                    // Apply multiplier mods
-                    if (real_caster)
-                        if (Player* modOwner = real_caster->GetSpellModOwner())
-                            modOwner->ApplySpellMod(m_spellInfo->Id, SPELLMOD_EFFECT_PAST_FIRST, multiplier, this);
-                    m_damageMultipliers[effectNumber] *= multiplier;
+                    update_mult[effectNumber] = true;
                 }
             }
         }
 
         if (m_damage > 0)
-            caster->CalculateSpellDamage(&damageInfo, m_damage, m_spellInfo, m_attackType);
+        {
+            float dmgMultiplier = 1.0f;
+            if (m_damageIndex >= 0 && (m_applyMultiplierMask & (1 << m_damageIndex)))
+                dmgMultiplier = m_damageMultipliers[m_damageIndex];
+            damageInfo.damage = m_damage;
+            caster->CalculateSpellDamage(&damageInfo, dmgMultiplier);
+        }
+
+        // Update damage multipliers
+        for (int32 effectNumber = 0; effectNumber < MAX_EFFECT_INDEX; ++effectNumber)
+        {
+            if (update_mult[effectNumber])
+            {
+                // Get multiplier
+                float multiplier = m_spellInfo->DmgMultiplier[effectNumber];
+                // Apply multiplier mods
+                if (real_caster)
+                    if (Player* modOwner = real_caster->GetSpellModOwner())
+                        modOwner->ApplySpellMod(m_spellInfo->Id, SPELLMOD_EFFECT_PAST_FIRST, multiplier, this);
+                m_damageMultipliers[effectNumber] *= multiplier;
+            }
+        }
     }
 
     target->damage = damageInfo.damage;
@@ -4746,7 +4800,7 @@ void Spell::HandleThreatSpells()
     DEBUG_FILTER_LOG(LOG_FILTER_SPELL_CAST, "Spell %u added an additional %f threat for %s " SIZEFMTD " target(s)", m_spellInfo->Id, threat, positive ? "assisting" : "harming", m_UniqueTargetInfo.size());
 }
 
-void Spell::HandleEffects(Unit* pUnitTarget, Item* pItemTarget, GameObject* pGOTarget, SpellEffectIndex i, float DamageMultiplier)
+void Spell::HandleEffects(Unit *pUnitTarget, Item *pItemTarget, GameObject *pGOTarget, SpellEffectIndex i)
 {
     unitTarget = pUnitTarget;
     itemTarget = pItemTarget;
@@ -4754,13 +4808,13 @@ void Spell::HandleEffects(Unit* pUnitTarget, Item* pItemTarget, GameObject* pGOT
 
     uint8 eff = m_spellInfo->Effect[i];
 
-    damage = int32(CalculateDamage(i, unitTarget) * DamageMultiplier);
+    damage = CalculateDamage(i, unitTarget);
 
     DEBUG_FILTER_LOG(LOG_FILTER_SPELL_CAST, "Spell %u Effect%d : %u Targets: %s, %s, %s",
-                     m_spellInfo->Id, i, eff,
-                     unitTarget ? unitTarget->GetGuidStr().c_str() : "-",
-                     itemTarget ? itemTarget->GetGuidStr().c_str() : "-",
-                     gameObjTarget ? gameObjTarget->GetGuidStr().c_str() : "-");
+        m_spellInfo->Id, i, eff,
+        unitTarget ? unitTarget->GetGuidStr().c_str() : "-",
+        itemTarget ? itemTarget->GetGuidStr().c_str() : "-",
+        gameObjTarget ? gameObjTarget->GetGuidStr().c_str() : "-");
 
     if (eff < TOTAL_SPELL_EFFECTS)
     {
@@ -4770,6 +4824,10 @@ void Spell::HandleEffects(Unit* pUnitTarget, Item* pItemTarget, GameObject* pGOT
     {
         sLog.outError("WORLD: Spell FX %d > TOTAL_SPELL_EFFECTS ", eff);
     }
+
+    // store effect index who did the damage (for picking correct damage multiplier)
+    if (m_damage > 0)
+        m_damageIndex = i;
 }
 
 void Spell::AddTriggeredSpell(uint32 spellId)
@@ -7578,6 +7636,7 @@ void Spell::ResetEffectDamageAndHeal()
 {
     m_damage = 0;
     m_healing = 0;
+    m_damageIndex = -1;
 }
 
 void Spell::SelectMountByAreaAndSkill(Unit* target, SpellEntry const* parentSpell, uint32 spellId75, uint32 spellId150, uint32 spellId225, uint32 spellId300, uint32 spellIdSpecial)

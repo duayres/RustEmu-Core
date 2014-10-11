@@ -3913,8 +3913,7 @@ bool ChatHandler::HandleDamageCommand(char* args)
         player->DealDamage(target, damage, NULL, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, NULL, false);
         if (target != player)
         {
-            DamageInfo damageInfo = DamageInfo(player, target);
-            damageInfo.damage = damage;
+            DamageInfo damageInfo = DamageInfo(player, target, uint32(0), damage);
             damageInfo.HitInfo = HITINFO_NORMALSWING2;
             damageInfo.TargetState = VICTIMSTATE_NORMAL;
             m_session->GetPlayer()->SendAttackStateUpdate(&damageInfo);
@@ -3942,8 +3941,7 @@ bool ChatHandler::HandleDamageCommand(char* args)
     // melee damage by specific school
     if (!*args)
     {
-        DamageInfo damageInfo = DamageInfo(player, target, spellid);
-        damageInfo.damage = damage;
+        DamageInfo damageInfo = DamageInfo(player, target, spellid, damage);
         damageInfo.absorb = 0;
         damageInfo.resist = 0;
         damageInfo.HitInfo = HITINFO_NORMALSWING2;

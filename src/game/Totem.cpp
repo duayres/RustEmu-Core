@@ -181,27 +181,28 @@ void Totem::SetTypeBySummonSpell(SpellEntry const* spellProto)
         m_type = TOTEM_STATUE;                              // Jewelery statue
 }
 
-bool Totem::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex index, bool castOnSelf) const
+bool Totem::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex index) const
 {
-    // Totem may affected by some specific spells
-    // Mana Spring, Healing stream, Mana tide
-    // Flags : 0x00000002000 | 0x00000004000 | 0x00004000000 -> 0x00004006000
-    if (spellInfo->SpellFamilyName == SPELLFAMILY_SHAMAN && spellInfo->IsFitToFamilyMask(UI64LIT(0x00004006000)))
+    if (!spellInfo)
+        return true;
+
+    // Author - Velvet. seems not fully correct, but usable.
+    if (spellInfo->GetSpellFamilyFlags().test<CF_SHAMAN_MANA_SPRING, CF_SHAMAN_HEALING_STREAM, CF_SHAMAN_MISC_TOTEM_EFFECTS>())
         return false;
 
     switch (spellInfo->Effect[index])
     {
-        case SPELL_EFFECT_ATTACK_ME:
-            // immune to any type of regeneration effects hp/mana etc.
-        case SPELL_EFFECT_HEAL:
-        case SPELL_EFFECT_HEAL_MAX_HEALTH:
-        case SPELL_EFFECT_HEAL_MECHANICAL:
-        case SPELL_EFFECT_HEAL_PCT:
-        case SPELL_EFFECT_ENERGIZE:
-        case SPELL_EFFECT_ENERGIZE_PCT:
-            return true;
-        default:
-            break;
+    case SPELL_EFFECT_ATTACK_ME:
+        // immune to any type of regeneration effects hp/mana etc.
+    case SPELL_EFFECT_HEAL:
+    case SPELL_EFFECT_HEAL_MAX_HEALTH:
+    case SPELL_EFFECT_HEAL_MECHANICAL:
+    case SPELL_EFFECT_HEAL_PCT:
+    case SPELL_EFFECT_ENERGIZE:
+    case SPELL_EFFECT_ENERGIZE_PCT:
+        return true;
+    default:
+        break;
     }
 
     if (!IsPositiveSpell(spellInfo))
@@ -217,5 +218,5 @@ bool Totem::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex 
             return true;
     }
 
-    return Creature::IsImmuneToSpellEffect(spellInfo, index, castOnSelf);
+    return Creature::IsImmuneToSpellEffect(spellInfo, index);
 }

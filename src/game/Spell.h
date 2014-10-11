@@ -427,7 +427,7 @@ class Spell
         void SendChannelStart(uint32 duration);
         void SendResurrectRequest(Player* target);
 
-        void HandleEffects(Unit* pUnitTarget, Item* pItemTarget, GameObject* pGOTarget, SpellEffectIndex i, float DamageMultiplier = 1.0);
+        void HandleEffects(Unit *pUnitTarget, Item *pItemTarget, GameObject *pGOTarget, SpellEffectIndex i);
         void HandleThreatSpells();
         // void HandleAddAura(Unit* Target);
 
@@ -477,6 +477,9 @@ class Spell
         Unit* GetAffectiveCaster() const { return m_originalCasterGUID ? m_originalCaster : m_caster; }
         // m_originalCasterGUID can store GO guid, and in this case this is visual caster
         WorldObject* GetCastingObject() const;
+
+        // Unstead of GetAffectiveCaster() not return NULL if original caster is GameObject.
+        Unit* GetAffectiveUnitCaster() const { return (m_originalCaster ? m_originalCaster : m_caster); }
 
         uint32 GetPowerCost() const { return m_powerCost; }
 
@@ -545,7 +548,7 @@ class Spell
         bool m_referencedFromCurrentSpell;                  // mark as references to prevent deleted and access by dead pointers
         bool m_executedCurrently;                           // mark as executed to prevent deleted and access by dead pointers
         uint8 m_applyMultiplierMask;                        // by effect: damage multiplier needed?
-        float m_damageMultipliers[3];                       // by effect: damage multiplier
+        float m_damageMultipliers[MAX_EFFECT_INDEX];        // by effect: damage multiplier
 
         // Current targets, to be used in SpellEffects (MUST BE USED ONLY IN SPELL EFFECTS)
         Unit* unitTarget;
@@ -565,6 +568,7 @@ class Spell
         int32 m_damage;                                     // Damage   in effects count here
         int32 m_healing;                                    // Healing in effects count here
         int32 m_healthLeech;                                // Health leech in effects for all targets count here
+        int8 m_damageIndex;                                 // Index of last effect that added to m_damage
 
         //******************************************
         // Spell trigger system

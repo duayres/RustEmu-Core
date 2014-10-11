@@ -4502,6 +4502,14 @@ void Spell::EffectPowerBurn(SpellEffectIndex eff_idx)
 
     new_damage = int32(new_damage * multiplier);
     m_damage += new_damage;
+
+    DamageInfo damageInfo(m_caster, unitTarget, m_spellInfo);
+    damageInfo.damage = new_damage;
+    // Set trigger flag
+    damageInfo.procAttacker = PROC_FLAG_NONE;
+    damageInfo.procVictim = PROC_FLAG_TAKEN_ANY_DAMAGE;
+    damageInfo.procEx = PROC_EX_DIRECT_DAMAGE;
+    unitTarget->ProcDamageAndSpellFor(true, &damageInfo);
 }
 
 void Spell::EffectHeal(SpellEffectIndex /*eff_idx*/)
