@@ -604,7 +604,11 @@ bool ChatHandler::HandleGonameCommand(char* args)
 
         // to point to see at target with same orientation
         float x, y, z;
-        target->GetContactPoint(_player, x, y, z);
+
+        if (_player->GetMapId() == target->GetMapId())
+            target->GetContactPoint(_player, x, y, z);
+        else
+            target->GetPosition(x, y, z);
 
         _player->TeleportTo(target->GetMapId(), x, y, z, _player->GetAngle(target), TELE_TO_GM_MODE);
     }
