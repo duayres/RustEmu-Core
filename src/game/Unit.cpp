@@ -1646,6 +1646,7 @@ void Unit::CalculateMeleeDamage(DamageInfo* damageInfo)
         return;
 
     Unit* pVictim = damageInfo->target;
+
     if (!pVictim)
         return;
 
@@ -1655,34 +1656,34 @@ void Unit::CalculateMeleeDamage(DamageInfo* damageInfo)
     // Select HitInfo/procAttacker/procVictim flag based on attack type
     switch (damageInfo->attackType)
     {
-        case BASE_ATTACK:
-            damageInfo->procAttacker = PROC_FLAG_SUCCESSFUL_MELEE_HIT;
-            damageInfo->procVictim   = PROC_FLAG_TAKEN_MELEE_HIT;
-            damageInfo->HitInfo      = HITINFO_NORMALSWING2;
-            break;
-        case OFF_ATTACK:
-            damageInfo->procAttacker = PROC_FLAG_SUCCESSFUL_MELEE_HIT | PROC_FLAG_SUCCESSFUL_OFFHAND_HIT;
-            damageInfo->procVictim   = PROC_FLAG_TAKEN_MELEE_HIT;//|PROC_FLAG_TAKEN_OFFHAND_HIT // not used
-            damageInfo->HitInfo = HITINFO_LEFTSWING;
-            break;
-        case RANGED_ATTACK:
-            damageInfo->procAttacker = PROC_FLAG_SUCCESSFUL_RANGED_HIT;
-            damageInfo->procVictim   = PROC_FLAG_TAKEN_RANGED_HIT;
-            damageInfo->HitInfo = HITINFO_UNK3;             // test (dev note: test what? HitInfo flag possibly not confirmed.)
-            break;
-        default:
-            break;
+    case BASE_ATTACK:
+        damageInfo->procAttacker = PROC_FLAG_SUCCESSFUL_MELEE_HIT;
+        damageInfo->procVictim = PROC_FLAG_TAKEN_MELEE_HIT;
+        damageInfo->HitInfo = HITINFO_AFFECTS_VICTIM;
+        break;
+    case OFF_ATTACK:
+        damageInfo->procAttacker = PROC_FLAG_SUCCESSFUL_MELEE_HIT | PROC_FLAG_SUCCESSFUL_OFFHAND_HIT;
+        damageInfo->procVictim = PROC_FLAG_TAKEN_MELEE_HIT;     //|PROC_FLAG_TAKEN_OFFHAND_HIT // not used
+        damageInfo->HitInfo = HITINFO_OFFHAND;
+        break;
+    case RANGED_ATTACK:
+        damageInfo->procAttacker = PROC_FLAG_SUCCESSFUL_RANGED_HIT;
+        damageInfo->procVictim = PROC_FLAG_TAKEN_RANGED_HIT;
+        damageInfo->HitInfo = HITINFO_UNK3;                  // test (dev note: test what? HitInfo flag possibly not confirmed.)
+        break;
+    default:
+        break;
     }
 
     // Physical Immune check
     if (damageInfo->target->IsImmunedToDamage(damageInfo->SchoolMask()))
     {
-        damageInfo->HitInfo       |= HITINFO_NORMALSWING;
-        damageInfo->TargetState    = VICTIMSTATE_IS_IMMUNE;
+        damageInfo->HitInfo |= HITINFO_NORMALSWING;
+        damageInfo->TargetState = VICTIMSTATE_IS_IMMUNE;
 
         damageInfo->procEx |= PROC_EX_IMMUNE;
-        damageInfo->damage         = 0;
-        damageInfo->cleanDamage    = 0;
+        damageInfo->damage = 0;
+        damageInfo->cleanDamage = 0;
         return;
     }
     damageInfo->damage += CalculateDamage(damageInfo->attackType, false);
@@ -1707,169 +1708,169 @@ void Unit::CalculateMeleeDamage(DamageInfo* damageInfo)
 
     switch (damageInfo->hitOutCome)
     {
-        case MELEE_HIT_EVADE:
-        {
-            damageInfo->HitInfo    |= HITINFO_MISS | HITINFO_SWINGNOHITSOUND;
-            damageInfo->TargetState = VICTIMSTATE_EVADES;
+    case MELEE_HIT_EVADE:
+    {
+        damageInfo->HitInfo |= HITINFO_MISS | HITINFO_SWINGNOHITSOUND;
+        damageInfo->TargetState = VICTIMSTATE_EVADES;
 
-            damageInfo->procEx |= PROC_EX_EVADE;
-            damageInfo->damage = 0;
-            damageInfo->cleanDamage = 0;
-            return;
+        damageInfo->procEx |= PROC_EX_EVADE;
+        damageInfo->damage = 0;
+        damageInfo->cleanDamage = 0;
+        return;
+    }
+    case MELEE_HIT_MISS:
+    {
+        damageInfo->HitInfo |= HITINFO_MISS;
+        damageInfo->TargetState = VICTIMSTATE_UNAFFECTED;
+
+        damageInfo->procEx |= PROC_EX_MISS;
+        damageInfo->damage = 0;
+        damageInfo->cleanDamage = 0;
+        break;
+    }
+    case MELEE_HIT_NORMAL:
+        damageInfo->TargetState = VICTIMSTATE_NORMAL;
+        damageInfo->procEx |= PROC_EX_NORMAL_HIT;
+        break;
+    case MELEE_HIT_CRIT:
+    {
+        damageInfo->HitInfo |= HITINFO_CRITICALHIT;
+        damageInfo->TargetState = VICTIMSTATE_NORMAL;
+
+        damageInfo->procEx |= PROC_EX_CRITICAL_HIT;
+        // Crit bonus calc
+        damageInfo->damage += damageInfo->damage;
+        int32 mod = 0;
+        // Apply SPELL_AURA_MOD_ATTACKER_RANGED_CRIT_DAMAGE or SPELL_AURA_MOD_ATTACKER_MELEE_CRIT_DAMAGE
+        if (damageInfo->attackType == RANGED_ATTACK)
+            mod += damageInfo->target->GetTotalAuraModifier(SPELL_AURA_MOD_ATTACKER_RANGED_CRIT_DAMAGE);
+        else
+            mod += damageInfo->target->GetTotalAuraModifier(SPELL_AURA_MOD_ATTACKER_MELEE_CRIT_DAMAGE);
+
+        mod += GetTotalAuraModifierByMiscMask(SPELL_AURA_MOD_CRIT_DAMAGE_BONUS, SPELL_SCHOOL_MASK_NORMAL);
+
+        uint32 crTypeMask = damageInfo->target->GetCreatureTypeMask();
+
+        // Increase crit damage from SPELL_AURA_MOD_CRIT_PERCENT_VERSUS
+        mod += GetTotalAuraModifierByMiscMask(SPELL_AURA_MOD_CRIT_PERCENT_VERSUS, crTypeMask);
+        if (mod != 0)
+            damageInfo->damage = int32((damageInfo->damage) * float((100.0f + mod) / 100.0f));
+
+        // Resilience - reduce crit damage
+        uint32 reduction_affected_damage = CalcNotIgnoreDamageReduction(damageInfo);
+        uint32 resilienceReduction;
+        if (damageInfo->attackType != RANGED_ATTACK)
+            resilienceReduction = pVictim->GetMeleeCritDamageReduction(reduction_affected_damage);
+        else
+            resilienceReduction = pVictim->GetRangedCritDamageReduction(reduction_affected_damage);
+
+        damageInfo->damage -= resilienceReduction;
+        damageInfo->cleanDamage += resilienceReduction;
+        break;
+    }
+    case MELEE_HIT_PARRY:
+        damageInfo->TargetState = VICTIMSTATE_PARRY;
+        damageInfo->procEx |= PROC_EX_PARRY;
+        damageInfo->cleanDamage += damageInfo->damage;
+        damageInfo->damage = 0;
+        break;
+
+    case MELEE_HIT_DODGE:
+        damageInfo->TargetState = VICTIMSTATE_DODGE;
+        damageInfo->procEx |= PROC_EX_DODGE;
+        damageInfo->cleanDamage += damageInfo->damage;
+        damageInfo->damage = 0;
+        break;
+    case MELEE_HIT_BLOCK:
+    {
+        damageInfo->TargetState = VICTIMSTATE_NORMAL;
+        damageInfo->HitInfo |= HITINFO_BLOCK;
+        damageInfo->procEx |= PROC_EX_BLOCK;
+        damageInfo->blocked = damageInfo->target->GetShieldBlockValue();
+
+        // Target has a chance to double the blocked amount if it has SPELL_AURA_MOD_BLOCK_CRIT_CHANCE
+        if (roll_chance_i(pVictim->GetTotalAuraModifier(SPELL_AURA_MOD_BLOCK_CRIT_CHANCE)))
+            damageInfo->blocked *= 2;
+
+        if (damageInfo->blocked >= damageInfo->damage)
+        {
+            damageInfo->TargetState = VICTIMSTATE_BLOCKS;
+            damageInfo->blocked = damageInfo->damage;
+            damageInfo->procEx |= PROC_EX_FULL_BLOCK;
         }
-        case MELEE_HIT_MISS:
+        else
+            damageInfo->procEx |= PROC_EX_NORMAL_HIT;   // Partial blocks can still cause attacker procs
+
+        damageInfo->damage -= damageInfo->blocked;
+        damageInfo->cleanDamage += damageInfo->blocked;
+        break;
+    }
+    case MELEE_HIT_GLANCING:
+    {
+        damageInfo->HitInfo |= HITINFO_GLANCING;
+        damageInfo->TargetState = VICTIMSTATE_NORMAL;
+        damageInfo->procEx |= PROC_EX_NORMAL_HIT;
+        float reducePercent = 1.0f;                     //damage factor
+        // calculate base values and mods
+        float baseLowEnd = 1.3f;
+        float baseHighEnd = 1.2f;
+        switch (getClass())                              // lowering base values for casters
         {
-            damageInfo->HitInfo    |= HITINFO_MISS;
-            damageInfo->TargetState = VICTIMSTATE_UNAFFECTED;
-
-            damageInfo->procEx |= PROC_EX_MISS;
-            damageInfo->damage = 0;
-            damageInfo->cleanDamage = 0;
-            break;
-        }
-        case MELEE_HIT_NORMAL:
-            damageInfo->TargetState = VICTIMSTATE_NORMAL;
-            damageInfo->procEx |= PROC_EX_NORMAL_HIT;
-            break;
-        case MELEE_HIT_CRIT:
-        {
-            damageInfo->HitInfo     |= HITINFO_CRITICALHIT;
-            damageInfo->TargetState  = VICTIMSTATE_NORMAL;
-
-            damageInfo->procEx |= PROC_EX_CRITICAL_HIT;
-            // Crit bonus calc
-            damageInfo->damage += damageInfo->damage;
-            int32 mod = 0;
-            // Apply SPELL_AURA_MOD_ATTACKER_RANGED_CRIT_DAMAGE or SPELL_AURA_MOD_ATTACKER_MELEE_CRIT_DAMAGE
-            if (damageInfo->attackType == RANGED_ATTACK)
-                mod += damageInfo->target->GetTotalAuraModifier(SPELL_AURA_MOD_ATTACKER_RANGED_CRIT_DAMAGE);
-            else
-                mod += damageInfo->target->GetTotalAuraModifier(SPELL_AURA_MOD_ATTACKER_MELEE_CRIT_DAMAGE);
-
-            mod += GetTotalAuraModifierByMiscMask(SPELL_AURA_MOD_CRIT_DAMAGE_BONUS, SPELL_SCHOOL_MASK_NORMAL);
-
-            uint32 crTypeMask = damageInfo->target->GetCreatureTypeMask();
-
-            // Increase crit damage from SPELL_AURA_MOD_CRIT_PERCENT_VERSUS
-            mod += GetTotalAuraModifierByMiscMask(SPELL_AURA_MOD_CRIT_PERCENT_VERSUS, crTypeMask);
-            if (mod != 0)
-                damageInfo->damage = int32((damageInfo->damage) * float((100.0f + mod) / 100.0f));
-
-            // Resilience - reduce crit damage
-            uint32 reduction_affected_damage = CalcNotIgnoreDamageReduction(damageInfo);
-            uint32 resilienceReduction;
-            if (damageInfo->attackType != RANGED_ATTACK)
-                resilienceReduction = pVictim->GetMeleeCritDamageReduction(reduction_affected_damage);
-            else
-                resilienceReduction = pVictim->GetRangedCritDamageReduction(reduction_affected_damage);
-
-            damageInfo->damage      -= resilienceReduction;
-            damageInfo->cleanDamage += resilienceReduction;
-            break;
-        }
-        case MELEE_HIT_PARRY:
-            damageInfo->TargetState  = VICTIMSTATE_PARRY;
-            damageInfo->procEx      |= PROC_EX_PARRY;
-            damageInfo->cleanDamage += damageInfo->damage;
-            damageInfo->damage = 0;
-            break;
-
-        case MELEE_HIT_DODGE:
-            damageInfo->TargetState  = VICTIMSTATE_DODGE;
-            damageInfo->procEx      |= PROC_EX_DODGE;
-            damageInfo->cleanDamage += damageInfo->damage;
-            damageInfo->damage = 0;
-            break;
-        case MELEE_HIT_BLOCK:
-        {
-            damageInfo->TargetState = VICTIMSTATE_NORMAL;
-            damageInfo->HitInfo    |= HITINFO_BLOCK;
-            damageInfo->procEx     |= PROC_EX_BLOCK;
-            damageInfo->blocked = damageInfo->target->GetShieldBlockValue();
-
-            // Target has a chance to double the blocked amount if it has SPELL_AURA_MOD_BLOCK_CRIT_CHANCE
-            if (roll_chance_i(pVictim->GetTotalAuraModifier(SPELL_AURA_MOD_BLOCK_CRIT_CHANCE)))
-                damageInfo->blocked *= 2;
-
-            if (damageInfo->blocked >= damageInfo->damage)
-            {
-                damageInfo->TargetState = VICTIMSTATE_BLOCKS;
-                damageInfo->blocked = damageInfo->damage;
-                damageInfo->procEx |= PROC_EX_FULL_BLOCK;
-            }
-            else
-                damageInfo->procEx |= PROC_EX_NORMAL_HIT;   // Partial blocks can still cause attacker procs
-
-            damageInfo->damage -= damageInfo->blocked;
-            damageInfo->cleanDamage += damageInfo->blocked;
-            break;
-        }
-        case MELEE_HIT_GLANCING:
-        {
-            damageInfo->HitInfo |= HITINFO_GLANCING;
-            damageInfo->TargetState = VICTIMSTATE_NORMAL;
-            damageInfo->procEx |= PROC_EX_NORMAL_HIT;
-            float reducePercent = 1.0f;                     // damage factor
-            // calculate base values and mods
-            float baseLowEnd = 1.3f;
-            float baseHighEnd = 1.2f;
-            switch (getClass())                             // lowering base values for casters
-            {
-                case CLASS_SHAMAN:
-                case CLASS_PRIEST:
-                case CLASS_MAGE:
-                case CLASS_WARLOCK:
-                case CLASS_DRUID:
-                    baseLowEnd  -= 0.7f;
-                    baseHighEnd -= 0.3f;
-                    break;
-            }
-
-            float maxLowEnd = 0.6f;
-            switch (getClass())                             // upper for melee classes
-            {
-                case CLASS_WARRIOR:
-                case CLASS_ROGUE:
-                    maxLowEnd = 0.91f;                      // If the attacker is a melee class then instead the lower value of 0.91
-            }
-
-            // calculate values
-            int32 diff = damageInfo->target->GetDefenseSkillValue() - GetWeaponSkillValue(damageInfo->attackType);
-            float lowEnd  = baseLowEnd - (0.05f * diff);
-            float highEnd = baseHighEnd - (0.03f * diff);
-
-            // apply max/min bounds
-            if (lowEnd < 0.01f)                             // the low end must not go bellow 0.01f
-                lowEnd = 0.01f;
-            else if (lowEnd > maxLowEnd)                    // the smaller value of this and 0.6 is kept as the low end
-                lowEnd = maxLowEnd;
-
-            if (highEnd < 0.2f)                             // high end limits
-                highEnd = 0.2f;
-            if (highEnd > 0.99f)
-                highEnd = 0.99f;
-
-            if (lowEnd > highEnd)                           // prevent negative range size
-                lowEnd = highEnd;
-
-            reducePercent = lowEnd + rand_norm_f() * (highEnd - lowEnd);
-
-            damageInfo->cleanDamage += damageInfo->damage - uint32(reducePercent *  damageInfo->damage);
-            damageInfo->damage   = uint32(reducePercent *  damageInfo->damage);
+        case CLASS_SHAMAN:
+        case CLASS_PRIEST:
+        case CLASS_MAGE:
+        case CLASS_WARLOCK:
+        case CLASS_DRUID:
+            baseLowEnd -= 0.7f;
+            baseHighEnd -= 0.3f;
             break;
         }
-        case MELEE_HIT_CRUSHING:
-        {
-            damageInfo->HitInfo     |= HITINFO_CRUSHING;
-            damageInfo->TargetState  = VICTIMSTATE_NORMAL;
-            damageInfo->procEx |= PROC_EX_NORMAL_HIT;
-            // 150% normal damage
-            damageInfo->damage += (damageInfo->damage / 2);
-            break;
-        }
-        default:
 
-            break;
+        float maxLowEnd = 0.6f;
+        switch (getClass())                              // upper for melee classes
+        {
+        case CLASS_WARRIOR:
+        case CLASS_ROGUE:
+            maxLowEnd = 0.91f;                      //If the attacker is a melee class then instead the lower value of 0.91
+        }
+
+        // calculate values
+        int32 diff = damageInfo->target->GetDefenseSkillValue() - GetWeaponSkillValue(damageInfo->attackType);
+        float lowEnd = baseLowEnd - (0.05f * diff);
+        float highEnd = baseHighEnd - (0.03f * diff);
+
+        // apply max/min bounds
+        if (lowEnd < 0.01f)                           //the low end must not go bellow 0.01f
+            lowEnd = 0.01f;
+        else if (lowEnd > maxLowEnd)                  //the smaller value of this and 0.6 is kept as the low end
+            lowEnd = maxLowEnd;
+
+        if (highEnd < 0.2f)                           //high end limits
+            highEnd = 0.2f;
+        if (highEnd > 0.99f)
+            highEnd = 0.99f;
+
+        if (lowEnd > highEnd)                            // prevent negative range size
+            lowEnd = highEnd;
+
+        reducePercent = lowEnd + rand_norm_f() * (highEnd - lowEnd);
+
+        damageInfo->cleanDamage += damageInfo->damage - uint32(reducePercent *  damageInfo->damage);
+        damageInfo->damage = uint32(reducePercent *  damageInfo->damage);
+        break;
+    }
+    case MELEE_HIT_CRUSHING:
+    {
+        damageInfo->HitInfo |= HITINFO_CRUSHING;
+        damageInfo->TargetState = VICTIMSTATE_NORMAL;
+        damageInfo->procEx |= PROC_EX_NORMAL_HIT;
+        // 150% normal damage
+        damageInfo->damage += (damageInfo->damage / 2);
+        break;
+    }
+    default:
+
+        break;
     }
 
     // only from players and their pets
@@ -1881,7 +1882,7 @@ void Unit::CalculateMeleeDamage(DamageInfo* damageInfo)
             resilienceReduction = pVictim->GetMeleeDamageReduction(reduction_affected_damage);
         else
             resilienceReduction = pVictim->GetRangedDamageReduction(reduction_affected_damage);
-        damageInfo->damage      -= resilienceReduction;
+        damageInfo->damage -= resilienceReduction;
         damageInfo->cleanDamage += resilienceReduction;
     }
 
@@ -1889,17 +1890,11 @@ void Unit::CalculateMeleeDamage(DamageInfo* damageInfo)
     if (int32(damageInfo->damage) > 0)
     {
         damageInfo->procVictim |= PROC_FLAG_TAKEN_ANY_DAMAGE;
+        damageInfo->procEx |= PROC_EX_DIRECT_DAMAGE;
 
         // Calculate absorb & resists
         damageInfo->target->CalculateDamageAbsorbAndResist(this, damageInfo, true);
 
-        if (damageInfo->absorb)
-        {
-            damageInfo->HitInfo |= HITINFO_ABSORB;
-            damageInfo->procEx |= PROC_EX_ABSORB;
-        }
-        if (damageInfo->resist)
-            damageInfo->HitInfo |= HITINFO_RESIST;
     }
     else // Umpossible get negative result but....
         damageInfo->damage = 0;
@@ -1910,7 +1905,7 @@ void Unit::DealMeleeDamage(DamageInfo* damageInfo, bool durabilityLoss)
     if (!damageInfo)
         return;
 
-    Unit* pVictim = damageInfo->target;
+    Unit *pVictim = damageInfo->target;
 
     if (!this || !pVictim)
         return;
@@ -1918,13 +1913,13 @@ void Unit::DealMeleeDamage(DamageInfo* damageInfo, bool durabilityLoss)
     if (!pVictim->isAlive() || pVictim->IsTaxiFlying() || (pVictim->GetTypeId() == TYPEID_UNIT && ((Creature*)pVictim)->IsInEvadeMode()))
         return;
 
-    // You don't lose health from damage taken from another player while in a sanctuary
-    // You still see it in the combat log though
+    //You don't lose health from damage taken from another player while in a sanctuary
+    //You still see it in the combat log though
     if (!IsAllowedDamageInArea(pVictim))
         return;
 
     // Hmmmm dont like this emotes client must by self do all animations
-    if (damageInfo->HitInfo & HITINFO_CRITICALHIT)
+    if (damageInfo->HitInfo&HITINFO_CRITICALHIT)
         pVictim->HandleEmoteCommand(EMOTE_ONESHOT_WOUNDCRITICAL);
     if (damageInfo->blocked && damageInfo->TargetState != VICTIMSTATE_BLOCKS)
         pVictim->HandleEmoteCommand(EMOTE_ONESHOT_PARRYSHIELD);
@@ -1932,7 +1927,7 @@ void Unit::DealMeleeDamage(DamageInfo* damageInfo, bool durabilityLoss)
     if (damageInfo->TargetState == VICTIMSTATE_PARRY)
     {
         // Get attack timers
-        float offtime  = float(pVictim->getAttackTimer(OFF_ATTACK));
+        float offtime = float(pVictim->getAttackTimer(OFF_ATTACK));
         float basetime = float(pVictim->getAttackTimer(BASE_ATTACK));
         // Reduce attack time
         if (pVictim->haveOffhandWeapon() && offtime < basetime)
@@ -1971,15 +1966,15 @@ void Unit::DealMeleeDamage(DamageInfo* damageInfo, bool durabilityLoss)
 
     // If this is a creature and it attacks from behind it has a probability to daze it's victim
     if ((damageInfo->hitOutCome == MELEE_HIT_CRIT || damageInfo->hitOutCome == MELEE_HIT_CRUSHING || damageInfo->hitOutCome == MELEE_HIT_NORMAL || damageInfo->hitOutCome == MELEE_HIT_GLANCING) &&
-            GetTypeId() != TYPEID_PLAYER && !((Creature*)this)->GetCharmerOrOwnerGuid() && !pVictim->HasInArc(M_PI_F, this))
+        GetTypeId() != TYPEID_PLAYER && !((Creature*)this)->GetCharmerOrOwnerGuid() && !pVictim->HasInArc(M_PI_F, this))
     {
         // -probability is between 0% and 40%
         // 20% base chance
         float Probability = 20.0f;
 
-        // there is a newbie protection, at level 10 just 7% base chance; assuming linear function
+        //there is a newbie protection, at level 10 just 7% base chance; assuming linear function
         if (pVictim->getLevel() < 30)
-            Probability = 0.65f * pVictim->getLevel() + 0.5f;
+            Probability = 0.65f*pVictim->getLevel() + 0.5f;
 
         uint32 VictimDefense = pVictim->GetDefenseSkillValue();
         uint32 AttackerMeleeSkill = GetUnitMeleeSkill();
@@ -1999,44 +1994,6 @@ void Unit::DealMeleeDamage(DamageInfo* damageInfo, bool durabilityLoss)
         // on weapon hit casts
         if (GetTypeId() == TYPEID_PLAYER && pVictim->isAlive())
             ((Player*)this)->CastItemCombatSpell(pVictim, damageInfo->attackType);
-
-        // victim's damage shield
-        std::set<Aura*> alreadyDone;
-        AuraList const& vDamageShields = pVictim->GetAurasByType(SPELL_AURA_DAMAGE_SHIELD);
-        for (AuraList::const_iterator i = vDamageShields.begin(); i != vDamageShields.end();)
-        {
-            if (alreadyDone.find(*i) == alreadyDone.end())
-            {
-                alreadyDone.insert(*i);
-                uint32 damage = (*i)->GetModifier()->m_amount;
-                SpellEntry const* i_spellProto = (*i)->GetSpellProto();
-                // Calculate absorb resist ??? no data in opcode for this possibly unable to absorb or resist?
-                // uint32 absorb;
-                // uint32 resist;
-                // CalcAbsorbResist(pVictim, SpellSchools(spellProto->School), SPELL_DIRECT_DAMAGE, damage, &absorb, &resist);
-                // damage-=absorb + resist;
-
-                pVictim->DealDamageMods(this, damage, NULL);
-
-                uint32 targetHealth = GetHealth();
-                uint32 overkill = damage > targetHealth ? damage - targetHealth : 0;
-
-                WorldPacket data(SMSG_SPELLDAMAGESHIELD, (8 + 8 + 4 + 4 + 4 + 4));
-                data << pVictim->GetObjectGuid();
-                data << GetObjectGuid();
-                data << uint32(i_spellProto->Id);
-                data << uint32(damage);                  // Damage
-                data << uint32(overkill);                // Overkill
-                data << uint32(i_spellProto->SchoolMask);
-                pVictim->SendMessageToSet(&data, true);
-
-                pVictim->DealDamage(this, damage, 0, SPELL_DIRECT_DAMAGE, GetSpellSchoolMask(i_spellProto), i_spellProto, true);
-
-                i = vDamageShields.begin();
-            }
-            else
-                ++i;
-        }
     }
 }
 
@@ -2138,15 +2095,17 @@ uint32 Unit::CalcArmorReducedDamage(Unit* pVictim, const uint32 damage)
     return (newdamage > 1) ? newdamage : 1;
 }
 
-void Unit::CalculateDamageAbsorbAndResist(Unit* pCaster, DamageInfo* damageInfo, bool canReflect)
+void Unit::CalculateDamageAbsorbAndResist(Unit *pCaster, DamageInfo* damageInfo, bool canReflect)
 {
     if (!pCaster || !isAlive() || !damageInfo || damageInfo->damage == 0)
         return;
 
     // Magic damage, check for resists
-    if ((damageInfo->SchoolMask() & SPELL_SCHOOL_MASK_NORMAL) == 0)
+    if (!(damageInfo->SchoolMask() & SPELL_SCHOOL_MASK_NORMAL) &&
+        !damageInfo->IsMeleeDamage() &&
+        !damageInfo->m_spellInfo->HasAttribute(SPELL_ATTR_EX4_IGNORE_RESISTANCES))
     {
-        // Get base victim resistance for school
+        // Get base resistance for schoolmask
         float tmpvalue2 = (float)GetResistance(damageInfo->SchoolMask());
         // Ignore resistance by self SPELL_AURA_MOD_TARGET_RESISTANCE aura
         tmpvalue2 += (float)pCaster->GetTotalAuraModifierByMiscMask(SPELL_AURA_MOD_TARGET_RESISTANCE, damageInfo->SchoolMask());
@@ -2160,12 +2119,12 @@ void Unit::CalculateDamageAbsorbAndResist(Unit* pCaster, DamageInfo* damageInfo,
         if (tmpvalue2 > 0.75f)
             tmpvalue2 = 0.75f;
         uint32 ran = urand(0, 100);
-        float faq[4] = {24.0f, 6.0f, 4.0f, 6.0f};
+        float faq[4] = { 24.0f, 6.0f, 4.0f, 6.0f };
         uint8 m = 0;
         float Binom = 0.0f;
         for (uint8 i = 0; i < 4; ++i)
         {
-            Binom += 2400 * (powf(tmpvalue2, float(i)) * powf((1 - tmpvalue2), float(4 - i))) / faq[i];
+            Binom += 2400 * (pow(tmpvalue2, float(i)) * pow((1 - tmpvalue2), float(4 - i))) / faq[i];
             if (ran > Binom)
                 ++m;
             else
@@ -2176,6 +2135,7 @@ void Unit::CalculateDamageAbsorbAndResist(Unit* pCaster, DamageInfo* damageInfo,
         // need make more correct this hack.
         else
             damageInfo->resist += uint32(damageInfo->damage * m / 4);
+
         // full resist mode granted
         if (damageInfo->resist > damageInfo->damage)
             damageInfo->resist = damageInfo->damage;
@@ -2198,10 +2158,10 @@ void Unit::CalculateDamageAbsorbAndResist(Unit* pCaster, DamageInfo* damageInfo,
     // for absorb use only absorb_affected_damage
     uint32 absorb_affected_damage = pCaster->CalcNotIgnoreAbsorbDamage(damageInfo);
     uint32 absorb_unaffected_damage = RemainingDamage > absorb_affected_damage ?
-    RemainingDamage - absorb_affected_damage : 0;
-    
+        RemainingDamage - absorb_affected_damage : 0;
+
     RemainingDamage -= absorb_unaffected_damage;
-    
+
     if (RemainingDamage == 0)
     {
         // nont need remaining calculation, if none absorbed...
@@ -2224,7 +2184,7 @@ void Unit::CalculateDamageAbsorbAndResist(Unit* pCaster, DamageInfo* damageInfo,
 
         SpellEntry const* i_spellProto = (*i)->GetSpellProto();
         // Fire Ward or Frost Ward
-        if (i_spellProto->SpellFamilyName == SPELLFAMILY_MAGE && i_spellProto->SpellFamilyFlags & UI64LIT(0x0000000000000108))
+        if (i_spellProto->SpellFamilyName == SPELLFAMILY_MAGE && i_spellProto->SpellFamilyFlags.test<CF_MAGE_FIRE_WARD, CF_MAGE_FROST_WARD>())
         {
             int chance = 0;
             Unit::AuraList const& auras = GetAurasByType(SPELL_AURA_ADD_PCT_MODIFIER);
@@ -2282,194 +2242,252 @@ void Unit::CalculateDamageAbsorbAndResist(Unit* pCaster, DamageInfo* damageInfo,
 
         switch (spellProto->SpellFamilyName)
         {
-            case SPELLFAMILY_GENERIC:
+        case SPELLFAMILY_GENERIC:
+        {
+            // Astral Shift
+            if (spellProto->SpellIconID == 3066)
             {
-                // Astral Shift
-                if (spellProto->SpellIconID == 3066)
-                {
-                    // reduces all damage taken while stun, fear or silence
-                    if (unitflag & (UNIT_FLAG_STUNNED | UNIT_FLAG_FLEEING | UNIT_FLAG_SILENCED))
-                        RemainingDamage -= RemainingDamage * currentAbsorb / 100;
-                    continue;
-                }
-                // Nerves of Steel
-                if (spellProto->SpellIconID == 2115)
-                {
-                    // while affected by Stun and Fear
-                    if (unitflag & (UNIT_FLAG_STUNNED | UNIT_FLAG_FLEEING))
-                        RemainingDamage -= RemainingDamage * currentAbsorb / 100;
-                    continue;
-                }
-                // Spell Deflection
-                if (spellProto->SpellIconID == 3006)
-                {
-                    // You have a chance equal to your Parry chance
-                    if (damageInfo->damageType == SPELL_DIRECT_DAMAGE &&             // Only for direct spell damage
-                            roll_chance_f(GetUnitParryChance()))             // Roll chance
-                        RemainingDamage -= RemainingDamage * currentAbsorb / 100;
-                    continue;
-                }
-                // Reflective Shield (Lady Malande boss)
-                if (spellProto->Id == 41475 && canReflect)
-                {
-                    if (RemainingDamage < currentAbsorb)
-                        reflectDamage = RemainingDamage / 2;
-                    else
-                        reflectDamage = currentAbsorb / 2;
-                    reflectSpell = 33619;
-                    reflectTriggeredBy = *i;
-                    reflectTriggeredBy->SetInUse(true);     // lock aura from final deletion until processing
-                    break;
-                }
-                if (spellProto->Id == 39228 ||              // Argussian Compass
-                        spellProto->Id == 60218)            // Essence of Gossamer
-                {
-                    // Max absorb stored in 1 dummy effect
-                    int32 max_absorb = spellProto->CalculateSimpleValue(EFFECT_INDEX_1);
-                    if (max_absorb < currentAbsorb)
-                        currentAbsorb = max_absorb;
-                    break;
-                }
+                //reduces all damage taken while stun, fear or silence
+                if (unitflag & (UNIT_FLAG_STUNNED | UNIT_FLAG_FLEEING | UNIT_FLAG_SILENCED))
+                    RemainingDamage -= RemainingDamage * currentAbsorb / 100;
+                continue;
+            }
+            // Nerves of Steel
+            if (spellProto->SpellIconID == 2115)
+            {
+                // while affected by Stun and Fear
+                if (unitflag&(UNIT_FLAG_STUNNED | UNIT_FLAG_FLEEING))
+                    RemainingDamage -= RemainingDamage * currentAbsorb / 100;
+                continue;
+            }
+            // Spell Deflection
+            if (spellProto->SpellIconID == 3006)
+            {
+                // You have a chance equal to your Parry chance
+                if (damageInfo->damageType == SPELL_DIRECT_DAMAGE &&             // Only for direct spell damage
+                    roll_chance_f(GetUnitParryChance()))             // Roll chance
+                    RemainingDamage -= RemainingDamage * currentAbsorb / 100;
+                continue;
+            }
+            // Reflective Shield (Lady Malande boss)
+            if (spellProto->Id == 41475 && canReflect)
+            {
+                if (RemainingDamage < currentAbsorb)
+                    reflectDamage = RemainingDamage / 2;
+                else
+                    reflectDamage = currentAbsorb / 2;
+                reflectSpell = 33619;
+                reflectTriggeredBy = *i;
+                reflectTriggeredBy->SetInUse(true);     // lock aura from final deletion until processing
                 break;
             }
-            case SPELLFAMILY_DRUID:
+            if (spellProto->Id == 39228 ||              // Argussian Compass
+                spellProto->Id == 60218)                // Essence of Gossamer
             {
-                // Primal Tenacity
-                if (spellProto->SpellIconID == 2253)
-                {
-                    // reduces all damage taken while Stunned and in Cat Form
-                    if (GetShapeshiftForm() == FORM_CAT && (unitflag & UNIT_FLAG_STUNNED))
-                        RemainingDamage -= RemainingDamage * currentAbsorb / 100;
-                    continue;
-                }
-                // Moonkin Form passive
-                if (spellProto->Id == 69366)
-                {
-                    // reduces all damage taken while Stunned
-                    if (unitflag & UNIT_FLAG_STUNNED)
-                        RemainingDamage -= RemainingDamage * currentAbsorb / 100;
-                    continue;
-                }
+                // Max absorb stored in 1 dummy effect
+                int32 max_absorb = spellProto->CalculateSimpleValue(EFFECT_INDEX_1);
+                if (max_absorb < currentAbsorb)
+                    currentAbsorb = max_absorb;
                 break;
             }
-            case SPELLFAMILY_ROGUE:
+            break;
+        }
+        case SPELLFAMILY_DRUID:
+        {
+            // Primal Tenacity
+            if (spellProto->SpellIconID == 2253)
             {
-                // Cheat Death (make less prio with Guardian Spirit case)
-                if (spellProto->SpellIconID == 2109)
-                {
-                    if (!preventDeathSpell &&
-                            GetTypeId() == TYPEID_PLAYER && // Only players
-                            !((Player*)this)->HasSpellCooldown(31231) &&
-                            // Only if no cooldown
-                            roll_chance_i((*i)->GetModifier()->m_amount))
-                        // Only if roll
-                    {
-                        preventDeathSpell = (*i)->GetSpellProto();
-                    }
-                    // always skip this spell in charge dropping, absorb amount calculation since it has chance as m_amount and doesn't need to absorb any damage
-                    continue;
-                }
-                break;
+                //reduces all damage taken while Stunned and in Cat Form
+                if (GetShapeshiftForm() == FORM_CAT && (unitflag & UNIT_FLAG_STUNNED))
+                    RemainingDamage -= RemainingDamage * currentAbsorb / 100;
+                continue;
             }
-            case SPELLFAMILY_PRIEST:
+            // Moonkin Form passive
+            if (spellProto->Id == 69366)
             {
-                // Guardian Spirit
-                if (spellProto->SpellIconID == 2873)
+                //reduces all damage taken while Stunned
+                if (unitflag & UNIT_FLAG_STUNNED)
+                    RemainingDamage -= RemainingDamage * currentAbsorb / 100;
+                continue;
+            }
+            break;
+        }
+        case SPELLFAMILY_ROGUE:
+        {
+            // Cheat Death (make less prio with Guardian Spirit case)
+            if (spellProto->SpellIconID == 2109)
+            {
+                if (!preventDeathSpell &&
+                    GetTypeId() == TYPEID_PLAYER &&       // Only players
+                    !((Player*)this)->HasSpellCooldown(31231) &&
+                    // Only if no cooldown
+                    roll_chance_i((*i)->GetModifier()->m_amount))
+                    // Only if roll
                 {
                     preventDeathSpell = (*i)->GetSpellProto();
-                    preventDeathAmount = (*i)->GetModifier()->m_amount;
-                    continue;
                 }
-                // Reflective Shield
-                if (spellProto->IsFitToFamilyMask(UI64LIT(0x0000000000000001)) && canReflect)
+                // always skip this spell in charge dropping, absorb amount calculation since it has chance as m_amount and doesn't need to absorb any damage
+                continue;
+            }
+            break;
+        }
+        case SPELLFAMILY_PALADIN:
+        {
+            // Ardent Defender
+            if (spellProto->SpellIconID == 2135 && GetTypeId() == TYPEID_PLAYER)
+            {
+                int32 remainingHealth = GetHealth() - RemainingDamage;
+                uint32 allowedHealth = GetMaxHealth() * 0.35f;
+                // If damage kills us
+                if (remainingHealth <= 0 && !HasAura(66233))
                 {
-                    if (pCaster == this)
-                        break;
-                    Unit* caster = (*i)->GetCaster();
-                    if (!caster)
-                        break;
-                    AuraList const& vOverRideCS = caster->GetAurasByType(SPELL_AURA_DUMMY);
-                    for (AuraList::const_iterator k = vOverRideCS.begin(); k != vOverRideCS.end(); ++k)
-                    {
-                        switch ((*k)->GetModifier()->m_miscvalue)
-                        {
-                            case 5065:                      // Rank 1
-                            case 5064:                      // Rank 2
-                            {
-                                if (RemainingDamage >= currentAbsorb)
-                                    reflectDamage = (*k)->GetModifier()->m_amount * currentAbsorb / 100;
-                                else
-                                    reflectDamage = (*k)->GetModifier()->m_amount * RemainingDamage / 100;
-                                reflectSpell = 33619;
-                                reflectTriggeredBy = *i;
-                                reflectTriggeredBy->SetInUse(true);// lock aura from final deletion until processing
-                            } break;
-                            default: break;
-                        }
-                    }
+                    // Cast healing spell, completely avoid damage
+                    RemainingDamage = 0;
+
+                    uint32 defenseSkillValue = GetDefenseSkillValue();
+                    // Max heal when defense skill denies critical hits from raid bosses
+                    // Formula: max defense at level + 140 (raiting from gear)
+                    uint32 reqDefForMaxHeal = getLevel() * 5 + 140;
+                    float pctFromDefense = (defenseSkillValue >= reqDefForMaxHeal)
+                        ? 1.0f
+                        : float(defenseSkillValue) / float(reqDefForMaxHeal);
+
+                    int32 healAmount = GetMaxHealth() * ((*i)->GetSpellProto()->EffectBasePoints[1] + 1) / 100.0f * pctFromDefense;
+                    CastSpell(this, 66233, true);
+                    CastCustomSpell(this, 66235, &healAmount, NULL, NULL, true);
+                }
+                else if (remainingHealth < int32(allowedHealth))
+                {
+                    // Reduce damage that brings us under 35% (or full damage if we are already under 35%) by x%
+                    uint32 damageToReduce = (GetHealth() < allowedHealth)
+                        ? RemainingDamage
+                        : allowedHealth - remainingHealth;
+                    RemainingDamage -= damageToReduce * currentAbsorb / 100;
+                }
+                continue;
+            }
+            break;
+        }
+        case SPELLFAMILY_PRIEST:
+        {
+            // Guardian Spirit
+            if (spellProto->SpellIconID == 2873)
+            {
+                preventDeathSpell = (*i)->GetSpellProto();
+                preventDeathAmount = (*i)->GetModifier()->m_amount;
+                continue;
+            }
+            // Reflective Shield
+            if (spellProto->SpellFamilyFlags.test<CF_PRIEST_POWER_WORD_SHIELD>() && canReflect)
+            {
+                if (pCaster == this)
                     break;
+                Unit* caster = (*i)->GetCaster();
+                if (!caster)
+                    break;
+                AuraList const& vOverRideCS = caster->GetAurasByType(SPELL_AURA_DUMMY);
+                for (AuraList::const_iterator k = vOverRideCS.begin(); k != vOverRideCS.end(); ++k)
+                {
+                    switch ((*k)->GetModifier()->m_miscvalue)
+                    {
+                    case 5065:                      // Rank 1
+                    case 5064:                      // Rank 2
+                    {
+                        if (RemainingDamage >= currentAbsorb)
+                            reflectDamage = (*k)->GetModifier()->m_amount * currentAbsorb / 100;
+                        else
+                            reflectDamage = (*k)->GetModifier()->m_amount * RemainingDamage / 100;
+                        reflectSpell = 33619;
+                        reflectTriggeredBy = *i;
+                        reflectTriggeredBy->SetInUse(true);// lock aura from final deletion until processing
+                    } break;
+                    default: break;
+                    }
                 }
                 break;
             }
-            case SPELLFAMILY_SHAMAN:
+            break;
+        }
+        case SPELLFAMILY_SHAMAN:
+        {
+            // Astral Shift
+            if (spellProto->SpellIconID == 3066)
             {
-                // Astral Shift
-                if (spellProto->SpellIconID == 3066)
-                {
-                    // reduces all damage taken while stun, fear or silence
-                    if (unitflag & (UNIT_FLAG_STUNNED | UNIT_FLAG_FLEEING | UNIT_FLAG_SILENCED))
-                        RemainingDamage -= RemainingDamage * currentAbsorb / 100;
-                    continue;
-                }
-                break;
-            }
-            case SPELLFAMILY_DEATHKNIGHT:
-            {
-                // Shadow of Death
-                if (spellProto->SpellIconID == 1958)
-                {
-                    // TODO: absorb only while transform
-                    continue;
-                }
-                // Anti-Magic Shell (on self)
-                if (spellProto->Id == 48707)
-                {
-                    // damage absorbed by Anti-Magic Shell energizes the DK with additional runic power.
-                    // This, if I'm not mistaken, shows that we get back ~2% of the absorbed damage as runic power.
-                    int32 absorbed = RemainingDamage * currentAbsorb / 100;
-                    int32 regen = absorbed * 2 / 10;
-                    CastCustomSpell(this, 49088, &regen, NULL, NULL, true, NULL, *i);
-                    RemainingDamage -= absorbed;
-                    continue;
-                }
-                // Anti-Magic Shell (on single party/raid member)
-                if (spellProto->Id == 50462)
-                {
+                //reduces all damage taken while stun, fear or silence
+                if (unitflag & (UNIT_FLAG_STUNNED | UNIT_FLAG_FLEEING | UNIT_FLAG_SILENCED))
                     RemainingDamage -= RemainingDamage * currentAbsorb / 100;
-                    continue;
-                }
-                // Anti-Magic Zone
-                if (spellProto->Id == 50461)
-                {
-                    Unit* caster = (*i)->GetCaster();
-                    if (!caster)
-                        continue;
-                    int32 absorbed = RemainingDamage * currentAbsorb / 100;
-                    int32 canabsorb = caster->GetHealth();
-                    if (canabsorb < absorbed)
-                        absorbed = canabsorb;
-
-                    RemainingDamage -= absorbed;
-
-                    uint32 ab_damage = absorbed;
-                    pCaster->DealDamageMods(caster, ab_damage, NULL);
-                    pCaster->DealDamage(caster, ab_damage, NULL, damageInfo->damageType, damageInfo->SchoolMask(), 0, false);
-                    continue;
-                }
-                break;
+                continue;
             }
-            default:
-                break;
+            break;
+        }
+        case SPELLFAMILY_DEATHKNIGHT:
+        {
+            // Shadow of Death
+            if (spellProto->SpellIconID == 1958)
+            {
+                // TODO: absorb only while transform
+                continue;
+            }
+            // Anti-Magic Shell (on self)
+            if (spellProto->Id == 48707)
+            {
+                // damage absorbed by Anti-Magic Shell energizes the DK with additional runic power.
+                // This, if I'm not mistaken, shows that we get back ~2% of the absorbed damage as runic power.
+                int32 absorbed = RemainingDamage * currentAbsorb / 100;
+                int32 regen = absorbed * 2 / 10;
+                CastCustomSpell(this, 49088, &regen, NULL, NULL, true, NULL, *i);
+                RemainingDamage -= absorbed;
+                continue;
+            }
+            // Anti-Magic Shell (on single party/raid member)
+            if (spellProto->Id == 50462)
+            {
+                RemainingDamage -= RemainingDamage * currentAbsorb / 100;
+                continue;
+            }
+            // Unbreakable armor
+            if (spellProto->Id == 51271)
+            {
+                int32 absorbed = GetArmor() * currentAbsorb / 100;
+                // If we have a glyph
+                if (Aura* aur = GetDummyAura(58635))
+                    absorbed += absorbed * aur->GetModifier()->m_amount / 100;
+                RemainingDamage = (RemainingDamage < absorbed) ? 0 : RemainingDamage - absorbed;
+                continue;
+            }
+            // Anti-Magic Zone
+            if (spellProto->Id == 50461)
+            {
+                Unit* caster = (*i)->GetCaster();
+                if (!caster)
+                    continue;
+                int32 absorbed = RemainingDamage * currentAbsorb / 100;
+                int32 canabsorb = caster->GetHealth();
+                if (canabsorb < absorbed)
+                    absorbed = canabsorb;
+
+                RemainingDamage -= absorbed;
+
+                uint32 ab_damage = absorbed;
+                pCaster->DealDamageMods(caster, ab_damage, NULL);
+                pCaster->DealDamage(caster, ab_damage, NULL, damageInfo->damageType, damageInfo->SchoolMask(), 0, false);
+                continue;
+            }
+            // Will of Necropolis
+            if (spellProto->SpellIconID == 857)
+            {
+                // Apply absorb only on damage below 35% hp
+                int32 absorbableDamage = RemainingDamage + 0.35f * GetMaxHealth() - GetHealth();
+                if (absorbableDamage > RemainingDamage)
+                    absorbableDamage = RemainingDamage;
+                if (absorbableDamage > 0)
+                    RemainingDamage -= absorbableDamage * currentAbsorb / 100;
+                continue;
+            }
+            break;
+        }
+        default:
+            break;
         }
 
         // currentAbsorb - damage can be absorbed by shield
@@ -2481,7 +2499,7 @@ void Unit::CalculateDamageAbsorbAndResist(Unit* pCaster, DamageInfo* damageInfo,
 
         // Fire Ward or Frost Ward or Ice Barrier (or Mana Shield)
         // for Incanter's Absorption converting to spell power
-        if (spellProto->IsFitToFamily(SPELLFAMILY_MAGE, UI64LIT(0x0000000000000000), 0x00000008))
+        if (spellProto->IsFitToFamily<SPELLFAMILY_MAGE, CF_MAGE_MISC>())
             incanterAbsorption += currentAbsorb;
 
         // Reduce shield amount
@@ -2791,9 +2809,9 @@ void Unit::AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType, bool ext
 
     uint32 hitInfo;
     if (attType == BASE_ATTACK)
-        hitInfo = HITINFO_NORMALSWING2;
+        hitInfo = HITINFO_AFFECTS_VICTIM;
     else if (attType == OFF_ATTACK)
-        hitInfo = HITINFO_LEFTSWING;
+        hitInfo = HITINFO_OFFHAND;
     else
         return;                                             // ignore ranged case
 
@@ -5673,13 +5691,13 @@ void Unit::SendAttackStateUpdate(DamageInfo* damageInfo)
         data << uint32(damageInfo->damage);                 // Sub Damage
     }
 
-    if (damageInfo->HitInfo & (HITINFO_ABSORB | HITINFO_ABSORB2))
+    if (damageInfo->HitInfo & (HITINFO_ABSORB | HITINFO_PARTIAL_ABSORB))
     {
         for (uint32 i = 0; i < count; ++i)
             data << uint32(damageInfo->absorb);             // Absorb
     }
 
-    if (damageInfo->HitInfo & (HITINFO_RESIST | HITINFO_RESIST2))
+    if (damageInfo->HitInfo & (HITINFO_RESIST | HITINFO_PARTIAL_RESIST))
     {
         for (uint32 i = 0; i < count; ++i)
             data << uint32(damageInfo->resist);             // Resist
@@ -5693,7 +5711,7 @@ void Unit::SendAttackStateUpdate(DamageInfo* damageInfo)
     if (damageInfo->HitInfo & HITINFO_BLOCK)
         data << uint32(damageInfo->blocked);
 
-    if (damageInfo->HitInfo & HITINFO_UNK22)
+    if (damageInfo->HitInfo & HITINFO_RAGE_GAIN)
         data << uint32(0);                                  // count of some sort?
 
     if (damageInfo->HitInfo & HITINFO_UNK0)
@@ -11706,6 +11724,7 @@ void DamageInfo::Reset(uint32 _damage)
     reduction = 0;
     bonusDone = 0;
     bonusTaken = 0;
+    rage = 0;
     unused = false;
     HitInfo = HITINFO_NORMALSWING;
     TargetState = VICTIMSTATE_UNAFFECTED;

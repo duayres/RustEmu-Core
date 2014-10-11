@@ -393,7 +393,7 @@ enum SpellAttributesEx3
 
 enum SpellAttributesEx4
 {
-    SPELL_ATTR_EX4_UNK0                        = 0x00000001,// 0
+    SPELL_ATTR_EX4_IGNORE_RESISTANCES          = 0x00000001,// 0 not may be resisted (in magic case) and have binary resistance method (in melee case).
     SPELL_ATTR_EX4_UNK1                        = 0x00000002,// 1 proc on finishing move?
     SPELL_ATTR_EX4_UNK2                        = 0x00000004,// 2
     SPELL_ATTR_EX4_UNK3                        = 0x00000008,// 3
