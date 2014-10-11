@@ -3762,7 +3762,7 @@ SpellAuraProcResult Unit::HandleProcTriggerDamageAuraProc(Unit* pVictim, DamageI
     procDamageInfo.damage = triggeredByAura->GetModifier()->m_amount;
     CalculateSpellDamage(&procDamageInfo);
     procDamageInfo.target->CalculateAbsorbResistBlock(this, &procDamageInfo, spellInfo);
-    DealDamageMods(procDamageInfo.target, procDamageInfo.damage, &procDamageInfo.absorb);
+    DealDamageMods(&procDamageInfo);
     SendSpellNonMeleeDamageLog(&procDamageInfo);
     DealSpellDamage(&procDamageInfo, true);
     return SPELL_AURA_PROC_OK;
@@ -4295,6 +4295,7 @@ SpellAuraProcResult Unit::HandleDamageShieldAuraProc(Unit* pVictim, DamageInfo* 
         return SPELL_AURA_PROC_FAILED;
 
     DamageInfo procDamageInfo = DamageInfo(this, pVictim, spellProto);
+
     procDamageInfo.damage = triggeredByAura->GetModifier()->m_amount;
 
     procDamageInfo.damage = SpellDamageBonusDone(pVictim, spellProto, procDamageInfo.damage, SPELL_DIRECT_DAMAGE);
@@ -4302,9 +4303,10 @@ SpellAuraProcResult Unit::HandleDamageShieldAuraProc(Unit* pVictim, DamageInfo* 
 
     procDamageInfo.CleanDamage(0, 0, BASE_ATTACK, MELEE_HIT_NORMAL);
 
-    pVictim->CalculateDamageAbsorbAndResist(this, &procDamageInfo, !(spellProto->AttributesEx & SPELL_ATTR_EX_CANT_REFLECTED));
 
-    DealDamageMods(pVictim, procDamageInfo.damage, &procDamageInfo.absorb);
+    pVictim->CalculateDamageAbsorbAndResist(this, &procDamageInfo, !spellProto->HasAttribute(SPELL_ATTR_EX_CANT_REFLECTED));
+
+    DealDamageMods(&procDamageInfo);
 
     uint32 targetHealth = pVictim->GetHealth();
     uint32 overkill = procDamageInfo.damage > targetHealth ? procDamageInfo.damage - targetHealth : 0;
@@ -4312,7 +4314,7 @@ SpellAuraProcResult Unit::HandleDamageShieldAuraProc(Unit* pVictim, DamageInfo* 
     WorldPacket data(SMSG_SPELLDAMAGESHIELD, (8 + 8 + 4 + 4 + 4 + 4));
     data << GetObjectGuid();
     data << pVictim->GetObjectGuid();
-    data << uint32(procDamageInfo.SpellID);
+    data << uint32(procDamageInfo.GetSpellId());
     data << uint32(procDamageInfo.damage);                  // Damage
     data << uint32(overkill);                   // Overkill
     data << uint32(procDamageInfo.SchoolMask());

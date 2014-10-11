@@ -3949,7 +3949,7 @@ bool ChatHandler::HandleDamageCommand(char* args)
 
         target->CalculateDamageAbsorbAndResist(player, &damageInfo, false);
         
-        player->DealDamageMods(target, damageInfo.damage, &damageInfo.absorb);
+        player->DealDamageMods(&damageInfo);
         player->DealDamage(target, &damageInfo, false);
         player->SendAttackStateUpdate(&damageInfo);
         return true;

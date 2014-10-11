@@ -77,8 +77,8 @@ enum SpellAuraInterruptFlags
     AURA_INTERRUPT_FLAG_NOT_SHEATHED                = 0x00000200,   // 9    removed by unsheathing
     AURA_INTERRUPT_FLAG_UNK10                       = 0x00000400,   // 10
     AURA_INTERRUPT_FLAG_UNK11                       = 0x00000800,   // 11
-    AURA_INTERRUPT_FLAG_UNK12                       = 0x00001000,   // 12   removed by attack?
-    AURA_INTERRUPT_FLAG_UNK13                       = 0x00002000,   // 13
+    AURA_INTERRUPT_FLAG_MELEE_ATTACK                = 0x00001000,   // 12   removed by melee attack?
+    AURA_INTERRUPT_FLAG_SPELL_ATTACK                = 0x00002000,   // 13   removed by spell attack?
     AURA_INTERRUPT_FLAG_UNK14                       = 0x00004000,   // 14
     AURA_INTERRUPT_FLAG_UNK15                       = 0x00008000,   // 15   removed by casting a spell?
     AURA_INTERRUPT_FLAG_UNK16                       = 0x00010000,   // 16
@@ -841,6 +841,12 @@ enum MeleeHitOutcome
     MELEE_HIT_NORMAL    = 8,
 };
 
+enum DamageFlags
+{
+    DAMAGE_FREEACTION = 0,
+    DAMAGE_SHARED = 1,
+};
+
 //struct CleanDamage
 //struct CalcDamageInfo
 //struct SpellNonMeleeDamage
@@ -884,9 +890,9 @@ struct DamageInfo
     void Reset(uint32 _damage = 0);
 
     // compartibility methods
-    void CleanDamage(int32 _damage, uint32 _absorb, WeaponAttackType _attackType, MeleeHitOutcome _hitOutCome)
+    void CleanDamage(int32 _signedDamage, uint32 _absorb, WeaponAttackType _attackType, MeleeHitOutcome _hitOutCome)
     {
-        cleanDamage = _damage;
+        cleanDamage = _signedDamage;
         absorb = _absorb;
         attackType = _attackType;
         hitOutCome = _hitOutCome;
@@ -896,26 +902,28 @@ struct DamageInfo
     Unit*  target;               // Target for damage
 
     // Spell parameters
-    uint32            SpellID;
-    SpellEntry const* m_spellInfo;
+    uint32            GetSpellId()    const { return SpellID; }
     SpellEntry const* GetSpellProto() const { return m_spellInfo; }
-    SpellSchoolMask   SchoolMask();
+    SpellSchoolMask   SchoolMask()    const { return GetSpellProto() ? SpellSchoolMask(GetSpellProto()->SchoolMask) : SPELL_SCHOOL_MASK_NORMAL; };
 
-    // Damage divide
+    // Damage types
     uint32 damage;
-    uint32 absorb;
-    uint32 resist;
-    uint32 blocked;
-    int32  cleanDamage;          // Used only for rage calculation
-    uint32 reduction;
+    int32  cleanDamage;          // Used for rage and healing calculation
 
     // Damage calculation
     uint32 baseDamage;
+    uint32 bonusCrit;
     uint32 bonusDone;
     uint32 bonusTaken;
-    uint32 Damage() {
-        return (baseDamage + bonusDone + bonusTaken
-            - reduction - absorb - resist - blocked);
+    uint32 reduction;
+    uint32 absorb;
+    uint32 resist;
+    uint32 blocked;
+    uint32 Damage() const
+    {
+        return IsHeal() ?
+            (baseDamage + bonusCrit + bonusDone + bonusTaken + reduction + absorb /*+ resist + blocked*/) :
+            (baseDamage + bonusCrit + bonusDone + bonusTaken - reduction - absorb - resist - blocked);
     };
 
     // Various types
@@ -933,9 +941,22 @@ struct DamageInfo
     uint32 procEx;
 
     // Helpers
+    bool   durabilityLoss;
     bool   physicalLog;
     bool   unused;
-    bool   IsMeleeDamage() { return !m_spellInfo; };
+    bool   IsMeleeDamage() const { return !m_spellInfo; };
+    bool   IsHeal()        const { return cleanDamage < 0; };
+
+    uint32 const&  GetFlags();
+    void           AddFlag(DamageFlags flag)       { m_flags |= (1 << flag); };
+    void           RemoveFlag(DamageFlags flag)    { m_flags &= ~(1 << flag); };
+    bool           HasFlag(DamageFlags flag) const { return (m_flags & (1 << flag)); };
+
+private:
+    DamageInfo();     // Don't allow plain initialization!
+    uint32            m_flags;
+    SpellEntry const* m_spellInfo;
+    uint32            SpellID;
 };
 
 // Spell damage info structure based on structure sending in SMSG_SPELLNONMELEEDAMAGELOG opcode
@@ -1522,9 +1543,10 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         void SetVehicleId(uint32 entry, uint32 overwriteNpcEntry);
 
         uint16 GetMaxSkillValueForLevel(Unit const* target = NULL) const { return (target ? GetLevelForTarget(target) : getLevel()) * 5; }
-        void DealDamageMods(Unit* pVictim, uint32& damage, uint32* absorb);
+        void DealDamageMods(DamageInfo* damageInfo);
         uint32 DealDamage(Unit *pVictim, uint32 damage, DamageInfo* cleanDamage, DamageEffectType damagetype, SpellSchoolMask damageSchoolMask, SpellEntry const *spellProto, bool durabilityLoss);
         uint32 DealDamage(Unit* pVictim, DamageInfo* damageInfo, bool durabilityLoss);
+        uint32 DealDamage(DamageInfo* damageInfo);
         int32  DealHeal(Unit* pVictim, uint32 addhealth, SpellEntry const* spellProto, bool critical = false, uint32 absorb = 0);
 
         void PetOwnerKilledUnit(Unit* pVictim);
