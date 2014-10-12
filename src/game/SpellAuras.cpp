@@ -5695,7 +5695,12 @@ void Aura::HandlePeriodicDamage(bool apply, bool Real)
         {
             // SpellDamageBonusDone for magic spells
             if (spellProto->DmgClass == SPELL_DAMAGE_CLASS_NONE || spellProto->DmgClass == SPELL_DAMAGE_CLASS_MAGIC)
-                m_modifier.m_amount = caster->SpellDamageBonusDone(target, GetSpellProto(), m_modifier.m_amount, DOT, GetStackAmount());
+            {
+                DamageInfo damageInfo = DamageInfo(caster, target, GetSpellProto(), m_modifier.m_amount);
+                damageInfo.damageType = DOT;
+                caster->SpellDamageBonusDone(&damageInfo, GetStackAmount());
+                m_modifier.m_amount = damageInfo.damage;                
+            }
             // MeleeDamagebonusDone for weapon based spells
             else
             {
@@ -5735,7 +5740,10 @@ void Aura::HandlePeriodicLeech(bool apply, bool /*Real*/)
         if (!caster)
             return;
 
-        m_modifier.m_amount = caster->SpellDamageBonusDone(GetTarget(), GetSpellProto(), m_modifier.m_amount, DOT, GetStackAmount());
+        DamageInfo damageInfo = DamageInfo(caster, GetTarget(), GetSpellProto(), m_modifier.m_amount);
+        damageInfo.damageType = DOT;
+        caster->SpellDamageBonusDone(&damageInfo, GetStackAmount());
+        m_modifier.m_amount = damageInfo.damage;
     }
 }
 
@@ -5761,7 +5769,10 @@ void Aura::HandlePeriodicHealthFunnel(bool apply, bool /*Real*/)
         if (!caster)
             return;
 
-        m_modifier.m_amount = caster->SpellDamageBonusDone(GetTarget(), GetSpellProto(), m_modifier.m_amount, DOT, GetStackAmount());
+        DamageInfo damageInfo = DamageInfo(caster, GetTarget(), GetSpellProto(), m_modifier.m_amount);
+        damageInfo.damageType = DOT;
+        caster->SpellDamageBonusDone(&damageInfo, GetStackAmount());
+        m_modifier.m_amount = damageInfo.damage;
     }
 }
 
@@ -7351,7 +7362,7 @@ void Aura::PeriodicTick()
 
             // SpellDamageBonus for magic spells
             if (spellProto->DmgClass == SPELL_DAMAGE_CLASS_NONE || spellProto->DmgClass == SPELL_DAMAGE_CLASS_MAGIC)
-                damageInfo.damage = target->SpellDamageBonusTaken(pCaster, spellProto, damageInfo.damage, DOT, GetStackAmount());
+                target->SpellDamageBonusTaken(&damageInfo, GetStackAmount());
             // MeleeDamagebonus for weapon based spells
             else
             {
@@ -7477,7 +7488,7 @@ void Aura::PeriodicTick()
                 damageInfo.damage = pdamageReductedArmor;
             }
 
-            damageInfo.damage = target->SpellDamageBonusTaken(pCaster, spellProto, damageInfo.damage, DOT, GetStackAmount());
+            target->SpellDamageBonusTaken(&damageInfo, GetStackAmount());
 
             bool isCrit = IsCritFromAbilityAura(pCaster, &damageInfo);
 

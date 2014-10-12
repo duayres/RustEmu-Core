@@ -4415,21 +4415,19 @@ void Spell::EffectPowerDrain(SpellEffectIndex eff_idx)
 
     uint32 curPower = unitTarget->GetPower(drain_power);
 
+    DamageInfo drainDamageInfo = DamageInfo(m_caster, unitTarget, m_spellInfo, damage);
+    drainDamageInfo.damageType = SPELL_DIRECT_DAMAGE;
+
     // add spell damage bonus
-    damage = m_caster->SpellDamageBonusDone(unitTarget, m_spellInfo, uint32(damage), SPELL_DIRECT_DAMAGE);
-    damage = unitTarget->SpellDamageBonusTaken(m_caster, m_spellInfo, uint32(damage), SPELL_DIRECT_DAMAGE);
+    m_caster->SpellDamageBonusDone(&drainDamageInfo);
+    unitTarget->SpellDamageBonusTaken(&drainDamageInfo);
 
     // resilience reduce mana draining effect at spell crit damage reduction (added in 2.4)
-    uint32 power = damage;
+    uint32 power = drainDamageInfo.damage;
     if (drain_power == POWER_MANA)
-        power -= unitTarget->GetSpellCritDamageReduction(power);
+        drainDamageInfo.damage -= unitTarget->GetSpellCritDamageReduction(drainDamageInfo.damage);
 
-    int32 new_damage;
-    if (curPower < power)
-        new_damage = curPower;
-    else
-        new_damage = power;
-
+    uint32 new_damage = std::min(curPower, drainDamageInfo.damage);
     unitTarget->ModifyPower(drain_power, -new_damage);
 
     // Don`t restore from self drain

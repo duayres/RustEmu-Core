@@ -430,6 +430,17 @@ class MANGOS_DLL_SPEC Aura
         Unit* GetTarget() const { return GetHolder()->GetTarget(); }
 
         SpellEffectIndex GetEffIndex() const { return m_effIndex; }
+
+        bool IsEmpty(bool withDeleted = true) const
+        {
+            return
+                !m_spellAuraHolder ||
+                (m_effIndex == MAX_EFFECT_INDEX) ||
+                m_spellAuraHolder->IsEmptyHolder() ||
+                (withDeleted && m_spellAuraHolder->IsDeleted())
+                ;
+        }
+
         int32 GetBasePoints() const { return m_currentBasePoints; }
 
         int32 GetAuraMaxDuration() const { return GetHolder()->GetAuraMaxDuration(); }
@@ -456,6 +467,7 @@ class MANGOS_DLL_SPEC Aura
         bool IsPersistent() const { return m_isPersistent; }
         bool IsAreaAura() const { return m_isAreaAura; }
         bool IsPeriodic() const { return m_isPeriodic; }
+        bool IsStacking() const { return m_stacking; }
         bool IsInUse() const { return m_in_use; }
 
         void SetInUse(bool state)
@@ -521,6 +533,7 @@ class MANGOS_DLL_SPEC Aura
         bool m_isPeriodic: 1;
         bool m_isAreaAura: 1;
         bool m_isPersistent: 1;
+        bool m_stacking : 1;                                  // Aura is not overwritten, but effects are not cumulative with similar effects
 
         uint32 m_in_use;                                    // > 0 while in Aura::ApplyModifier call/Aura::Update/etc
 
