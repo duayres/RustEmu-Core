@@ -4312,7 +4312,7 @@ SpellAuraProcResult Unit::HandleDamageShieldAuraProc(Unit* pVictim, DamageInfo* 
     data << uint32(procDamageInfo.GetSpellId());
     data << uint32(procDamageInfo.damage);                  // Damage
     data << uint32(overkill);                   // Overkill
-    data << uint32(procDamageInfo.SchoolMask());
+    data << uint32(procDamageInfo.GetSchoolMask());
     SendMessageToSet(&data, true);
 
     DealDamage(pVictim, &procDamageInfo, true);

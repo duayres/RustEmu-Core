@@ -303,7 +303,7 @@ enum SpellAttributesEx
     SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY     = 0x00008000,// 15 remove auras on immunity
     SPELL_ATTR_EX_UNAFFECTED_BY_SCHOOL_IMMUNE  = 0x00010000,// 16 unaffected by school immunity
     SPELL_ATTR_EX_UNK17                        = 0x00020000,// 17 for auras SPELL_AURA_TRACK_CREATURES, SPELL_AURA_TRACK_RESOURCES and SPELL_AURA_TRACK_STEALTHED select non-stacking tracking spells
-    SPELL_ATTR_EX_UNK18                        = 0x00040000,// 18
+    SPELL_ATTR_EX_BREAKABLE_BY_ANY_DAMAGE      = 0x00040000,// 18 auras with this attribute breaked by any damage (not CrowdControl auras)
     SPELL_ATTR_EX_UNK19                        = 0x00080000,// 19
     SPELL_ATTR_EX_REQ_TARGET_COMBO_POINTS      = 0x00100000,// 20 Req combo points on target
     SPELL_ATTR_EX_UNK21                        = 0x00200000,// 21
@@ -386,7 +386,7 @@ enum SpellAttributesEx3
     SPELL_ATTR_EX3_UNK26                       = 0x04000000,// 26
     SPELL_ATTR_EX3_UNK27                       = 0x08000000,// 27
     SPELL_ATTR_EX3_UNK28                       = 0x10000000,// 28
-    SPELL_ATTR_EX3_UNK29                       = 0x20000000,// 29
+    SPELL_ATTR_EX3_DISABLE_MODS                = 0x20000000,// 29 Client doesn't apply spellmods for those spells (mostly mounting and like this spells)
     SPELL_ATTR_EX3_UNK30                       = 0x40000000,// 30
     SPELL_ATTR_EX3_UNK31                       = 0x80000000,// 31
 };
@@ -442,7 +442,7 @@ enum SpellAttributesEx5
     SPELL_ATTR_EX5_UNK10                       = 0x00000400,// 10
     SPELL_ATTR_EX5_UNK11                       = 0x00000800,// 11
     SPELL_ATTR_EX5_UNK12                       = 0x00001000,// 12
-    SPELL_ATTR_EX5_UNK13                       = 0x00002000,// 13 haste affects duration (e.g. 8050 since 3.3.3)
+    SPELL_ATTR_EX5_AFFECTED_BY_HASTE           = 0x00002000,// 13 haste affects duration (e.g. 8050 since 3.3.3)
     SPELL_ATTR_EX5_UNK14                       = 0x00004000,// 14
     SPELL_ATTR_EX5_UNK15                       = 0x00008000,// 15
     SPELL_ATTR_EX5_UNK16                       = 0x00010000,// 16
@@ -486,8 +486,8 @@ enum SpellAttributesEx6
     SPELL_ATTR_EX6_UNK18                       = 0x00040000,// 18
     SPELL_ATTR_EX6_UNK19                       = 0x00080000,// 19
     SPELL_ATTR_EX6_UNK20                       = 0x00100000,// 20
-    SPELL_ATTR_EX6_UNK21                       = 0x00200000,// 21
-    SPELL_ATTR_EX6_UNK22                       = 0x00400000,// 22
+    SPELL_ATTR_EX6_EXPLICIT_NO_BINARY_RESIST   = 0x00200000,// 21
+    SPELL_ATTR_EX6_PCT_ABSORB                  = 0x00400000,// 22
     SPELL_ATTR_EX6_NO_STACK_DEBUFF_MAJOR       = 0x00800000,// 23 only debuff and debuff-like spells in 3.3.5a
     SPELL_ATTR_EX6_UNK24                       = 0x01000000,// 24 not set in 3.0.3
     SPELL_ATTR_EX6_UNK25                       = 0x02000000,// 25 not set in 3.0.3

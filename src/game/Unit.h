@@ -832,17 +832,18 @@ struct DiminishingReturn
 };
 
 // At least some values expected fixed and used in auras field, other custom
+// At least some values expected fixed and used in auras field, other custom
 enum MeleeHitOutcome
 {
-    MELEE_HIT_EVADE     = 0,
-    MELEE_HIT_MISS      = 1,
-    MELEE_HIT_DODGE     = 2,                                // used as misc in SPELL_AURA_IGNORE_COMBAT_RESULT
-    MELEE_HIT_BLOCK     = 3,                                // used as misc in SPELL_AURA_IGNORE_COMBAT_RESULT
-    MELEE_HIT_PARRY     = 4,                                // used as misc in SPELL_AURA_IGNORE_COMBAT_RESULT
-    MELEE_HIT_GLANCING  = 5,
-    MELEE_HIT_CRIT      = 6,
-    MELEE_HIT_CRUSHING  = 7,
-    MELEE_HIT_NORMAL    = 8,
+    MELEE_HIT_EVADE = 0,
+    MELEE_HIT_MISS = 1,
+    MELEE_HIT_DODGE = 2,                                // used as misc in SPELL_AURA_IGNORE_COMBAT_RESULT
+    MELEE_HIT_BLOCK = 3,                                // used as misc in SPELL_AURA_IGNORE_COMBAT_RESULT
+    MELEE_HIT_PARRY = 4,                                // used as misc in SPELL_AURA_IGNORE_COMBAT_RESULT
+    MELEE_HIT_GLANCING = 5,
+    MELEE_HIT_CRIT = 6,
+    MELEE_HIT_CRUSHING = 7,
+    MELEE_HIT_NORMAL = 8,
 };
 
 enum DamageFlags
@@ -854,13 +855,15 @@ enum DamageFlags
 //struct CleanDamage
 //struct CalcDamageInfo
 //struct SpellNonMeleeDamage
+
 // Struct for use in Unit::CalculateMeleeDamage
 // Spell damage info structure based on structure sending in SMSG_SPELLNONMELEEDAMAGELOG opcode
 struct DamageInfo
 {
+public:
     // Constructors for use with spell and melee damage
     DamageInfo(Unit *_attacker, Unit *_target, uint32 _SpellID, uint32 _damage)
-        : attacker(_attacker), target(_target), SpellID(_SpellID), m_spellInfo(NULL)
+        : attacker(_attacker), target(_target), m_spellInfo(NULL), SpellID(_SpellID)
     {
         Reset(_damage);
     };
@@ -873,13 +876,13 @@ struct DamageInfo
 
     // Constructors for use on temporary operation
     DamageInfo(uint32 _damage)
-        : attacker(NULL), target(NULL), SpellID(0), m_spellInfo(NULL)
+        : attacker(NULL), target(NULL), m_spellInfo(NULL), SpellID(0)
     {
         Reset(_damage);
     };
 
     DamageInfo(uint32 _damage, uint32 _SpellID)
-        : attacker(NULL), target(NULL), SpellID(_SpellID), m_spellInfo(NULL)
+        : attacker(NULL), target(NULL), m_spellInfo(NULL), SpellID(_SpellID)
     {
         Reset(_damage);
     };
@@ -908,10 +911,14 @@ struct DamageInfo
     // Spell parameters
     uint32            GetSpellId()    const { return SpellID; }
     SpellEntry const* GetSpellProto() const { return m_spellInfo; }
-    SpellSchoolMask   SchoolMask()    const;
+    SpellSchoolMask   GetSchoolMask() const;
 
     // Damage types
-    uint32 damage;
+    union {
+        uint32 damage;
+        uint32 heal;
+    };
+
     int32  cleanDamage;          // Used for rage and healing calculation
 
     // Damage calculation
@@ -951,10 +958,23 @@ struct DamageInfo
     bool   IsMeleeDamage() const { return !m_spellInfo; };
     bool   IsHeal()        const { return cleanDamage < 0; };
 
-    uint32 const&  GetFlags();
     void           AddFlag(DamageFlags flag)       { m_flags |= (1 << flag); };
     void           RemoveFlag(DamageFlags flag)    { m_flags &= ~(1 << flag); };
     bool           HasFlag(DamageFlags flag) const { return (m_flags & (1 << flag)); };
+
+    // Attention: We now that this to function return the same (Remember the union from heal and damage)
+    // Exits Only for better reading!
+    uint32 GetRemainingHeal() { return heal; };
+    uint32 GetRemainingDamage() { return damage; };
+
+    // absorb
+    uint32 AddAbsorb(uint32 addvalue);
+    void AddPctAbsorb(float aborbPct);
+    uint32 GetAbsorb() const { return absorb; };
+    // should not be used, possible for some kinds of hacks
+    void SetAbsorb(uint32 value) { absorb = value; };
+
+
 
 private:
     DamageInfo();     // Don't allow plain initialization!
@@ -1552,6 +1572,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         uint32 DealDamage(Unit* pVictim, DamageInfo* damageInfo, bool durabilityLoss);
         uint32 DealDamage(DamageInfo* damageInfo);
         int32  DealHeal(Unit* pVictim, uint32 addhealth, SpellEntry const* spellProto, bool critical = false, uint32 absorb = 0);
+        int32  DealHeal(DamageInfo* healInfo, bool critical = false);
 
         void PetOwnerKilledUnit(Unit* pVictim);
 
@@ -1563,12 +1584,12 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         void HandleEmote(uint32 emote_id);                  // auto-select command/state
         void HandleEmoteCommand(uint32 emote_id);
         void HandleEmoteState(uint32 emote_id);
-        void AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType = BASE_ATTACK, bool extra = false);
+        void AttackerStateUpdate(Unit *pVictim, WeaponAttackType attType = BASE_ATTACK, bool extra = false);
 
-        float MeleeMissChanceCalc(const Unit* pVictim, WeaponAttackType attType) const;
+        float MeleeMissChanceCalc(const Unit *pVictim, WeaponAttackType attType) const;
 
         void CalculateMeleeDamage(DamageInfo *damageInfo);
-        void DealMeleeDamage(DamageInfo* damageInfo, bool durabilityLoss);
+        void DealMeleeDamage(DamageInfo *damageInfo, bool durabilityLoss);
 
         bool IsAllowedDamageInArea(Unit* pVictim) const;
 
@@ -1590,10 +1611,12 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         uint32 GetRangedDamageReduction(uint32 damage) const { return GetCombatRatingDamageReduction(CR_CRIT_TAKEN_MELEE, 2.0f, 100.0f, damage); }
         uint32 GetSpellDamageReduction(uint32 damage) const { return GetCombatRatingDamageReduction(CR_CRIT_TAKEN_MELEE, 2.0f, 100.0f, damage); }
 
-        float  MeleeSpellMissChance(Unit* pVictim, WeaponAttackType attType, int32 skillDiff, SpellEntry const* spell);
+        float MeleeSpellMissChance(Unit* pVictim, WeaponAttackType attType, int32 skillDiff, SpellEntry const* spell);
         SpellMissInfo MeleeSpellHitResult(Unit* pVictim, SpellEntry const* spell);
-        SpellMissInfo MagicSpellHitResult(Unit* pVictim, SpellEntry const* spell);
-        SpellMissInfo SpellHitResult(Unit* pVictim, SpellEntry const* spell, bool canReflect = false);
+        SpellMissInfo MagicSpellHitResult(Unit* pVictim, SpellEntry const* spell, bool dotDamage = false);
+        SpellMissInfo SpellHitResult(Unit* pVictim, SpellEntry const* spell, bool dotDamage = false);
+        SpellMissInfo SpellResistResult(Unit* pVictim, SpellEntry const* spell);
+        uint32 CalculateBaseSpellHitChance(Unit* pVictim);
 
         float GetUnitDodgeChance()    const;
         float GetUnitParryChance()    const;
@@ -1693,9 +1716,11 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         void SendAttackStateUpdate(DamageInfo* damageInfo);
         void SendSpellNonMeleeDamageLog(DamageInfo *log);
-        void SendSpellNonMeleeDamageLog(Unit* target, uint32 SpellID, uint32 Damage, SpellSchoolMask damageSchoolMask, uint32 AbsorbedDamage, uint32 Resist, bool PhysicalDamage, uint32 Blocked, bool CriticalHit = false);
-        void SendPeriodicAuraLog(SpellPeriodicAuraLogInfo* pInfo);
-        void SendSpellMiss(Unit* target, uint32 spellID, SpellMissInfo missInfo);
+        void SendSpellNonMeleeDamageLog(Unit *target, uint32 SpellID, uint32 Damage, SpellSchoolMask damageSchoolMask, uint32 AbsorbedDamage, uint32 Resist, bool PhysicalDamage, uint32 Blocked, bool CriticalHit = false);
+        void SendPeriodicAuraLog(SpellPeriodicAuraLogInfo *pInfo);
+        void SendSpellMiss(Unit *target, uint32 spellID, SpellMissInfo missInfo);
+        void SendSpellDamageResist(Unit* target, uint32 spellId);
+        void SendSpellDamageImmune(Unit* target, uint32 spellId);
 
         void NearTeleportTo(float x, float y, float z, float orientation, bool casting = false);
         void Blinkway(uint32 mapid, float x, float y, float z, float dist);
@@ -2034,6 +2059,10 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         // misc have plain value but we check it fit to provided values mask (mask & (1 << (misc-1)))
         float GetTotalAuraMultiplierByMiscValueForMask(AuraType auratype, uint32 mask) const;
 
+        // Calculating custom multipliers (dummy && class script)
+        float GetTotalAuraScriptedMultiplierForDamageTaken(SpellEntry const* spellInfo) const;
+        float GetTotalAuraScriptedMultiplierForDamageDone(SpellEntry const* spellInfo) const;
+
         Aura* GetDummyAura(uint32 spell_id) const;
 
         uint32 m_AuraFlags;
@@ -2070,7 +2099,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         void UnsummonAllTotems();
         Unit* SelectMagnetTarget(Unit* victim, Spell* spell = NULL, SpellEffectIndex eff = EFFECT_INDEX_0);
 
-        int32 SpellBonusWithCoeffs(SpellEntry const* spellProto, int32 total, int32 benefit, int32 ap_benefit, DamageEffectType damagetype, bool donePart, float defCoeffMod = 1.0f);
+        int32 SpellBonusWithCoeffs(SpellEntry const *spellProto, int32 total, int32 benefit, int32 ap_benefit, DamageEffectType damagetype, bool donePart, float defCoeffMod = 1.0f);
         int32 SpellBaseDamageBonusDone(SpellSchoolMask schoolMask);
         int32 SpellBaseDamageBonusTaken(SpellSchoolMask schoolMask);
 
@@ -2079,8 +2108,8 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         int32 SpellBaseHealingBonusDone(SpellSchoolMask schoolMask);
         int32 SpellBaseHealingBonusTaken(SpellSchoolMask schoolMask);
-        uint32 SpellHealingBonusDone(Unit* pVictim, SpellEntry const* spellProto, int32 healamount, DamageEffectType damagetype, uint32 stack = 1);
-        uint32 SpellHealingBonusTaken(Unit* pCaster, SpellEntry const* spellProto, int32 healamount, DamageEffectType damagetype, uint32 stack = 1);
+        uint32 SpellHealingBonusDone(Unit *pVictim, SpellEntry const *spellProto, int32 healamount, DamageEffectType damagetype, uint32 stack = 1);
+        uint32 SpellHealingBonusTaken(Unit *pCaster, SpellEntry const *spellProto, int32 healamount, DamageEffectType damagetype, uint32 stack = 1);
 
         void MeleeDamageBonusDone(DamageInfo* damageInfo, uint32 stack = 1);
         void MeleeDamageBonusTaken(DamageInfo* damageInfo, uint32 stack = 1);
@@ -2146,11 +2175,16 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         void ApplySpellImmune(uint32 spellId, uint32 op, uint32 type, bool apply);
         void ApplySpellDispelImmunity(const SpellEntry* spellProto, DispelType type, bool apply);
         virtual bool IsImmuneToSpell(SpellEntry const* spellInfo, bool isFriendly) const;
-        bool IsImmunedToDamage(SpellSchoolMask meleeSchoolMask);
+        // redefined in Creature
+        bool IsImmunedToDamage(SpellSchoolMask meleeSchoolMask) const;
+        bool IsImmunedToSchool(SpellSchoolMask meleeSchoolMask) const;
         virtual bool IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex index) const;
+        // redefined in Creature
 
+        static bool IsDamageReducedByArmor(SpellSchoolMask damageSchoolMask, SpellEntry const* spellProto = NULL, SpellEffectIndex effIndex = MAX_EFFECT_INDEX);
         uint32 CalcArmorReducedDamage(Unit* pVictim, const uint32 damage);
-        void CalculateDamageAbsorbAndResist(Unit *pCaster, DamageInfo* damageInfo, bool canReflect = false);
+        void CalculateResistance(Unit* pCaster, DamageInfo* damageInfo);
+        void CalculateDamageAbsorbAndResist(Unit* pCaster, DamageInfo* damageInfo, bool canReflect = false);
         void CalculateAbsorbResistBlock(Unit* pCaster, DamageInfo* damageInfo, SpellEntry const* spellProto, WeaponAttackType attType = BASE_ATTACK);
         void CalculateHealAbsorb(uint32 heal, uint32* absorb);
 
@@ -2170,6 +2204,8 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         uint32 CalcNotIgnoreAbsorbDamage(DamageInfo* damageInfo);
         uint32 CalcNotIgnoreDamageReduction(DamageInfo* damageInfo);
         int32 CalculateAuraDuration(SpellEntry const* spellProto, uint32 effectMask, int32 duration, Unit const* caster);
+        uint32 CalculateAuraPeriodicTimeWithHaste(SpellEntry const* spellProto, uint32 periodicTime);
+        uint32 CalculateSpellDurationWithHaste(SpellEntry const* spellProto, uint32 duration);
 
         float CalculateLevelPenalty(SpellEntry const* spellProto) const;
 

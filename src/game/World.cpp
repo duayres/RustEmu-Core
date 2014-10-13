@@ -602,6 +602,9 @@ void World::LoadConfigSettings(bool reload)
 
     setConfigMinMax(CONFIG_UINT32_START_PLAYER_MONEY, "StartPlayerMoney", 0, 0, MAX_MONEY_AMOUNT);
 
+    // resistance calculation options
+    setConfigMinMax(CONFIG_UINT32_RESIST_CALC_METHOD, "Resistance.CalculationMethod", 1, 0, 1);
+    setConfig(CONFIG_BOOL_RESIST_ADD_BY_OVER_LEVEL, "Resistance.AddByOverLevel", false);
     setConfig(CONFIG_BOOL_RESILIENCE_ALTERNATIVE_CALCULATION, "ResilienceAlternativeCalculation", false);
 
     setConfig(CONFIG_UINT32_MAX_HONOR_POINTS, "MaxHonorPoints", 75000);

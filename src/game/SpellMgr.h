@@ -567,6 +567,27 @@ inline Mechanics GetEffectMechanic(SpellEntry const* spellInfo, SpellEffectIndex
     return MECHANIC_NONE;
 }
 
+inline bool IsBinaryResistedSpell(SpellEntry const* spellInfo)
+{
+    if (!spellInfo)
+        return false;
+
+    if (IsAreaOfEffectSpell(spellInfo) ||
+        spellInfo->HasAttribute(SPELL_ATTR_EX6_EXPLICIT_NO_BINARY_RESIST) ||
+        spellInfo->HasAttribute(SPELL_ATTR_UNAFFECTED_BY_INVULNERABILITY) || //???
+        spellInfo->HasAttribute(SPELL_ATTR_EX4_IGNORE_RESISTANCES) ||
+        (spellInfo->GetSchoolMask() & SPELL_SCHOOL_MASK_NORMAL) ||
+        spellInfo->HasAttribute(SPELL_ATTR_EX3_CANT_MISS))
+        return false;
+
+    if (GetAllSpellMechanicMask(spellInfo) != 0
+        || IsDispelSpell(spellInfo)
+        || spellInfo->HasAttribute(SPELL_ATTR_EX_BREAKABLE_BY_ANY_DAMAGE))
+        return true;
+
+    return false;
+}
+
 inline uint32 GetDispellMask(DispelType dispel)
 {
     // If dispell all
@@ -677,6 +698,7 @@ enum ProcFlagsEx
     PROC_EX_SHIELD_BREAK        = 0x0200000,                // proc at remove aura by shield break
     PROC_EX_DISPEL              = 0x0400000,                // proc at remove aura by dispel
     PROC_EX_EXPIRE              = 0x0800000,                // proc at remove aura by expire
+    PROC_EX_IGNORE_CC           = 0x1000000,                // proc result ignore possible CC limitations
 };
 
 struct SpellProcEventEntry
@@ -1113,6 +1135,7 @@ class SpellMgr
 
         bool IsSkillBonusSpell(uint32 spellId) const;
 
+        static bool IsReflectableSpell(SpellEntry const* spellInfo);
         // Spell correctness for client using
         static bool IsSpellValid(SpellEntry const* spellInfo, Player* pl = NULL, bool msg = true);
 

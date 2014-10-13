@@ -4474,8 +4474,8 @@ void Spell::EffectPowerBurn(SpellEffectIndex eff_idx)
     if (damage < 0)
         return;
 
-    // burn x% of target's mana, up to maximum of 2x% of caster's mana (Mana Burn)
-    if (m_spellInfo->ManaCostPercentage)
+    // burn x% of target's mana, up to maximum of 2x% of caster's mana (Priest's Mana Burn)
+    if (m_spellInfo->SpellFamilyName == SPELLFAMILY_PRIEST)
     {
         int32 maxdamage = m_caster->GetMaxPower(powertype) * damage * 2 / 100;
         damage = unitTarget->GetMaxPower(powertype) * damage / 100;
@@ -4495,7 +4495,7 @@ void Spell::EffectPowerBurn(SpellEffectIndex eff_idx)
     unitTarget->ModifyPower(powertype, -new_damage);
     float multiplier = m_spellInfo->EffectMultipleValue[eff_idx];
 
-    if (Player* modOwner = m_caster->GetSpellModOwner())
+    if (Player *modOwner = m_caster->GetSpellModOwner())
         modOwner->ApplySpellMod(m_spellInfo->Id, SPELLMOD_MULTIPLE_VALUE, multiplier);
 
     new_damage = int32(new_damage * multiplier);
@@ -4506,7 +4506,7 @@ void Spell::EffectPowerBurn(SpellEffectIndex eff_idx)
     // Set trigger flag
     damageInfo.procAttacker = PROC_FLAG_NONE;
     damageInfo.procVictim = PROC_FLAG_TAKEN_ANY_DAMAGE;
-    damageInfo.procEx = PROC_EX_DIRECT_DAMAGE;
+    damageInfo.procEx = PROC_EX_DIRECT_DAMAGE | PROC_EX_IGNORE_CC;
     unitTarget->ProcDamageAndSpellFor(true, &damageInfo);
 }
 

@@ -2728,6 +2728,29 @@ bool SpellMgr::IsSkillBonusSpell(uint32 spellId) const
     return false;
 }
 
+bool SpellMgr::IsReflectableSpell(SpellEntry const* spellInfo)
+{
+    // AoE spells, spells with non-magic DmgClass or SchoolMask or with SPELL_ATTR_EX2_CANT_REFLECTED cannot be reflected
+    if (spellInfo->DmgClass == SPELL_DAMAGE_CLASS_MAGIC &&
+        spellInfo->GetSchoolMask() != SPELL_SCHOOL_MASK_NORMAL &&
+        !spellInfo->HasAttribute(SPELL_ATTR_EX2_IGNORE_LOS) &&
+        !spellInfo->HasAttribute(SPELL_ATTR_EX_CANT_REFLECTED) &&
+        !IsAreaOfEffectSpell(spellInfo))
+    {
+        for (int j = 0; j < MAX_EFFECT_INDEX; ++j)
+        {
+            if (spellInfo->Effect[j] == SPELL_EFFECT_NONE)
+                continue;
+
+            if (IsPositiveTarget(spellInfo->EffectImplicitTargetA[j], spellInfo->EffectImplicitTargetB[j]) && !spellInfo->HasAttribute(SPELL_ATTR_EX_NEGATIVE))
+                continue;
+            else
+                return true;
+        }
+    }
+    return false;
+}
+
 SpellEntry const* SpellMgr::SelectAuraRankForLevel(SpellEntry const* spellInfo, uint32 level) const
 {
     // fast case
