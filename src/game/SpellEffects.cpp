@@ -3754,14 +3754,14 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 return;
             }
             // Death Strike
-            else if (m_spellInfo->SpellFamilyFlags & UI64LIT(0x0000000000000010))
+            else if (m_spellInfo->GetSpellFamilyFlags().test<CF_DEATHKNIGHT_DEATH_STRIKE>())
             {
                 uint32 count = 0;
                 Unit::SpellAuraHolderMap const& auras = unitTarget->GetSpellAuraHolderMap();
                 for (Unit::SpellAuraHolderMap::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
                 {
                     if (itr->second->GetSpellProto()->Dispel == DISPEL_DISEASE &&
-                            itr->second->GetCasterGuid() == m_caster->GetObjectGuid())
+                        itr->second->GetCasterGuid() == m_caster->GetObjectGuid())
                     {
                         ++count;
                         // max. 15%
@@ -3777,7 +3777,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 for (Unit::AuraList::const_iterator iter = auraMod.begin(); iter != auraMod.end(); ++iter)
                 {
                     // only required spell have spellicon for SPELL_AURA_ADD_FLAT_MODIFIER
-                    if ((*iter)->GetSpellProto()->SpellIconID == 2751 && (*iter)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_DEATHKNIGHT)
+                    if ((*iter)->GetSpellProto()->GetSpellIconID() == 2751 && (*iter)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_DEATHKNIGHT)
                     {
                         bp += (*iter)->GetSpellProto()->CalculateSimpleValue(EFFECT_INDEX_2) * bp / 100;
                         break;
@@ -3785,6 +3785,51 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 }
 
                 m_caster->CastCustomSpell(m_caster, 45470, &bp, NULL, NULL, true);
+                return;
+            }
+            // Death Grip
+            else if (m_spellInfo->Id == 49576)
+            {
+                if (!unitTarget)
+                    return;
+
+                m_caster->CastSpell(unitTarget, 49560, true);
+                return;
+            }
+            else if (m_spellInfo->Id == 49560)
+            {
+                if (!unitTarget || unitTarget == m_caster)
+                    return;
+
+                uint32 spellId = m_spellInfo->CalculateSimpleValue(EFFECT_INDEX_0);
+                float dest_x, dest_y;
+                m_caster->GetNearPoint2D(dest_x, dest_y, m_caster->GetObjectBoundingRadius() + unitTarget->GetObjectBoundingRadius(), m_caster->GetOrientation());
+                unitTarget->CastSpell(dest_x, dest_y, m_caster->GetPositionZ() + 0.5f, spellId, true, NULL, NULL, m_caster->GetObjectGuid(), m_spellInfo);
+                return;
+            }
+            // Corpse Explosion. Execute for Effect1 only
+            else if (m_spellInfo->GetSpellIconID() == 1737 && eff_idx == EFFECT_INDEX_1)
+            {
+                if (!unitTarget)
+                    return;
+
+                // casting on a ghoul-pet makes it explode! :D
+                // target validation is done in Spell:SetTargetMap
+                if (unitTarget->GetEntry() == 26125 && unitTarget->isAlive())
+                {
+                    int32 bp0 = int32(unitTarget->GetMaxHealth() * 0.25); // AoE dmg
+                    int32 bp1 = int32(unitTarget->GetHealth()); // self damage
+                    unitTarget->InterruptNonMeleeSpells(false);
+                    unitTarget->CastCustomSpell(unitTarget, 47496, &bp0, &bp1, 0, false);
+                }
+                else
+                {
+                    int32 damage = m_spellInfo->CalculateSimpleValue(SpellEffectIndex(EFFECT_INDEX_0));
+                    uint32 spell = m_spellInfo->CalculateSimpleValue(EFFECT_INDEX_1);
+
+                    m_caster->CastSpell(unitTarget, 51270, true); // change modelId (is this generic spell for this kind of spells?)
+                    m_caster->CastCustomSpell(unitTarget, spell, &damage, NULL, NULL, true);
+                }
                 return;
             }
             // Obliterate
@@ -4102,6 +4147,7 @@ void Spell::EffectJump(SpellEffectIndex eff_idx)
     if (m_caster->IsTaxiFlying())
         return;
 
+    Unit* pTarget = NULL;
     // Init dest coordinates
     float x, y, z, o;
     if (m_targets.m_targetMask & TARGET_FLAG_DEST_LOCATION)
@@ -4112,7 +4158,6 @@ void Spell::EffectJump(SpellEffectIndex eff_idx)
         {
             // explicit cast data from client or server-side cast
             // some spell at client send caster
-            Unit* pTarget = NULL;
             if (m_targets.getUnitTarget() && m_targets.getUnitTarget() != m_caster)
                 pTarget = m_targets.getUnitTarget();
             else if (Unit* pVictim = m_caster->getVictim())
@@ -4141,7 +4186,17 @@ void Spell::EffectJump(SpellEffectIndex eff_idx)
         return;
     }
 
-    m_caster->NearTeleportTo(x, y, z, o, true);             // TODO Implement this as jump movement?
+    int32 speed_z = m_spellInfo->EffectMiscValue[eff_idx];
+    if (!speed_z)
+        speed_z = 5;
+    int32 speed_xy = m_spellInfo->EffectMiscValueB[eff_idx];
+    if (!speed_xy)
+        speed_xy = 150;
+
+    if (pTarget == m_caster)
+        pTarget = NULL;
+
+    m_caster->MonsterMoveJump(x, y, z, float(speed_xy) / 2, float(speed_z) / 10);
 }
 
 void Spell::EffectTeleportUnits(SpellEffectIndex eff_idx)   // TODO - Use target settings for this effect!

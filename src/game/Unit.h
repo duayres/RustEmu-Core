@@ -1726,6 +1726,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         void NearTeleportTo(float x, float y, float z, float orientation, bool casting = false);
         void Blinkway(uint32 mapid, float x, float y, float z, float dist);
         void MonsterMoveWithSpeed(float x, float y, float z, float speed, bool generatePath = false, bool forceDestination = false);
+        void MonsterMoveJump(float x, float y, float z, float speed, float height);
         // recommend use MonsterMove/MonsterMoveWithSpeed for most case that correctly work with movegens
         // if used additional args in ... part then floats must explicitly casted to double
         void SendHeartBeat();

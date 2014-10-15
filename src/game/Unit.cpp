@@ -12160,6 +12160,15 @@ void Unit::MonsterMoveWithSpeed(float x, float y, float z, float speed, bool gen
     init.Launch();
 }
 
+void Unit::MonsterMoveJump(float x, float y, float z, float speed, float height)
+{
+    Movement::MoveSplineInit init(*this);
+    init.MoveTo(x, y, z);
+    init.SetParabolic(height, 0);
+    init.SetVelocity(speed);
+    init.Launch();
+}
+
 struct SetPvPHelper
 {
     explicit SetPvPHelper(bool _state) : state(_state) {}
