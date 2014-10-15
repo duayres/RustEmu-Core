@@ -278,4 +278,13 @@ class MANGOS_DLL_SPEC Pet : public Creature
             MANGOS_ASSERT(false);
         }
 };
+
+struct ApplyArenaPreparationWithHelper
+{
+    explicit ApplyArenaPreparationWithHelper(bool _apply) : apply(_apply)
+    {}
+    void operator()(Unit* unit) const;
+    bool apply;
+};
+
 #endif

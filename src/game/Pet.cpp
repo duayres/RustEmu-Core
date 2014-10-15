@@ -2090,3 +2090,12 @@ void Pet::ApplyModeFlags(PetModeFlags mode, bool apply)
     data << uint32(m_petModeFlags);
     ((Player*)owner)->GetSession()->SendPacket(&data);
 }
+
+void ApplyArenaPreparationWithHelper::operator() (Unit* unit) const
+{
+    if (!unit || !unit->GetObjectGuid().IsPet())
+        return;
+
+    if (unit->IsInWorld())
+        unit->HandleArenaPreparation(apply);
+}

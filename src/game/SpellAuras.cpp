@@ -8784,22 +8784,7 @@ void Aura::HandleArenaPreparation(bool apply, bool Real)
         return;
 
     Unit* target = GetTarget();
-
-    target->ApplyModFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PREPARATION, apply);
-
-    if (apply)
-    {
-        // max regen powers at start preparation
-        target->SetHealth(target->GetMaxHealth());
-        target->SetPower(POWER_MANA, target->GetMaxPower(POWER_MANA));
-        target->SetPower(POWER_ENERGY, target->GetMaxPower(POWER_ENERGY));
-    }
-    else
-    {
-        // reset originally 0 powers at start/leave
-        target->SetPower(POWER_RAGE, 0);
-        target->SetPower(POWER_RUNIC_POWER, 0);
-    }
+    target->HandleArenaPreparation(apply);
 }
 
 /**
@@ -9760,11 +9745,11 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
                 return;
             break;
         }
-        /*case 37728:                                 // Arena preparation
+        case 37728:                                 // Arena preparation
         {
             GetTarget()->HandleArenaPreparation(apply);
             return;
-        }*/
+        }
         case 55053:                                 // Deathbloom (25 man)
         {
             if (!apply && m_removeMode == AURA_REMOVE_BY_EXPIRE)

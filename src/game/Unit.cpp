@@ -5757,12 +5757,12 @@ void Unit::RemoveArenaAuras(bool onleave)
     for (SpellAuraHolderMap::iterator iter = m_spellAuraHolders.begin(); iter != m_spellAuraHolders.end();)
     {
         if (!iter->second->GetSpellProto()->HasAttribute(SPELL_ATTR_EX4_UNK21) &&
-                // don't remove stances, shadowform, pally/hunter auras
-                !iter->second->IsPassive() &&               // don't remove passive auras
-                (!iter->second->GetSpellProto()->HasAttribute(SPELL_ATTR_UNAFFECTED_BY_INVULNERABILITY) ||
-                 !iter->second->GetSpellProto()->HasAttribute(SPELL_ATTR_UNK8)) &&
-                // not unaffected by invulnerability auras or not having that unknown flag (that seemed the most probable)
-                (iter->second->IsPositive() != onleave))    // remove positive buffs on enter, negative buffs on leave
+            // don't remove stances, shadowform, pally/hunter auras
+            !iter->second->IsPassive() &&                   // don't remove passive auras
+            (!iter->second->GetSpellProto()->HasAttribute(SPELL_ATTR_UNAFFECTED_BY_INVULNERABILITY) ||
+            !iter->second->GetSpellProto()->HasAttribute(SPELL_ATTR_HIDE_IN_COMBAT_LOG)) &&
+            // not unaffected by invulnerability auras or not having that unknown flag (that seemed the most probable)
+            (iter->second->IsPositive() != onleave))        // remove positive buffs on enter, negative buffs on leave
         {
             RemoveSpellAuraHolder(iter->second);
             iter = m_spellAuraHolders.begin();
@@ -5770,6 +5770,58 @@ void Unit::RemoveArenaAuras(bool onleave)
         else
             ++iter;
     }
+}
+
+void Unit::HandleArenaPreparation(bool apply)
+{
+    ApplyModFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PREPARATION, apply);
+
+    if (apply)
+    {
+        // max regen powers at start preparation
+        SetHealth(GetMaxHealth());
+        SetPower(POWER_MANA, GetMaxPower(POWER_MANA));
+        SetPower(POWER_ENERGY, GetMaxPower(POWER_ENERGY));
+    }
+    else
+    {
+        // reset originally 0 powers at start/leave
+        SetPower(POWER_RAGE, 0);
+        SetPower(POWER_RUNIC_POWER, 0);
+        SetPower(POWER_MANA, GetMaxPower(POWER_MANA));
+        SetPower(POWER_ENERGY, GetMaxPower(POWER_ENERGY));
+
+        // Remove all buffs with duration < 25 sec (actually depends on config value)
+        // and auras, which have SPELL_ATTR_EX5_REMOVE_AT_ENTER_ARENA (former SPELL_ATTR_EX5_UNK2 = 0x00000004).
+        for (SpellAuraHolderMap::iterator iter = m_spellAuraHolders.begin(); iter != m_spellAuraHolders.end();)
+        {
+            if ((!iter->second->GetSpellProto()->HasAttribute(SPELL_ATTR_EX4_UNK21) &&
+                // don't remove stances, shadowform, pally/hunter auras
+                !iter->second->IsPassive() &&                   // don't remove passive auras
+                (iter->second->GetAuraMaxDuration() > 0 &&
+                iter->second->GetAuraDuration() <= int32(sWorld.getConfig(CONFIG_UINT32_ARENA_AURAS_DURATION) * IN_MILLISECONDS))) ||
+                iter->second->GetSpellProto()->HasAttribute(SPELL_ATTR_EX5_REMOVE_AT_ENTER_ARENA))
+            {
+                RemoveSpellAuraHolder(iter->second, AURA_REMOVE_BY_CANCEL);
+                iter = m_spellAuraHolders.begin();
+            }
+            else
+                ++iter;
+        }
+    }
+
+    if (GetObjectGuid().IsPet())
+    {
+        Pet* pet = ((Pet*)this);
+        if (pet)
+        {
+            Unit* owner = pet->GetOwner();
+            if (owner && (owner->GetTypeId() == TYPEID_PLAYER) && ((Player*)owner)->GetGroup())
+                ((Player*)owner)->SetGroupUpdateFlag(GROUP_UPDATE_FLAG_PET_AURAS);
+        }
+    }
+    else
+        CallForAllControlledUnits(ApplyArenaPreparationWithHelper(apply), CONTROLLED_PET | CONTROLLED_GUARDIANS);
 }
 
 void Unit::RemoveAllAurasOnDeath()

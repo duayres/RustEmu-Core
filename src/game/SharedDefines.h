@@ -257,7 +257,7 @@ enum SpellAttributes
     SPELL_ATTR_TRADESPELL                      = 0x00000020,// 5 trade spells, will be added by client to a sublist of profession spell
     SPELL_ATTR_PASSIVE                         = 0x00000040,// 6 Passive spell
     SPELL_ATTR_UNK7                            = 0x00000080,// 7 can't be linked in chat?
-    SPELL_ATTR_UNK8                            = 0x00000100,// 8 hide created item in tooltip (for effect=24)
+    SPELL_ATTR_HIDE_IN_COMBAT_LOG              = 0x00000100,// 8 This attribite controls whether spell appears in combat logs
     SPELL_ATTR_UNK9                            = 0x00000200,// 9
     SPELL_ATTR_ON_NEXT_SWING_2                 = 0x00000400,// 10 on next swing 2
     SPELL_ATTR_UNK11                           = 0x00000800,// 11
@@ -431,7 +431,7 @@ enum SpellAttributesEx5
 {
     SPELL_ATTR_EX5_UNK0                        = 0x00000001,// 0
     SPELL_ATTR_EX5_NO_REAGENT_WHILE_PREP       = 0x00000002,// 1 not need reagents if UNIT_FLAG_PREPARATION
-    SPELL_ATTR_EX5_UNK2                        = 0x00000004,// 2 removed at enter arena (e.g. 31850 since 3.3.3)
+    SPELL_ATTR_EX5_REMOVE_AT_ENTER_ARENA       = 0x00000004,// 2 removed at enter arena (e.g. 31850 since 3.3.3)
     SPELL_ATTR_EX5_USABLE_WHILE_STUNNED        = 0x00000008,// 3 usable while stunned
     SPELL_ATTR_EX5_UNK4                        = 0x00000010,// 4
     SPELL_ATTR_EX5_SINGLE_TARGET_SPELL         = 0x00000020,// 5 Only one target can be apply at a time
