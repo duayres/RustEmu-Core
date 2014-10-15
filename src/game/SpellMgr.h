@@ -644,7 +644,13 @@ enum ProcFlags
     PROC_FLAG_ON_TRAP_ACTIVATION            = 0x00200000,   // 21 On trap activation
 
     PROC_FLAG_TAKEN_OFFHAND_HIT             = 0x00400000,   // 22 Taken off-hand melee attacks(not used)
-    PROC_FLAG_SUCCESSFUL_OFFHAND_HIT        = 0x00800000    // 23 Successful off-hand melee attacks
+    PROC_FLAG_SUCCESSFUL_OFFHAND_HIT        = 0x00800000,   // 23 Successful off-hand melee attacks
+
+    PROC_FLAG_ON_DEATH                      = 0x01000000,   // 24 On caster's death
+
+    // Custom proc flag system (must be used for write proc-like effects over procsystem)
+    PROC_FLAG_ON_AURA_APPLY                 = 0x04000000,   // 26 On apply aura (require SpellClassMask and custom proc ex flags)
+    PROC_FLAG_ON_AURA_FADE                  = 0x08000000,   // 27 On fade aura  (require SpellClassMask and custom proc ex flags)
 };
 
 #define MELEE_BASED_TRIGGER_MASK (PROC_FLAG_SUCCESSFUL_MELEE_HIT        | \
@@ -774,6 +780,36 @@ struct SpellTargetPosition
 };
 
 typedef UNORDERED_MAP<uint32, SpellTargetPosition> SpellTargetPositionMap;
+
+// Spell linked types
+enum SpellLinkedType
+{
+    SPELL_LINKED_TYPE_NONE = 0,
+    SPELL_LINKED_TYPE_BOOST = 1,
+    SPELL_LINKED_TYPE_BOOSTFORWARD = 2,
+    SPELL_LINKED_TYPE_PRECAST = 3,
+    SPELL_LINKED_TYPE_TRIGGERED = 4,
+    SPELL_LINKED_TYPE_PROC = 5,
+    SPELL_LINKED_TYPE_REMOVEONCAST = 6,
+    SPELL_LINKED_TYPE_REMOVEONREMOVE = 7,
+    SPELL_LINKED_TYPE_CASTONREMOVE = 8,
+    SPELL_LINKED_TYPE_SCRIPTEFFECT = 9,
+    SPELL_LINKED_TYPE_DUMMYEFFECT = 10,
+    SPELL_LINKED_TYPE_NOT_TRIGGERED = 11,
+    SPELL_LINKED_TYPE_MAX,
+};
+
+struct SpellLinkedEntry
+{
+    uint32 spellId;
+    uint32 linkedId;
+    SpellLinkedType type;
+    uint32 effectMask;
+};
+
+typedef std::multimap<uint32, SpellLinkedEntry>  SpellLinkedMap;
+typedef std::pair<SpellLinkedMap::const_iterator, SpellLinkedMap::const_iterator> SpellLinkedMapBounds;
+typedef std::set<uint32>  SpellLinkedSet;
 
 // Spell pet auras
 class PetAura
@@ -1193,6 +1229,12 @@ class SpellMgr
             return mSpellAreaForAreaMap.equal_range(area_id);
         }
 
+        SpellLinkedMapBounds GetSpellLinkedMapBounds(uint32 spell_id) const
+        {
+            return mSpellLinkedMap.equal_range(spell_id);
+        }
+
+        SpellLinkedSet GetSpellLinked(uint32 spell_id, SpellLinkedType type) const;
         // Modifiers
     public:
         static SpellMgr& Instance();
@@ -1208,6 +1250,7 @@ class SpellMgr
         void LoadSpellProcEvents();
         void LoadSpellProcItemEnchant();
         void LoadSpellBonuses();
+        void LoadSpellLinked();
         void LoadSpellTargetPositions();
         void LoadSpellThreats();
         void LoadSkillLineAbilityMap();
@@ -1230,6 +1273,7 @@ class SpellMgr
         SpellProcEventMap  mSpellProcEventMap;
         SpellProcItemEnchantMap mSpellProcItemEnchantMap;
         SpellBonusMap      mSpellBonusMap;
+        SpellLinkedMap     mSpellLinkedMap;
         SkillLineAbilityMap mSkillLineAbilityMap;
         SkillRaceClassInfoMap mSkillRaceClassInfoMap;
         SpellPetAuraMap     mSpellPetAuraMap;

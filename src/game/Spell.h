@@ -488,11 +488,14 @@ class Spell
         bool CheckTargetCreatureType(Unit* target) const;
 
         void AddTriggeredSpell(SpellEntry const* spellInfo) { m_TriggerSpells.push_back(spellInfo); }
+        void AddNotTriggeredSpell(SpellEntry const* spellInfo) { m_NotTriggerSpells.push_back(spellInfo); }
         void AddPrecastSpell(SpellEntry const* spellInfo) { m_preCastSpells.push_back(spellInfo); }
         void AddTriggeredSpell(uint32 spellId);
+        void AddNotTriggeredSpell(uint32 spellId);
         void AddPrecastSpell(uint32 spellId);
         void CastPreCastSpells(Unit* target);
         void CastTriggerSpells();
+        void CastNotTriggerSpells();
 
         void CleanupTargetList();
         void ClearCastItem();
@@ -653,6 +656,7 @@ class Spell
         typedef std::list<SpellEntry const*> SpellInfoList;
         SpellInfoList m_TriggerSpells;                      // casted by caster to same targets settings in m_targets at success finish of current spell
         SpellInfoList m_preCastSpells;                      // casted by caster to each target at spell hit before spell effects apply
+        SpellInfoList m_NotTriggerSpells;                   // casted not triggered by caster to same targets settings in m_targets at success finish of current spell
 
         uint32 m_spellState;
         uint32 m_timer;

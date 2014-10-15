@@ -1417,6 +1417,26 @@ void Player::Update(uint32 update_diff, uint32 p_time)
     UpdateEnchantTime(update_diff);
     UpdateHomebindTime(update_diff);
 
+    if (getClass() == CLASS_DEATH_KNIGHT)
+    {
+        // Update rune grace data
+        for (uint8 i = 0; i < MAX_RUNES; ++i)
+        {
+            // Don't update timer if rune is disabled
+            if (GetRuneCooldown(i))
+                continue;
+
+            uint32 timer = GetRuneTimer(i);
+
+            // Timer has began
+            if (timer < UINT32_MAX)
+            {
+                timer += p_time;
+                SetRuneTimer(i, std::min(uint32(2500), timer));
+            }
+        }
+    }
+
     // Group update
     SendUpdateToOutOfRangeGroupMembers();
 
@@ -2097,18 +2117,37 @@ void Player::Regenerate(Powers power, uint32 diff)
 
             for (uint32 rune = 0; rune < MAX_RUNES; ++rune)
             {
-                if (uint16 cd = GetRuneCooldown(rune))      // if we have cooldown, reduce it...
+                if (uint16 cd = GetRuneCooldown(rune))       // if we have cooldown, reduce it...
                 {
                     uint32 cd_diff = diff;
                     AuraList const& ModPowerRegenPCTAuras = GetAurasByType(SPELL_AURA_MOD_POWER_REGEN_PERCENT);
                     for (AuraList::const_iterator i = ModPowerRegenPCTAuras.begin(); i != ModPowerRegenPCTAuras.end(); ++i)
+                    {
                         if ((*i)->GetModifier()->m_miscvalue == int32(power) && (*i)->GetMiscBValue() == GetCurrentRune(rune))
                             cd_diff = cd_diff * ((*i)->GetModifier()->m_amount + 100) / 100;
+                    }
 
                     SetRuneCooldown(rune, (cd < cd_diff) ? 0 : cd - cd_diff);
+
+                    // check if we don't have cooldown, need convert and that our rune wasn't already converted
+                    if (cd < cd_diff && m_runes->IsRuneNeedsConvert(rune) && GetBaseRune(rune) == GetCurrentRune(rune))
+                    {
+                        // currently all delayed rune converts happen with rune death
+                        // ConvertedBy was initialized at proc
+                        ConvertRune(rune, RUNE_DEATH);
+                        SetNeedConvertRune(rune, false);
+                    }
+                }
+                else if (m_runes->IsRuneNeedsConvert(rune) && GetBaseRune(rune) == GetCurrentRune(rune))
+                {
+                    // currently all delayed rune converts happen with rune death
+                    // ConvertedBy was initialized at proc
+                    ConvertRune(rune, RUNE_DEATH);
+                    SetNeedConvertRune(rune, false);
                 }
             }
-        }   break;
+            break;
+        }
         case POWER_FOCUS:
         case POWER_HAPPINESS:
         case POWER_HEALTH:
@@ -21499,9 +21538,33 @@ void Player::SetTitle(CharTitlesEntry const* title, bool lost)
     GetSession()->SendPacket(&data);
 }
 
-void Player::ConvertRune(uint8 index, RuneType newType)
+void Player::SetRuneCooldown(uint8 index, uint16 cooldown, bool casted /*=false*/)
+{
+    if (casted && isInCombat())
+    {
+        if (cooldown > 0)
+        {
+            uint32 gracePeriod = GetRuneTimer(index);
+            if (gracePeriod < UINT32_MAX)
+            {
+                uint32 lessCd = std::min(uint32(2500), gracePeriod);
+                cooldown = (cooldown > lessCd) ? (cooldown - lessCd) : 0;
+                SetLastRuneGraceTimer(index, lessCd);
+            }
+        }
+        SetRuneTimer(index, 0);
+    }
+
+    m_runes->runes[index].Cooldown = cooldown;
+    m_runes->SetRuneState(index, (cooldown == 0) ? true : false);
+}
+
+void Player::ConvertRune(uint8 index, RuneType newType, uint32 spellid)
 {
     SetCurrentRune(index, newType);
+
+    if (spellid != 0)
+        SetConvertedBy(index, spellid);
 
     WorldPacket data(SMSG_CONVERT_RUNE, 2);
     data << uint8(index);
@@ -21509,16 +21572,41 @@ void Player::ConvertRune(uint8 index, RuneType newType)
     GetSession()->SendPacket(&data);
 }
 
-bool Player::ActivateRunes(RuneType type, uint32 count)
+bool Player::ActivateRunes(RuneType type, uint32 count, bool forBloodTap /*=false*/)
 {
     bool modify = false;
-    for (uint32 j = 0; count > 0 && j < MAX_RUNES; ++j)
+    for (uint8 j = 0; count > 0 && j < MAX_RUNES; ++j)
     {
-        if (GetRuneCooldown(j) && GetCurrentRune(j) == type)
+        if (GetCurrentRune(j) == type && GetRuneCooldown(j) > 0)
         {
+            if (forBloodTap && GetBaseRune(j) != RUNE_BLOOD)
+                continue;
+
             SetRuneCooldown(j, 0);
             --count;
             modify = true;
+        }
+    }
+
+    // Blood Tap
+    if (forBloodTap && count > 0)
+    {
+        for (uint8 r = 0; r + 1 < MAX_RUNES && count > 0; ++r)
+        {
+            // Check if both runes are on cd as that is the only time when this needs to come into effect
+            if ((GetRuneCooldown(r) && GetCurrentRune(r) == RUNE_BLOOD) &&
+                (GetRuneCooldown(r + 1) && GetCurrentRune(r + 1) == RUNE_BLOOD))
+            {
+                // Should always update the rune with the lowest cd
+                if (r + 1 < MAX_RUNES && GetRuneCooldown(r) >= GetRuneCooldown(r + 1))
+                    r++;
+
+                SetRuneCooldown(r, 0);
+                --count;
+                modify = true;
+            }
+            else
+                break;
         }
     }
 
@@ -21562,17 +21650,30 @@ void Player::InitRunes()
     m_runes = new Runes;
 
     m_runes->runeState = 0;
+    m_runes->needConvert = 0;
 
-    for (uint32 i = 0; i < MAX_RUNES; ++i)
+    for (uint8 i = 0; i < MAX_RUNES; ++i)
     {
         SetBaseRune(i, runeSlotTypes[i]);                   // init base types
         SetCurrentRune(i, runeSlotTypes[i]);                // init current types
         SetRuneCooldown(i, 0);                              // reset cooldowns
+        SetConvertedBy(i, 0);                               // init spellid
         m_runes->SetRuneState(i);
     }
 
+    ResetRuneGraceData();
+
     for (uint32 i = 0; i < NUM_RUNE_TYPES; ++i)
         SetFloatValue(PLAYER_RUNE_REGEN_1 + i, 0.1f);
+}
+
+void Player::ResetRuneGraceData()
+{
+    for (uint8 i = 0; i < MAX_RUNES; ++i)
+    {
+        SetRuneTimer(i, UINT32_MAX);
+        SetLastRuneGraceTimer(i, 0);
+    }
 }
 
 bool Player::IsBaseRuneSlotsOnCooldown(RuneType runeType) const

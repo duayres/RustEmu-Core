@@ -373,6 +373,7 @@ Spell::Spell(Unit* caster, SpellEntry const* info, bool triggered, ObjectGuid or
 
     m_castPositionX = m_castPositionY = m_castPositionZ = 0;
     m_TriggerSpells.clear();
+    m_NotTriggerSpells.clear();
     m_preCastSpells.clear();
     m_IsTriggeredSpell = triggered;
     // m_AreaAura = false;
@@ -3403,6 +3404,30 @@ void Spell::cast(bool skipCheck)
             break;
     }
 
+    // Linked spells (precast chain)
+    SpellLinkedSet linkedSet = sSpellMgr.GetSpellLinked(m_spellInfo->Id, SPELL_LINKED_TYPE_PRECAST);
+    if (linkedSet.size() > 0)
+    {
+        for (SpellLinkedSet::const_iterator itr = linkedSet.begin(); itr != linkedSet.end(); ++itr)
+            AddPrecastSpell(*itr);
+    }
+
+    // Linked spells (triggered chain)
+    linkedSet = sSpellMgr.GetSpellLinked(m_spellInfo->Id, SPELL_LINKED_TYPE_TRIGGERED);
+    if (linkedSet.size() > 0)
+    {
+        for (SpellLinkedSet::const_iterator itr = linkedSet.begin(); itr != linkedSet.end(); ++itr)
+            AddTriggeredSpell(*itr);
+    }
+
+    // Linked spells (not triggered)
+    linkedSet = sSpellMgr.GetSpellLinked(m_spellInfo->Id, SPELL_LINKED_TYPE_NOT_TRIGGERED);
+    if (linkedSet.size() > 0)
+    {
+        for (SpellLinkedSet::const_iterator itr = linkedSet.begin(); itr != linkedSet.end(); ++itr)
+            AddNotTriggeredSpell(*itr);
+    }
+
     // traded items have trade slot instead of guid in m_itemTargetGUID
     // set to real guid to be sent later to the client
     m_targets.updateTradeSlotItem();
@@ -3829,6 +3854,10 @@ void Spell::finish(bool ok)
     // call triggered spell only at successful cast (after clear combo points -> for add some if need)
     if (!m_TriggerSpells.empty())
         CastTriggerSpells();
+
+    // call not triggered spell only at successful cast
+    if (!m_NotTriggerSpells.empty())
+        CastNotTriggerSpells();
 
     // Stop Attack for some spells
     if (m_spellInfo->HasAttribute(SPELL_ATTR_STOP_ATTACK_TARGET))
@@ -4624,7 +4653,7 @@ SpellCastResult Spell::CheckOrTakeRunePower(bool take)
         // scan death runes
         if (runeCost[RUNE_DEATH] > 0)
         {
-            for (uint32 i = 0; i < MAX_RUNES && runeCost[RUNE_DEATH]; ++i)
+            for (uint8 i = 0; i < MAX_RUNES && runeCost[RUNE_DEATH]; ++i)
             {
                 RuneType rune = plr->GetCurrentRune(i);
                 if (rune != RUNE_DEATH)
@@ -4635,12 +4664,15 @@ SpellCastResult Spell::CheckOrTakeRunePower(bool take)
                     continue;
 
                 if (take)
-                    plr->SetRuneCooldown(i, RUNE_COOLDOWN); // 5*2=10 sec
+                    plr->SetRuneCooldown(i, RUNE_COOLDOWN, true); // 5*2=10 sec
 
                 --runeCost[rune];
 
                 if (take)
+                {
                     plr->ConvertRune(i, plr->GetBaseRune(i));
+                    plr->ClearConvertedBy(i);
+                }
             }
         }
 
@@ -4843,6 +4875,17 @@ void Spell::AddTriggeredSpell(uint32 spellId)
     m_TriggerSpells.push_back(spellInfo);
 }
 
+void Spell::AddNotTriggeredSpell(uint32 spellId)
+{
+    SpellEntry const* spellInfo = sSpellStore.LookupEntry(spellId);
+    if (!spellInfo)
+    {
+        sLog.outError("Spell::AddNotTriggeredSpell: unknown spell id %u used as not triggred spell for spell %u)", spellId, m_spellInfo->Id);
+        return;
+    }
+    m_NotTriggerSpells.push_back(spellInfo);
+}
+
 void Spell::AddPrecastSpell(uint32 spellId)
 {
     SpellEntry const* spellInfo = sSpellStore.LookupEntry(spellId);
@@ -4861,6 +4904,15 @@ void Spell::CastTriggerSpells()
     for (SpellInfoList::const_iterator si = m_TriggerSpells.begin(); si != m_TriggerSpells.end(); ++si)
     {
         Spell* spell = new Spell(m_caster, (*si), true, m_originalCasterGUID);
+        spell->prepare(&m_targets);                         // use original spell original targets
+    }
+}
+
+void Spell::CastNotTriggerSpells()
+{
+    for (SpellInfoList::const_iterator si = m_NotTriggerSpells.begin(); si != m_NotTriggerSpells.end(); ++si)
+    {
+        Spell* spell = new Spell(m_caster, (*si), false, m_originalCasterGUID);
         spell->prepare(&m_targets);                         // use original spell original targets
     }
 }

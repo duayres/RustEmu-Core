@@ -88,6 +88,7 @@ class MANGOS_DLL_SPEC SpellAuraHolder
         void BuildUpdatePacket(WorldPacket& data) const;
         void SendAuraUpdate(bool remove) const;
         void HandleSpellSpecificBoosts(bool apply);
+        void HandleSpellSpecificBoostsForward(bool apply);
         void CleanupTriggeredSpells();
 
         void setDiminishGroup(DiminishingGroup group) { m_AuraDRGroup = group; }
@@ -452,6 +453,9 @@ class MANGOS_DLL_SPEC Aura
             int32 maxDuration = GetAuraMaxDuration();
             return maxDuration > 0 && m_modifier.periodictime > 0 ? maxDuration / m_modifier.periodictime : 0;
         }
+
+        void SetAuraPeriodicTimer(int32 timer) { m_modifier.periodictime = timer; }
+
         uint32 GetStackAmount() const { return GetHolder()->GetStackAmount(); }
 
         void SetLoadedState(int32 damage, uint32 periodicTime)
