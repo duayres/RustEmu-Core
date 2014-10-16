@@ -433,6 +433,13 @@ void PathFinder::BuildPointPath(const float* startPoint, const float* endPoint)
         m_type = PATHFIND_NOPATH;
         return;
     }
+    else if (pointCount == m_pointPathLimit)
+    {
+        DEBUG_FILTER_LOG(LOG_FILTER_PATHFINDING, "BuildPointPath FAILED! path sized %d returned, lower than limit set to %d\n", pointCount, m_pointPathLimit);
+        BuildShortcut();
+        m_type = PATHFIND_SHORT;
+        return;
+    }
 
     m_pathPoints.resize(pointCount);
     for (uint32 i = 0; i < pointCount; ++i)

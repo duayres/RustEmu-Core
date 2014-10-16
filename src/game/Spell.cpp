@@ -47,6 +47,7 @@
 #include "Vehicle.h"
 #include "TemporarySummon.h"
 #include "SQLStorages.h"
+#include "PathFinder.h"
 
 extern pEffect SpellEffects[TOTAL_SPELL_EFFECTS];
 
@@ -5755,8 +5756,31 @@ SpellCastResult Spell::CheckCast(bool strict)
             case SPELL_EFFECT_CHARGE:
             {
                 if (m_caster->hasUnitState(UNIT_STAT_ROOT))
+                {
+                    // Intervene with Warbringer talent
+                    if (m_spellInfo->Id == 3411 && m_caster->HasAura(57499))
+                    {
+                        m_caster->RemoveAurasAtMechanicImmunity(IMMUNE_TO_ROOT_AND_SNARE_MASK, 0);
+                        return SPELL_FAILED_DONT_REPORT;
+                    }
                     return SPELL_FAILED_ROOTED;
+                }
 
+                if (Unit* target = m_targets.getUnitTarget())
+                {
+                    float range = GetSpellMaxRange(sSpellRangeStore.LookupEntry(m_spellInfo->GetRangeIndex()));
+                    float x, y, z;
+                    target->GetContactPoint(m_caster, x, y, z);
+
+                    PathFinder pathFinder(m_caster);
+                    pathFinder.setPathLengthLimit(range * 1.5f);
+                    bool result = pathFinder.calculate(x, y, z, false);
+
+                    if (pathFinder.getPathType() & PATHFIND_SHORT)
+                        return SPELL_FAILED_OUT_OF_RANGE;
+                    else if (!result || pathFinder.getPathType() & PATHFIND_NOPATH)
+                        return SPELL_FAILED_NOPATH;
+                }
                 break;
             }
             case SPELL_EFFECT_SKINNING:

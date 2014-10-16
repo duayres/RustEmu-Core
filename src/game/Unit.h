@@ -482,6 +482,7 @@ enum UnitMoveType
 };
 
 #define MAX_MOVE_TYPE     9
+#define BASE_CHARGE_SPEED 27.0f
 
 enum CombatRating
 {
@@ -1730,7 +1731,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         // recommend use MonsterMove/MonsterMoveWithSpeed for most case that correctly work with movegens
         // if used additional args in ... part then floats must explicitly casted to double
         void SendHeartBeat();
-
+        bool IsFalling() const { return m_movementInfo.HasMovementFlag(MovementFlags(MOVEFLAG_FALLING | MOVEFLAG_FALLINGFAR)); };
         bool IsLevitating() const { return m_movementInfo.HasMovementFlag(MOVEFLAG_LEVITATING); }
         bool IsWalking() const { return m_movementInfo.HasMovementFlag(MOVEFLAG_WALK_MODE); }
         bool IsRooted() const { return m_movementInfo.HasMovementFlag(MOVEFLAG_ROOT); }
@@ -2261,6 +2262,8 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         void OnRelocated();
 
         bool IsLinkingEventTrigger() const { return m_isCreatureLinkingTrigger; }
+
+        void KillSelf(uint32 keepHealthPoints = 0); // used instead ForcedDespawn() when not need despawn unit
 
     protected:
         explicit Unit();

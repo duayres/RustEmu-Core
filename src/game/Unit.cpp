@@ -12747,3 +12747,9 @@ void DamageInfo::AddPctAbsorb(float aborbPct)
     uint32 realabsorb = damage * aborbPct / 100.0f;
     AddAbsorb(realabsorb);
 }
+
+void Unit::KillSelf(uint32 keepHealthPoints/*=0*/)
+{
+    DealDamage(this, keepHealthPoints ? GetHealth() - keepHealthPoints : GetHealth(),
+        NULL, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, NULL, false);
+}
