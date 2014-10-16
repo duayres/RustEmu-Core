@@ -878,7 +878,7 @@ void Spell::EffectSchoolDMG(SpellEffectIndex effect_idx)
         case SPELLFAMILY_WARLOCK:
         {
             // Incinerate Rank 1 & 2
-            if (m_spellInfo->GetSpellFamilyFlags().test<CF_WARLOCK_INCINERATE>() && m_spellInfo->GetSpellIconID() == 2128)
+            if (m_spellInfo->GetSpellFamilyFlags().test<CF_WARLOCK_INCINERATE>() && m_spellInfo->SpellIconID == 2128)
             {
                 // Incinerate does more dmg (dmg*0.25) if the target have Immolate debuff.
                 // Check aura state for speed but aura state set not only for Immolate spell
@@ -913,7 +913,7 @@ void Spell::EffectSchoolDMG(SpellEffectIndex effect_idx)
             // Shadow Bite
             else if (m_spellInfo->GetSpellFamilyFlags().test<CF_WARLOCK_SHADOW_BITE>())
             {
-                Unit *owner = m_caster->GetOwner();
+                Unit* owner = m_caster->GetOwner();
                 if (!owner)
                     break;
 
@@ -990,7 +990,7 @@ void Spell::EffectSchoolDMG(SpellEffectIndex effect_idx)
                 for (Unit::AuraList::const_iterator i = ImprMindBlast.begin(); i != ImprMindBlast.end(); ++i)
                 {
                     if ((*i)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_PRIEST &&
-                        ((*i)->GetSpellProto()->GetSpellIconID() == 95))
+                        ((*i)->GetSpellProto()->SpellIconID == 95))
                     {
                         int chance = (*i)->GetSpellProto()->CalculateSimpleValue(EFFECT_INDEX_1);
                         if (roll_chance_i(chance))
@@ -1069,7 +1069,7 @@ void Spell::EffectSchoolDMG(SpellEffectIndex effect_idx)
                         Unit::AuraList const& auraList = ((Player*)m_caster)->GetAurasByType(SPELL_AURA_MOD_DURATION_OF_EFFECTS_BY_DISPEL);
                         for (Unit::AuraList::const_iterator iter = auraList.begin(); iter != auraList.end(); ++iter)
                         {
-                            if ((*iter)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_ROGUE && (*iter)->GetSpellProto()->GetSpellIconID() == 1960)
+                            if ((*iter)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_ROGUE && (*iter)->GetSpellProto()->SpellIconID == 1960)
                             {
                                 if (int32 chance = (*iter)->GetSpellProto()->CalculateSimpleValue(EFFECT_INDEX_2))
                                     if (roll_chance_i(chance))
@@ -1130,7 +1130,7 @@ void Spell::EffectSchoolDMG(SpellEffectIndex effect_idx)
         case SPELLFAMILY_HUNTER:
         {
             //Gore
-            if (m_spellInfo->GetSpellIconID() == 1578)
+            if (m_spellInfo->SpellIconID == 1578)
             {
                 if (m_caster->HasAura(57627))           // Charge 6 sec post-affect
                     damage *= 2;
@@ -1160,7 +1160,7 @@ void Spell::EffectSchoolDMG(SpellEffectIndex effect_idx)
                 damage += int32(ap * 0.2f) + int32(holy * 32 / 100);
             }
             // Judgement of Vengeance/Corruption ${1+0.22*$SPH+0.14*$AP} + 10% for each application of Holy Vengeance/Blood Corruption on the target
-            else if ((m_spellInfo->GetSpellFamilyFlags().test<CF_PALADIN_JUDGEMENT_OF_CORRUPT_VENG>()) && m_spellInfo->GetSpellIconID() == 2292)
+            else if ((m_spellInfo->GetSpellFamilyFlags().test<CF_PALADIN_JUDGEMENT_OF_CORRUPT_VENG>()) && m_spellInfo->SpellIconID == 2292)
             {
                 uint32 debuf_id;
                 switch (m_spellInfo->Id)
@@ -4157,7 +4157,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
             bool needRemove = true;
             for (TargetList::const_iterator ihit = m_UniqueTargetInfo.begin(); ihit != m_UniqueTargetInfo.end(); ++ihit)
             {
-                Unit *unit = ObjectAccessor::GetUnit(*unitTarget, ihit->targetGUID);
+                Unit* unit = ObjectAccessor::GetUnit(*unitTarget, ihit->targetGUID);
                 if (unit && unitTarget->GetDistance(unit) > 5.0f)
                 {
                     needRemove = false;
@@ -4362,7 +4362,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 for (Unit::AuraList::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
                 {
                     // Only Sudden Death have this SpellIconID with SPELL_AURA_PROC_TRIGGER_SPELL
-                    if ((*itr)->GetSpellProto()->GetSpellIconID() == 1989)
+                    if ((*itr)->GetSpellProto()->SpellIconID == 1989)
                     {
                         // saved rage top stored in next affect
                         uint32 lastrage = (*itr)->GetSpellProto()->CalculateSimpleValue(EFFECT_INDEX_1) * 10;
@@ -4465,7 +4465,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 // Improved Life Tap mod
                 Unit::AuraList const& auraDummy = m_caster->GetAurasByType(SPELL_AURA_DUMMY);
                 for (Unit::AuraList::const_iterator itr = auraDummy.begin(); itr != auraDummy.end(); ++itr)
-                    if ((*itr)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_WARLOCK && (*itr)->GetSpellProto()->GetSpellIconID() == 208)
+                    if ((*itr)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_WARLOCK && (*itr)->GetSpellProto()->SpellIconID == 208)
                         mana = ((*itr)->GetModifier()->m_amount + 100)* mana / 100;
 
                 m_caster->CastCustomSpell(unitTarget, 31818, &mana, NULL, NULL, true);
@@ -4475,7 +4475,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 Unit::AuraList const& mod = m_caster->GetAurasByType(SPELL_AURA_ADD_FLAT_MODIFIER);
                 for (Unit::AuraList::const_iterator itr = mod.begin(); itr != mod.end(); ++itr)
                 {
-                    if ((*itr)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_WARLOCK && (*itr)->GetSpellProto()->GetSpellIconID() == 1982)
+                    if ((*itr)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_WARLOCK && (*itr)->GetSpellProto()->SpellIconID == 1982)
                         manaFeedVal += (*itr)->GetModifier()->m_amount;
                 }
                 if (manaFeedVal > 0)
@@ -4645,7 +4645,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
             Unit::AuraList const& decSpeedList = unitTarget->GetAurasByType(SPELL_AURA_MOD_DECREASE_SPEED);
             for (Unit::AuraList::const_iterator iter = decSpeedList.begin(); iter != decSpeedList.end(); ++iter)
             {
-                if ((*iter)->GetSpellProto()->GetSpellIconID() == 15 && (*iter)->GetSpellProto()->Dispel == 0)
+                if ((*iter)->GetSpellProto()->SpellIconID == 15 && (*iter)->GetSpellProto()->Dispel == 0)
                 {
                     found = true;
                     break;
@@ -4742,7 +4742,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
     }
     case SPELLFAMILY_PALADIN:
     {
-        switch (m_spellInfo->GetSpellIconID())
+        switch (m_spellInfo->SpellIconID)
         {
         case 156:                                   // Holy Shock
         {
@@ -4859,7 +4859,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
     case SPELLFAMILY_SHAMAN:
     {
         // Cleansing Totem
-        if (m_spellInfo->GetSpellFamilyFlags().test<CF_SHAMAN_MISC_TOTEM_EFFECTS>() && m_spellInfo->GetSpellIconID() == 1673)
+        if (m_spellInfo->GetSpellFamilyFlags().test<CF_SHAMAN_MISC_TOTEM_EFFECTS>() && m_spellInfo->SpellIconID == 1673)
         {
             if (unitTarget)
                 m_caster->CastSpell(unitTarget, 52025, true);
@@ -4870,7 +4870,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
         {
             if (unitTarget)
             {
-                if (Unit *owner = m_caster->GetOwner())
+                if (Unit* owner = m_caster->GetOwner())
                 {
                     // spell have SPELL_DAMAGE_CLASS_NONE and not get bonuses from owner, use main spell for bonuses
                     if (m_triggeredBySpellInfo)
@@ -4883,7 +4883,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                     Unit::AuraList const& mDummyAuras = owner->GetAurasByType(SPELL_AURA_DUMMY);
                     for (Unit::AuraList::const_iterator i = mDummyAuras.begin(); i != mDummyAuras.end(); ++i)
                         // only its have dummy with specific icon
-                        if ((*i)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_SHAMAN && (*i)->GetSpellProto()->GetSpellIconID() == 338)
+                        if ((*i)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_SHAMAN && (*i)->GetSpellProto()->SpellIconID == 338)
                             damage += (*i)->GetModifier()->m_amount * damage / 100;
 
                     // Glyph of Healing Stream Totem
@@ -4926,7 +4926,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 return;
 
             // Glyph of Mana Tide
-            if (Unit *owner = m_caster->GetOwner())
+            if (Unit* owner = m_caster->GetOwner())
                 if (Aura const* dummy = owner->GetDummyAura(55441))
                     damage += dummy->GetModifier()->m_amount;
             // Regenerate 6% of Total Mana Every 3 secs
@@ -4959,7 +4959,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
             return;
         }
         // Fire Nova
-        if (m_spellInfo->GetSpellIconID() == 33)
+        if (m_spellInfo->SpellIconID == 33)
         {
             // fire totems slot
             Totem* totem = m_caster->GetTotem(TOTEM_SLOT_FIRE);
@@ -4992,7 +4992,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
     case SPELLFAMILY_DEATHKNIGHT:
     {
         // Corpse Explosion
-        if (m_spellInfo->GetSpellIconID() == 1737)
+        if (m_spellInfo->SpellIconID == 1737)
         {
             // Living ghoul as a target
             if (unitTarget->isAlive() && unitTarget->GetObjectGuid().IsPet() && unitTarget->GetEntry() == 26125)
@@ -5060,7 +5060,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
             for (Unit::AuraList::const_iterator iter = auraMod.begin(); iter != auraMod.end(); ++iter)
             {
                 // only required spell have spellicon for SPELL_AURA_ADD_FLAT_MODIFIER
-                if ((*iter)->GetSpellProto()->GetSpellIconID() == 2751 && (*iter)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_DEATHKNIGHT)
+                if ((*iter)->GetSpellProto()->SpellIconID == 2751 && (*iter)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_DEATHKNIGHT)
                 {
                     bp += (*iter)->GetSpellProto()->CalculateSimpleValue(EFFECT_INDEX_2) * bp / 100;
                     break;
@@ -5091,7 +5091,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
             return;
         }
         // Corpse Explosion. Execute for Effect1 only
-        else if (m_spellInfo->GetSpellIconID() == 1737 && eff_idx == EFFECT_INDEX_1)
+        else if (m_spellInfo->SpellIconID == 1737 && eff_idx == EFFECT_INDEX_1)
         {
             if (!unitTarget)
                 return;
@@ -5122,7 +5122,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
             Unit::AuraList const& dummyList = m_caster->GetAurasByType(SPELL_AURA_DUMMY);
             for (Unit::AuraList::const_iterator itr = dummyList.begin(); itr != dummyList.end(); ++itr)
             {
-                if ((*itr)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_DEATHKNIGHT && (*itr)->GetSpellProto()->GetSpellIconID() == 2710)
+                if ((*itr)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_DEATHKNIGHT && (*itr)->GetSpellProto()->SpellIconID == 2710)
                 {
                     if (roll_chance_i((*itr)->GetModifier()->m_amount)) // don't consume if found
                         return;
@@ -11218,7 +11218,7 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                 SpellAuraHolder* targetHolder = unitTarget->GetSpellAuraHolder(69558);
                 uint32 casterStack = 0;
                 uint32 targetStack = 0;
-                Unit *pBigger, *pSmaller;
+                Unit* pBigger, *pSmaller;
 
                 if (casterHolder)
                     casterStack = casterHolder->GetStackAmount();
@@ -11672,7 +11672,7 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
             for (Unit::AuraList::const_iterator i = auras.begin(); i != auras.end(); ++i)
             {
                 // Invigoration (master talent)
-                if ((*i)->GetModifier()->m_miscvalue == 8 && (*i)->GetSpellProto()->GetSpellIconID() == 3487)
+                if ((*i)->GetModifier()->m_miscvalue == 8 && (*i)->GetSpellProto()->SpellIconID == 3487)
                 {
                     if (roll_chance_i((*i)->GetModifier()->m_amount))
                     {

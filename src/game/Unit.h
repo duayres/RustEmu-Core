@@ -864,13 +864,13 @@ struct DamageInfo
 {
 public:
     // Constructors for use with spell and melee damage
-    DamageInfo(Unit *_attacker, Unit *_target, uint32 _SpellID, uint32 _damage)
+    DamageInfo(Unit* _attacker, Unit* _target, uint32 _SpellID, uint32 _damage)
         : attacker(_attacker), target(_target), m_spellInfo(NULL), SpellID(_SpellID)
     {
         Reset(_damage);
     };
 
-    DamageInfo(Unit *_attacker, Unit *_target, SpellEntry const* spellInfo, uint32 _damage = 0)
+    DamageInfo(Unit* _attacker, Unit* _target, SpellEntry const* spellInfo, uint32 _damage = 0)
         : attacker(_attacker), target(_target), m_spellInfo(spellInfo), SpellID(0)
     {
         Reset(_damage);
@@ -1570,7 +1570,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         uint16 GetMaxSkillValueForLevel(Unit const* target = NULL) const { return (target ? GetLevelForTarget(target) : getLevel()) * 5; }
         void DealDamageMods(DamageInfo* damageInfo);
-        uint32 DealDamage(Unit *pVictim, uint32 damage, DamageInfo* cleanDamage, DamageEffectType damagetype, SpellSchoolMask damageSchoolMask, SpellEntry const *spellProto, bool durabilityLoss);
+        uint32 DealDamage(Unit* pVictim, uint32 damage, DamageInfo* cleanDamage, DamageEffectType damagetype, SpellSchoolMask damageSchoolMask, SpellEntry const *spellProto, bool durabilityLoss);
         uint32 DealDamage(Unit* pVictim, DamageInfo* damageInfo, bool durabilityLoss);
         uint32 DealDamage(DamageInfo* damageInfo);
         int32  DealHeal(Unit* pVictim, uint32 addhealth, SpellEntry const* spellProto, bool critical = false, uint32 absorb = 0);
@@ -1586,9 +1586,9 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         void HandleEmote(uint32 emote_id);                  // auto-select command/state
         void HandleEmoteCommand(uint32 emote_id);
         void HandleEmoteState(uint32 emote_id);
-        void AttackerStateUpdate(Unit *pVictim, WeaponAttackType attType = BASE_ATTACK, bool extra = false);
+        void AttackerStateUpdate(Unit* pVictim, WeaponAttackType attType = BASE_ATTACK, bool extra = false);
 
-        float MeleeMissChanceCalc(const Unit *pVictim, WeaponAttackType attType) const;
+        float MeleeMissChanceCalc(const Unit* pVictim, WeaponAttackType attType) const;
 
         void CalculateMeleeDamage(DamageInfo *damageInfo);
         void DealMeleeDamage(DamageInfo *damageInfo, bool durabilityLoss);
@@ -1718,9 +1718,9 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         void SendAttackStateUpdate(DamageInfo* damageInfo);
         void SendSpellNonMeleeDamageLog(DamageInfo *log);
-        void SendSpellNonMeleeDamageLog(Unit *target, uint32 SpellID, uint32 Damage, SpellSchoolMask damageSchoolMask, uint32 AbsorbedDamage, uint32 Resist, bool PhysicalDamage, uint32 Blocked, bool CriticalHit = false);
+        void SendSpellNonMeleeDamageLog(Unit* target, uint32 SpellID, uint32 Damage, SpellSchoolMask damageSchoolMask, uint32 AbsorbedDamage, uint32 Resist, bool PhysicalDamage, uint32 Blocked, bool CriticalHit = false);
         void SendPeriodicAuraLog(SpellPeriodicAuraLogInfo *pInfo);
-        void SendSpellMiss(Unit *target, uint32 spellID, SpellMissInfo missInfo);
+        void SendSpellMiss(Unit* target, uint32 spellID, SpellMissInfo missInfo);
         void SendSpellDamageResist(Unit* target, uint32 spellId);
         void SendSpellDamageImmune(Unit* target, uint32 spellId);
 
@@ -2112,8 +2112,8 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         int32 SpellBaseHealingBonusDone(SpellSchoolMask schoolMask);
         int32 SpellBaseHealingBonusTaken(SpellSchoolMask schoolMask);
-        uint32 SpellHealingBonusDone(Unit *pVictim, SpellEntry const *spellProto, int32 healamount, DamageEffectType damagetype, uint32 stack = 1);
-        uint32 SpellHealingBonusTaken(Unit *pCaster, SpellEntry const *spellProto, int32 healamount, DamageEffectType damagetype, uint32 stack = 1);
+        uint32 SpellHealingBonusDone(Unit* pVictim, SpellEntry const *spellProto, int32 healamount, DamageEffectType damagetype, uint32 stack = 1);
+        uint32 SpellHealingBonusTaken(Unit* pCaster, SpellEntry const *spellProto, int32 healamount, DamageEffectType damagetype, uint32 stack = 1);
 
         void MeleeDamageBonusDone(DamageInfo* damageInfo, uint32 stack = 1);
         void MeleeDamageBonusTaken(DamageInfo* damageInfo, uint32 stack = 1);

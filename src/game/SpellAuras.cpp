@@ -5772,7 +5772,7 @@ void Aura::HandlePeriodicDamage(bool apply, bool Real)
         if (apply)
         {
             target->CastSpell(target, 70955, true); // Bounce Protection
-            if (Unit *pCaster = GetCaster())
+            if (Unit* pCaster = GetCaster())
             {
                 if (SpellAuraHolder* holder = pCaster->GetSpellAuraHolder(GetId()))
                 {
@@ -5860,7 +5860,7 @@ void Aura::HandlePeriodicHealthFunnel(bool apply, bool /*Real*/)
 
 void Aura::HandleAuraModResistanceExclusive(bool apply, bool /*Real*/)
 {
-    Unit *target = GetTarget();
+    Unit* target = GetTarget();
 
     for (int8 x = SPELL_SCHOOL_NORMAL; x < MAX_SPELL_SCHOOL; x++)
     {
@@ -5876,7 +5876,7 @@ void Aura::HandleAuraModResistanceExclusive(bool apply, bool /*Real*/)
 
 void Aura::HandleAuraModResistance(bool apply, bool /*Real*/)
 {
-    Unit *target = GetTarget();
+    Unit* target = GetTarget();
 
     for (int8 x = SPELL_SCHOOL_NORMAL; x < MAX_SPELL_SCHOOL; x++)
     {
@@ -5910,7 +5910,7 @@ void Aura::HandleAuraModBaseResistancePCT(bool apply, bool /*Real*/)
 
 void Aura::HandleModResistancePercent(bool apply, bool /*Real*/)
 {
-    Unit *target = GetTarget();
+    Unit* target = GetTarget();
 
     for (int8 i = SPELL_SCHOOL_NORMAL; i < MAX_SPELL_SCHOOL; i++)
     {
@@ -5952,7 +5952,7 @@ void Aura::HandleAuraModStat(bool apply, bool /*Real*/)
         return;
     }
 
-    Unit *target = GetTarget();
+    Unit* target = GetTarget();
 
     for (int32 i = STAT_STRENGTH; i < MAX_STATS; i++)
     {
@@ -6234,7 +6234,7 @@ void Aura::HandleAuraModIncreaseHealth(bool apply, bool Real)
 
 void  Aura::HandleAuraModIncreaseMaxHealth(bool apply, bool /*Real*/)
 {
-    Unit *target = GetTarget();
+    Unit* target = GetTarget();
     uint32 oldhealth = target->GetHealth();
     double healthPercentage = (double)oldhealth / (double)target->GetMaxHealth();
 
@@ -7640,7 +7640,7 @@ void Aura::PeriodicTick()
             if (!target->isAlive())
                 return;
 
-            Unit *pCaster = GetCaster();
+            Unit* pCaster = GetCaster();
             if (!pCaster)
                 return;
 
@@ -7664,7 +7664,7 @@ void Aura::PeriodicTick()
             {
                 damageInfo.damage = amount;
                 // Wild Growth (1/7 - 6 + 2*ramainTicks) %
-                if (spellProto->SpellFamilyName == SPELLFAMILY_DRUID && spellProto->GetSpellIconID() == 2864)
+                if (spellProto->SpellFamilyName == SPELLFAMILY_DRUID && spellProto->SpellIconID == 2864)
                 {
                     int32 ticks = GetAuraMaxTicks();
                     int32 remainingTicks = ticks - GetAuraTicks();
@@ -7995,7 +7995,7 @@ void Aura::PeriodicTick()
                 return;
 
             int32 gain = target->ModifyHealth(m_modifier.m_amount);
-            if (Unit *caster = GetCaster())
+            if (Unit* caster = GetCaster())
                 target->getHostileRefManager().threatAssist(caster, float(gain) * 0.5f  * sSpellMgr.GetSpellThreatMultiplier(spellProto), spellProto);
             break;
         }
@@ -8931,7 +8931,7 @@ void Aura::HandleAuraConvertRune(bool apply, bool Real)
     if (GetTarget()->GetTypeId() != TYPEID_PLAYER)
         return;
 
-    Player *plr = (Player*)GetTarget();
+    Player* plr = (Player*)GetTarget();
 
     if (plr->getClass() != CLASS_DEATH_KNIGHT)
         return;
@@ -9849,7 +9849,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
         case 73798:
         case 73799:
         {
-            Unit *pCaster = GetCaster();
+            Unit* pCaster = GetCaster();
             if (!apply && pCaster)
                 m_target->CastSpell(pCaster, 69410, true);
 
@@ -9945,7 +9945,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
     case SPELLFAMILY_MAGE:
     {
         // Ice Barrier (non stacking from one caster)
-        if (m_spellProto->GetSpellIconID() == 32)
+        if (m_spellProto->SpellIconID == 32)
         {
             if ((!apply && m_removeMode == AURA_REMOVE_BY_DISPEL) || m_removeMode == AURA_REMOVE_BY_SHIELD_BREAK)
             {
@@ -9953,7 +9953,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
                 for (Unit::AuraList::const_iterator itr = dummyAuras.begin(); itr != dummyAuras.end(); ++itr)
                 {
                     // Shattered Barrier
-                    if ((*itr)->GetSpellProto()->GetSpellIconID() == 2945)
+                    if ((*itr)->GetSpellProto()->SpellIconID == 2945)
                     {
                         cast_at_remove = true;
                         // first rank have 50% chance
@@ -9970,20 +9970,20 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
         else if (m_spellProto->GetSpellFamilyFlags().test<CF_MAGE_FIREBALL>() && GetSpellProto()->GetSpellVisual() == 67)
         {
             // Glyph of Fireball
-            if (Unit * caster = GetCaster())
+            if (Unit* caster = GetCaster())
                 if (caster->HasAura(56368))
                     m_target->RemoveAurasByCasterSpell(GetId(), caster->GetObjectGuid());
         }
         else if (m_spellProto->GetSpellFamilyFlags().test<CF_MAGE_FROSTBOLT>() && GetSpellProto()->GetSpellVisual() == 13)
         {
             // Glyph of Frostbolt
-            if (Unit * caster = GetCaster())
+            if (Unit* caster = GetCaster())
                 if (caster->HasAura(56370))
                     m_target->RemoveAurasByCasterSpell(GetId(), caster->GetObjectGuid());
         }
         else if (!apply && m_spellProto->GetSpellFamilyFlags().test<CF_MAGE_ARCANE_MISSILES_CHANNEL>())
         {
-            if (Unit * caster = GetCaster())
+            if (Unit* caster = GetCaster())
             {
                 // Remove missile barrage
                 if (SpellAuraHolder* holder = caster->GetSpellAuraHolder(44401, caster->GetObjectGuid()))
@@ -10086,7 +10086,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
                 {
                     SpellEntry const* dummyEntry = (*itr)->GetSpellProto();
                     // Improved Fear
-                    if (dummyEntry->SpellFamilyName == SPELLFAMILY_WARLOCK && dummyEntry->GetSpellIconID() == 98)
+                    if (dummyEntry->SpellFamilyName == SPELLFAMILY_WARLOCK && dummyEntry->SpellIconID == 98)
                     {
                         cast_at_remove = true;
                         switch ((*itr)->GetModifier()->m_amount)
@@ -10120,7 +10120,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
     case SPELLFAMILY_PRIEST:
     {
         // Shadow Word: Pain (need visual check fro skip improvement talent) or Vampiric Touch
-        if ((m_spellProto->GetSpellIconID() == 234 && m_spellProto->GetSpellVisual()) || m_spellProto->GetSpellIconID() == 2213)
+        if ((m_spellProto->SpellIconID == 234 && m_spellProto->GetSpellVisual()) || m_spellProto->SpellIconID == 2213)
         {
             if (!apply && m_removeMode == AURA_REMOVE_BY_DISPEL)
             {
@@ -10133,7 +10133,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
                 {
                     // Shadow Affinity
                     if ((*itr)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_PRIEST
-                        && (*itr)->GetSpellProto()->GetSpellIconID() == 178)
+                        && (*itr)->GetSpellProto()->SpellIconID == 178)
                     {
                         // custom cast code
                         int32 basepoints0 = (*itr)->GetModifier()->m_amount * caster->GetCreateMana() / 100;
@@ -10175,7 +10175,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
                 {
                     SpellEntry const* dummyEntry = (*itr)->GetSpellProto();
                     // Body and Soul (talent ranks)
-                    if (dummyEntry->SpellFamilyName == SPELLFAMILY_PRIEST && dummyEntry->GetSpellIconID() == 2218 &&
+                    if (dummyEntry->SpellFamilyName == SPELLFAMILY_PRIEST && dummyEntry->SpellIconID == 2218 &&
                         dummyEntry->GetSpellVisual() == 0)
                     {
                         chance = (*itr)->GetSpellProto()->CalculateSimpleValue(EFFECT_INDEX_1);
@@ -10335,7 +10335,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
             {
                 if (!apply)
                 {
-                    Unit *caster = GetCaster();
+                    Unit* caster = GetCaster();
                     // Glyph of Freezing Trap
                     if (caster && caster->HasAura(56845))
                     {
@@ -10367,7 +10367,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
     {
         if (m_spellProto->Id == 19746)                  // Aura Mastery (on Concentration Aura remove and apply)
         {
-            Unit *caster = GetCaster();
+            Unit* caster = GetCaster();
             if (!caster)
                 return;
 
@@ -10378,7 +10378,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
         }
         if (m_spellProto->Id == 31821)                  // Aura Mastery (on Aura Mastery original buff remove)
         {
-            Unit *caster = GetCaster();
+            Unit* caster = GetCaster();
             if (!caster)
                 return;
 
@@ -10397,7 +10397,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
                 Unit::AuraList const& dummyAuras = m_target->GetAurasByType(SPELL_AURA_DUMMY);
                 for (Unit::AuraList::const_iterator itr = dummyAuras.begin(); itr != dummyAuras.end(); ++itr)
                 {
-                    if ((*itr)->GetSpellProto()->GetSpellIconID() == 3029)
+                    if ((*itr)->GetSpellProto()->SpellIconID == 3029)
                     {
                         percent = (*itr)->GetModifier()->m_amount;
                         break;
@@ -10476,7 +10476,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
                     {
                         // skip same icon
                         if ((*itr)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_DEATHKNIGHT &&
-                            (*itr)->GetSpellProto()->GetSpellIconID() == 2636)
+                            (*itr)->GetSpellProto()->SpellIconID == 2636)
                         {
                             heal_pct = (*itr)->GetModifier()->m_amount;
                             break;
@@ -10503,7 +10503,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
                     {
                         // skip same icon
                         if ((*itr)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_DEATHKNIGHT &&
-                            (*itr)->GetSpellProto()->GetSpellIconID() == 2633)
+                            (*itr)->GetSpellProto()->SpellIconID == 2633)
                         {
                             power_pct = (*itr)->GetModifier()->m_amount;
                             break;
@@ -10527,7 +10527,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
                     {
                         // skip same icon
                         if ((*itr)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_DEATHKNIGHT &&
-                            (*itr)->GetSpellProto()->GetSpellIconID() == 2632)
+                            (*itr)->GetSpellProto()->SpellIconID == 2632)
                         {
                             stamina_pct = (*itr)->GetModifier()->m_amount;
                             break;
@@ -10554,7 +10554,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
                     {
                         // skip same icon
                         if ((*itr)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_DEATHKNIGHT &&
-                            (*itr)->GetSpellProto()->GetSpellIconID() == 2633)
+                            (*itr)->GetSpellProto()->SpellIconID == 2633)
                         {
                             power_pct = (*itr)->GetModifier()->m_amount;
                             break;
@@ -10579,7 +10579,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
         }
 
         // Improved Blood Presence
-        if (GetSpellProto()->GetSpellIconID() == 2636 && m_isPassive)
+        if (GetSpellProto()->SpellIconID == 2636 && m_isPassive)
         {
             // if presence active: Frost Presence or Unholy Presence
             if (apply && (m_target->HasAura(48263) || m_target->HasAura(48265)))
@@ -10597,7 +10597,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
         }
 
         // Improved Frost Presence
-        if (GetSpellProto()->GetSpellIconID() == 2632 && m_isPassive)
+        if (GetSpellProto()->SpellIconID == 2632 && m_isPassive)
         {
             // if presence active: Unholy Presence or Blood Presence
             if (apply && (m_target->HasAura(48265) || m_target->HasAura(48266)))
@@ -10616,7 +10616,7 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
         }
 
         // Improved Unholy Presence
-        if (GetSpellProto()->GetSpellIconID() == 2633 && m_isPassive)
+        if (GetSpellProto()->SpellIconID == 2633 && m_isPassive)
         {
             // if presence active: Unholy Presence
             if (apply && m_target->HasAura(48265))
@@ -10739,7 +10739,7 @@ void SpellAuraHolder::HandleSpellSpecificBoostsForward(bool apply)
             {
                 GetTarget()->CastSpell(GetTarget(), 74074, true); // Plague Siphon
 
-                if (Unit *caster = GetCaster())
+                if (Unit* caster = GetCaster())
                 {
                     if (SpellAuraHolder* holder = caster->GetSpellAuraHolder(GetId()))
                         SetStackAmount(holder->GetStackAmount());
@@ -10762,7 +10762,7 @@ void SpellAuraHolder::HandleSpellSpecificBoostsForward(bool apply)
     case SPELLFAMILY_WARLOCK:
     {
         // Shadow embrace (healing reduction part)
-        if (m_spellProto->GetSpellFamilyFlags().test<CF_WARLOCK_MISC_DEBUFFS>() && m_spellProto->GetSpellIconID() == 2209)
+        if (m_spellProto->GetSpellFamilyFlags().test<CF_WARLOCK_MISC_DEBUFFS>() && m_spellProto->SpellIconID == 2209)
         {
             switch (GetId())
             {

@@ -664,7 +664,7 @@ uint32 Unit::DealDamage(DamageInfo* damageInfo)
             if (!(*i)->GetHolder() || (*i)->GetHolder()->IsDeleted())
                 continue;
 
-            if ((*i)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_PALADIN && (*i)->GetSpellProto()->GetSpellIconID() == 2137)
+            if ((*i)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_PALADIN && (*i)->GetSpellProto()->SpellIconID == 2137)
                 if (urand(0, 100) < (*i)->GetSpellProto()->procChance)
                     damageInfo->damage *= 0.5f;
         }
@@ -863,7 +863,7 @@ uint32 Unit::DealDamage(DamageInfo* damageInfo)
             AuraList const& vDummyAuras = pVictim->GetAurasByType(SPELL_AURA_DUMMY);
             for (AuraList::const_iterator itr = vDummyAuras.begin(); itr != vDummyAuras.end(); ++itr)
             {
-                if ((*itr)->GetSpellProto()->GetSpellIconID() == 1654)
+                if ((*itr)->GetSpellProto()->SpellIconID == 1654)
                 {
                     spiritOfRedemtionTalentReady = (*itr);
                     break;

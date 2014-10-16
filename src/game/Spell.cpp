@@ -732,86 +732,88 @@ void Spell::prepareDataForTriggerSystem()
     {
         switch (m_spellInfo->SpellFamilyName)
         {
-            case SPELLFAMILY_MAGE:
-                // Arcane Missiles / Blizzard triggers need do it
-                if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x0000000000200080)))
-                    m_canTrigger = true;
-                // Clearcasting trigger need do it
-                else if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x0000000200000000)))
-                    m_canTrigger = true;
-                // Replenish Mana, item spell with triggered cases (Mana Agate, etc mana gems)
-                else if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x0000010000000000)))
-                    m_canTrigger = true;
-                break;
-            case SPELLFAMILY_WARLOCK:
-                // For Hellfire Effect / Rain of Fire / Seed of Corruption triggers need do it
-                if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x0000800000000060)))
-                    m_canTrigger = true;
-                break;
-            case SPELLFAMILY_PRIEST:
-                // For Penance,Mind Sear,Mind Flay heal/damage triggers need do it
-                if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x0001800000800000), 0x00000040))
-                    m_canTrigger = true;
-                break;
-            case SPELLFAMILY_ROGUE:
-                // For poisons need do it
-                if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x000000101001E000)))
-                    m_canTrigger = true;
-                break;
-            case SPELLFAMILY_HUNTER:
-                // Hunter Rapid Killing/Explosive Trap Effect/Immolation Trap Effect/Frost Trap Aura/Snake Trap Effect/Explosive Shot
-                if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x0100200000000214), 0x00000200))
-                    m_canTrigger = true;
-                break;
-            case SPELLFAMILY_PALADIN:
-                // For Judgements (all) / Holy Shock triggers need do it
-                if (m_spellInfo->IsFitToFamilyMask(UI64LIT(0x0001000900B80400)))
-                    m_canTrigger = true;
-                break;
-            default:
-                break;
+        case SPELLFAMILY_MAGE:
+            // Arcane Missiles / Blizzard triggers need do it
+            if (m_spellInfo->GetSpellFamilyFlags().test<CF_MAGE_BLIZZARD, CF_MAGE_ARCANE_MISSILES2>() || m_spellInfo->SpellIconID == 212)
+                m_canTrigger = true;
+            // Clearcasting trigger need do it
+            // Replenish Mana, item spell with triggered cases (Mana Agate, etc mana gems)
+            // Fingers of Frost: triggered by Frost/Ice Armor
+            // Living Bomb - can trigger Hot Streak
+            else if (m_spellInfo->GetSpellFamilyFlags().test<CF_MAGE_CLEARCASTING, CF_MAGE_REPLENISH_MANA, CF_MAGE_CHILLED, CF_MAGE_LIVING_BOMB_AOE>())
+                m_canTrigger = true;
+            break;
+        case SPELLFAMILY_WARLOCK:
+            // For Hellfire Effect / Rain of Fire / Seed of Corruption triggers need do it
+            if (m_spellInfo->GetSpellFamilyFlags().test<CF_WARLOCK_RAIN_OF_FIRE, CF_WARLOCK_HELLFIRE, CF_WARLOCK_SEED_OF_CORRUPTION2>())
+                m_canTrigger = true;
+            break;
+        case SPELLFAMILY_PRIEST:
+            // For Penance,Mind Sear,Mind Flay,Improved Devouring Plague heal/damage triggers need do it
+            if (m_spellInfo->GetSpellFamilyFlags().test<CF_PRIEST_MIND_FLAY1, CF_PRIEST_PENANCE_DMG, CF_PRIEST_PENANCE_HEAL, CF_PRIEST_IMP_DEVOURING_PLAGUE, CF_PRIEST_MIND_FLAY2>())
+                m_canTrigger = true;
+            break;
+        case SPELLFAMILY_ROGUE:
+            // For poisons need do it
+            if (m_spellInfo->GetSpellFamilyFlags().test<CF_ROGUE_INSTANT_POISON, CF_ROGUE_CRIPPLING_POISON, CF_ROGUE_MIND_NUMBING_POISON, CF_ROGUE_DEADLY_POISON, CF_ROGUE_WOUND_POISON, CF_ROGUE_ANESTHETIC_POISON>())
+                m_canTrigger = true;
+            break;
+        case SPELLFAMILY_HUNTER:
+            // Hunter Rapid Killing/Explosive Trap Effect/Immolation Trap Effect/Frost Trap Aura/Snake Trap Effect/Explosive Shot
+            if (m_spellInfo->GetSpellFamilyFlags().test<CF_HUNTER_FIRE_TRAP_EFFECTS, CF_HUNTER_FROST_TRAP_EFFECTS, CF_HUNTER_SNAKE_TRAP_EFFECT, CF_HUNTER_RAPID_KILLING, CF_HUNTER_EXPLOSIVE_SHOT2>())
+                m_canTrigger = true;
+            break;
+        case SPELLFAMILY_PALADIN:
+            // For Judgements (all) / Holy Shock triggers need do it
+            if (m_spellInfo->GetSpellFamilyFlags().test<CF_PALADIN_JUDGEMENT_OF_RIGHT, CF_PALADIN_JUDGEMENT_OF_WISDOM_LIGHT, CF_PALADIN_JUDGEMENT_OF_JUSTICE, CF_PALADIN_HOLY_SHOCK1, CF_PALADIN_JUDGEMENT_ACTIVATE, CF_PALADIN_JUDGEMENT_OF_LIGHT, CF_PALADIN_JUDGEMENT_OF_BLOOD_MARTYR, CF_PALADIN_HOLY_SHOCK>())
+                m_canTrigger = true;
+            break;
+        case SPELLFAMILY_WARRIOR:
+            break;
+        default:
+            break;
         }
     }
 
     // Get data for type of attack and fill base info for trigger
     switch (m_spellInfo->DmgClass)
     {
-        case SPELL_DAMAGE_CLASS_MELEE:
-            m_procAttacker = PROC_FLAG_SUCCESSFUL_MELEE_SPELL_HIT;
-            if (m_attackType == OFF_ATTACK)
-                m_procAttacker |= PROC_FLAG_SUCCESSFUL_OFFHAND_HIT;
-            m_procVictim   = PROC_FLAG_TAKEN_MELEE_SPELL_HIT;
-            break;
-        case SPELL_DAMAGE_CLASS_RANGED:
-            // Auto attack
-            if (m_spellInfo->HasAttribute(SPELL_ATTR_EX2_AUTOREPEAT_FLAG))
-            {
-                m_procAttacker = PROC_FLAG_SUCCESSFUL_RANGED_HIT;
-                m_procVictim   = PROC_FLAG_TAKEN_RANGED_HIT;
-            }
-            else // Ranged spell attack
-            {
-                m_procAttacker = PROC_FLAG_SUCCESSFUL_RANGED_SPELL_HIT;
-                m_procVictim   = PROC_FLAG_TAKEN_RANGED_SPELL_HIT;
-            }
-            break;
-        default:
-            if (IsPositiveSpell(m_spellInfo->Id))           // Check for positive spell
-            {
-                m_procAttacker = PROC_FLAG_SUCCESSFUL_POSITIVE_SPELL;
-                m_procVictim   = PROC_FLAG_TAKEN_POSITIVE_SPELL;
-            }
-            else if (m_spellInfo->HasAttribute(SPELL_ATTR_EX2_AUTOREPEAT_FLAG))   // Wands auto attack
-            {
-                m_procAttacker = PROC_FLAG_SUCCESSFUL_RANGED_HIT;
-                m_procVictim   = PROC_FLAG_TAKEN_RANGED_HIT;
-            }
-            else                                           // Negative spell
-            {
-                m_procAttacker = PROC_FLAG_SUCCESSFUL_NEGATIVE_SPELL_HIT;
-                m_procVictim   = PROC_FLAG_TAKEN_NEGATIVE_SPELL_HIT;
-            }
-            break;
+    case SPELL_DAMAGE_CLASS_MELEE:
+        m_procAttacker = PROC_FLAG_SUCCESSFUL_MELEE_SPELL_HIT;
+        if (m_attackType == OFF_ATTACK)
+            m_procAttacker |= PROC_FLAG_SUCCESSFUL_OFFHAND_HIT;
+        m_procVictim = PROC_FLAG_TAKEN_MELEE_SPELL_HIT;
+        break;
+    case SPELL_DAMAGE_CLASS_RANGED:
+        // Auto attack
+        if (m_spellInfo->HasAttribute(SPELL_ATTR_EX2_AUTOREPEAT_FLAG))
+        {
+            m_procAttacker = PROC_FLAG_SUCCESSFUL_RANGED_HIT;
+            m_procVictim = PROC_FLAG_TAKEN_RANGED_HIT;
+        }
+        else // Ranged spell attack
+        {
+            m_procAttacker = PROC_FLAG_SUCCESSFUL_RANGED_SPELL_HIT;
+            m_procVictim = PROC_FLAG_TAKEN_RANGED_SPELL_HIT;
+        }
+        break;
+    default:
+        if (IsPositiveSpell(m_spellInfo->Id))                                 // Check for positive spell
+        {
+            m_procAttacker = PROC_FLAG_SUCCESSFUL_POSITIVE_SPELL;
+            m_procVictim = PROC_FLAG_TAKEN_POSITIVE_SPELL;
+        }
+        else if (m_spellInfo->HasAttribute(SPELL_ATTR_EX2_AUTOREPEAT_FLAG))   // Wands auto attack
+        {
+            m_procAttacker = PROC_FLAG_SUCCESSFUL_RANGED_HIT;
+            m_procVictim = PROC_FLAG_TAKEN_RANGED_HIT;
+        }
+        else                                           // Negative spell
+        {
+            m_procAttacker = PROC_FLAG_SUCCESSFUL_NEGATIVE_SPELL_HIT;
+            m_procVictim = PROC_FLAG_TAKEN_NEGATIVE_SPELL_HIT;
+        }
+        break;
     }
 
     // some negative spells have positive effects to another or same targets
@@ -821,9 +823,9 @@ void Spell::prepareDataForTriggerSystem()
         if (!IsPositiveEffect(m_spellInfo, SpellEffectIndex(i)))
             m_negativeEffectMask |= (1 << i);
 
-    // Hunter traps spells (for Entrapment trigger)
-    // Gives your Immolation Trap, Frost Trap, Explosive Trap, and Snake Trap ....
-    if (m_spellInfo->SpellFamilyName == SPELLFAMILY_HUNTER && (m_spellInfo->SpellFamilyFlags & UI64LIT(0x000020000000001C)))
+    // Hunter traps spells: Immolation Trap Effect, Frost Trap (triggering spell!!),
+    // Freezing Trap Effect(+ Freezing Arrow Effect), Explosive Trap Effect, Snake Trap Effect
+    if (m_spellInfo->IsFitToFamily<SPELLFAMILY_HUNTER, CF_HUNTER_FREEZING_TRAP_EFFECT, CF_HUNTER_MISC_TRAPS, CF_HUNTER_SNAKE_TRAP_EFFECT, CF_HUNTER_EXPLOSIVE_TRAP_EFFECT, CF_HUNTER_IMMOLATION_TRAP, CF_HUNTER_FROST_TRAP>())
         m_procAttacker |= PROC_FLAG_ON_TRAP_ACTIVATION;
 }
 
@@ -1017,7 +1019,7 @@ void Spell::DoAllEffectOnTarget(TargetInfo *target)
         return;
 
     // Get original caster (if exist) and calculate damage/healing from him data
-    Unit *real_caster = GetAffectiveCaster();
+    Unit* real_caster = GetAffectiveCaster();
     // FIXME: in case wild GO heal/damage spells will be used target bonuses
     Unit* caster = real_caster ? real_caster : m_caster;
 
@@ -1484,9 +1486,9 @@ void Spell::HandleDelayedSpellLaunch(TargetInfo* target)
         return;
 
     // Get original caster (if exist) and calculate damage/healing from him data
-    Unit *real_caster = GetAffectiveCaster();
+    Unit* real_caster = GetAffectiveCaster();
     // FIXME: in case wild GO heal/damage spells will be used target bonuses
-    Unit *caster = real_caster ? real_caster : m_caster;
+    Unit* caster = real_caster ? real_caster : m_caster;
 
     SpellMissInfo missInfo = target->missCondition;
     // Need init unitTarget by default unit (can changed in code on reflect)
@@ -4833,7 +4835,7 @@ void Spell::HandleThreatSpells()
     DEBUG_FILTER_LOG(LOG_FILTER_SPELL_CAST, "Spell %u added an additional %f threat for %s " SIZEFMTD " target(s)", m_spellInfo->Id, threat, positive ? "assisting" : "harming", m_UniqueTargetInfo.size());
 }
 
-void Spell::HandleEffects(Unit *pUnitTarget, Item *pItemTarget, GameObject *pGOTarget, SpellEffectIndex i)
+void Spell::HandleEffects(Unit* pUnitTarget, Item* pItemTarget, GameObject* pGOTarget, SpellEffectIndex i)
 {
     unitTarget = pUnitTarget;
     itemTarget = pItemTarget;
