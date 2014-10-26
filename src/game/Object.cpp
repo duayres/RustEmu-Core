@@ -1842,6 +1842,16 @@ GameObject* WorldObject::GetClosestGameObjectWithEntry(const WorldObject* pSourc
     return pGameObject;
 }
 
+void WorldObject::PlayMusic(uint32 sound_id, Player const* target /*= NULL*/) const
+{
+    WorldPacket data(SMSG_PLAY_MUSIC, 4);
+    data << uint32(sound_id);
+    if (target)
+        target->SendDirectMessage(&data);
+    else
+        SendMessageToSet(&data, true);
+}
+
 void WorldObject::UpdateVisibilityAndView()
 {
     GetViewPoint().Call_UpdateVisibilityForOwner();
