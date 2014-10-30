@@ -12,6 +12,10 @@ https://github.com/cmangos/issues
 
 See the file ChangeLog.md for details!
 
+## Version 0.18
+ * Implemented Boost framework.
+ * Removed ACE framework to 5.8.3.
+
 ## Version 0.17
  * Move to CMaNGOS (http://cmangos.net - https://github.com/cmangos)
  * Add Prepared SQL-Statements
