@@ -25,7 +25,6 @@
 
 NetworkManager::NetworkManager(std::string const& mname) : m_managerName(mname), network_threads_count_(1), running_(false)
 {
-
 }
 
 NetworkManager::~NetworkManager()

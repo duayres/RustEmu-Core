@@ -1692,8 +1692,8 @@ void SpellMgr::LoadSpellLinked()
     {
         BarGoLink bar(1);
         bar.step();
-        sLog.outString();
         sLog.outString(">> Spell linked definition not loaded - table empty");
+        sLog.outString();
         return;
     }
 
@@ -1750,8 +1750,8 @@ void SpellMgr::LoadSpellLinked()
 
     delete result;
 
-    sLog.outString();
     sLog.outString(">> Loaded %u spell linked definitions", count);
+    sLog.outString();
 }
 
 SpellLinkedSet SpellMgr::GetSpellLinked(uint32 spell_id, SpellLinkedType type) const

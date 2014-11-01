@@ -21,12 +21,10 @@
 
 SessionManager::SessionManager() : NetworkManager("Realmd")
 {
-
 }
 
 SessionManager::~SessionManager()
 {
-
 }
 
 bool SessionManager::StartNetwork(boost::uint16_t port, std::string address)
