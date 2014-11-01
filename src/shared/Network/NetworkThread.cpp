@@ -62,7 +62,7 @@ void NetworkThread::RemoveSocket(const SocketPtr& socket)
 
 void NetworkThread::Work()
 {
-    DEBUG_LOG("Starting %s network thread.", m_threadName.c_str());
+    sLog.outString("Starting %s network thread.", m_threadName.c_str());
 
     LoginDatabase.ThreadStart();
 
@@ -70,5 +70,5 @@ void NetworkThread::Work()
 
     LoginDatabase.ThreadEnd();
 
-    DEBUG_LOG("%s network thread exitting.", m_threadName.c_str());
+    sLog.outString("%s network thread exitting.", m_threadName.c_str());
 }
