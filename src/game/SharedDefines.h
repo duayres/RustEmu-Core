@@ -253,7 +253,7 @@ enum SpellAttributes
     SPELL_ATTR_RANGED                          = 0x00000002,// 1 All ranged abilites have this flag
     SPELL_ATTR_ON_NEXT_SWING_1                 = 0x00000004,// 2 on next swing
     SPELL_ATTR_UNK3                            = 0x00000008,// 3 not set in 3.0.3
-    SPELL_ATTR_UNK4                            = 0x00000010,// 4 isAbility
+    SPELL_ATTR_ABILITY                         = 0x00000010,// 4 client puts 'ability' instead of 'spell' in game strings for these spells
     SPELL_ATTR_TRADESPELL                      = 0x00000020,// 5 trade spells, will be added by client to a sublist of profession spell
     SPELL_ATTR_PASSIVE                         = 0x00000040,// 6 Passive spell
     SPELL_ATTR_UNK7                            = 0x00000080,// 7 can't be linked in chat?
@@ -267,15 +267,15 @@ enum SpellAttributes
     SPELL_ATTR_OUTDOORS_ONLY                   = 0x00008000,// 15 Only useable outdoors.
     SPELL_ATTR_NOT_SHAPESHIFT                  = 0x00010000,// 16 Not while shapeshifted
     SPELL_ATTR_ONLY_STEALTHED                  = 0x00020000,// 17 Must be in stealth
-    SPELL_ATTR_UNK18                           = 0x00040000,// 18
+    SPELL_ATTR_DONT_AFFECT_SHEATH_STATE        = 0x00040000,// 18 client won't hide unit weapons in sheath on cast/channel
     SPELL_ATTR_LEVEL_DAMAGE_CALCULATION        = 0x00080000,// 19 spelldamage depends on caster level
     SPELL_ATTR_STOP_ATTACK_TARGET              = 0x00100000,// 20 Stop attack after use this spell (and not begin attack if use)
     SPELL_ATTR_IMPOSSIBLE_DODGE_PARRY_BLOCK    = 0x00200000,// 21 Cannot be dodged/parried/blocked
     SPELL_ATTR_SET_TRACKING_TARGET             = 0x00400000,// 22 SetTrackingTarget
-    SPELL_ATTR_UNK23                           = 0x00800000,// 23 castable while dead?
+    SPELL_ATTR_CASTABLE_WHILE_DEAD             = 0x00800000,// 23 castable while dead or not spawned/invisible (for creatures)
     SPELL_ATTR_CASTABLE_WHILE_MOUNTED          = 0x01000000,// 24 castable while mounted
     SPELL_ATTR_DISABLED_WHILE_ACTIVE           = 0x02000000,// 25 Activate and start cooldown after aura fade or remove summoned creature or go
-    SPELL_ATTR_UNK26                           = 0x04000000,// 26
+    SPELL_ATTR_NEGATIVE_1                      = 0x04000000,// 26 Many negative spells have this attr
     SPELL_ATTR_CASTABLE_WHILE_SITTING          = 0x08000000,// 27 castable while sitting
     SPELL_ATTR_CANT_USED_IN_COMBAT             = 0x10000000,// 28 Cannot be used in combat
     SPELL_ATTR_UNAFFECTED_BY_INVULNERABILITY   = 0x20000000,// 29 unaffected by invulnerability (hmm possible not...)
@@ -294,12 +294,12 @@ enum SpellAttributesEx
     SPELL_ATTR_EX_CHANNELED_2                  = 0x00000040,// 6 channeled 2
     SPELL_ATTR_EX_NEGATIVE                     = 0x00000080,// 7
     SPELL_ATTR_EX_NOT_IN_COMBAT_TARGET         = 0x00000100,// 8 Spell req target not to be in combat state
-    SPELL_ATTR_EX_UNK9                         = 0x00000200,// 9
+    SPELL_ATTR_EX_MELEE_COMBAT_START           = 0x00000200,// 9 player starts melee combat after this spell is cast
     SPELL_ATTR_EX_NO_THREAT                    = 0x00000400,// 10 no generates threat on cast 100%
     SPELL_ATTR_EX_UNK11                        = 0x00000800,// 11
     SPELL_ATTR_EX_UNK12                        = 0x00001000,// 12
     SPELL_ATTR_EX_FARSIGHT                     = 0x00002000,// 13 related to farsight
-    SPELL_ATTR_EX_UNK14                        = 0x00004000,// 14
+    SPELL_ATTR_EX_CHANNEL_TRACKING_TARGET      = 0x00004000,// 14 Client automatically forces player to face target when channeling
     SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY     = 0x00008000,// 15 remove auras on immunity
     SPELL_ATTR_EX_UNAFFECTED_BY_SCHOOL_IMMUNE  = 0x00010000,// 16 unaffected by school immunity
     SPELL_ATTR_EX_UNK17                        = 0x00020000,// 17 for auras SPELL_AURA_TRACK_CREATURES, SPELL_AURA_TRACK_RESOURCES and SPELL_AURA_TRACK_STEALTHED select non-stacking tracking spells
@@ -321,7 +321,7 @@ enum SpellAttributesEx
 
 enum SpellAttributesEx2
 {
-    SPELL_ATTR_EX2_UNK0                        = 0x00000001,// 0
+    SPELL_ATTR_EX2_ALLOW_DEAD_TARGET           = 0x00000001,// 0
     SPELL_ATTR_EX2_UNK1                        = 0x00000002,// 1
     SPELL_ATTR_EX2_IGNORE_LOS                  = 0x00000004,// 2 do not need LOS (e.g. 18220 since 3.3.3) // changed meaning from ? used for detect can or not spell reflected
     SPELL_ATTR_EX2_UNK3                        = 0x00000008,// 3 auto targeting? (e.g. fishing skill enhancement items since 3.3.3)
@@ -338,7 +338,7 @@ enum SpellAttributesEx2
     SPELL_ATTR_EX2_UNK14                       = 0x00004000,// 14
     SPELL_ATTR_EX2_UNK15                       = 0x00008000,// 15 not set in 3.0.3
     SPELL_ATTR_EX2_UNK16                       = 0x00010000,// 16
-    SPELL_ATTR_EX2_UNK17                       = 0x00020000,// 17 suspend weapon timer instead of resetting it, (?Hunters Shot and Stings only have this flag?)
+    SPELL_ATTR_EX2_NOT_RESET_AUTOATTACK        = 0x00020000,// 17 Do not reset timer for auto-attacks (Hunters Shot, Stings and Slam)
     SPELL_ATTR_EX2_UNK18                       = 0x00040000,// 18 Only Revive pet - possible req dead pet
     SPELL_ATTR_EX2_NOT_NEED_SHAPESHIFT         = 0x00080000,// 19 does not necessarly need shapeshift
     SPELL_ATTR_EX2_UNK20                       = 0x00100000,// 20
@@ -364,7 +364,7 @@ enum SpellAttributesEx3
     SPELL_ATTR_EX3_UNK4                        = 0x00000010,// 4 Druid Rebirth only this spell have this flag
     SPELL_ATTR_EX3_UNK5                        = 0x00000020,// 5
     SPELL_ATTR_EX3_UNK6                        = 0x00000040,// 6
-    SPELL_ATTR_EX3_UNK7                        = 0x00000080,// 7 create a separate (de)buff stack for each caster
+    SPELL_ATTR_EX3_STACK_FOR_DIFF_CASTERS      = 0x00000080,// 7 create a separate (de)buff stack for each caster
     SPELL_ATTR_EX3_TARGET_ONLY_PLAYER          = 0x00000100,// 8 Can target only player
     SPELL_ATTR_EX3_UNK9                        = 0x00000200,// 9
     SPELL_ATTR_EX3_MAIN_HAND                   = 0x00000400,// 10 Main hand weapon required
@@ -474,7 +474,7 @@ enum SpellAttributesEx6
     SPELL_ATTR_EX6_UNK6                        = 0x00000040,// 6
     SPELL_ATTR_EX6_UNK7                        = 0x00000080,// 7
     SPELL_ATTR_EX6_UNK8                        = 0x00000100,// 8
-    SPELL_ATTR_EX6_UNK9                        = 0x00000200,// 9
+    SPELL_ATTR_EX6_IGNORE_DETECTION            = 0x00000200,// 9 many spells, ignored unit detections/phasing.
     SPELL_ATTR_EX6_UNK10                       = 0x00000400,// 10
     SPELL_ATTR_EX6_NOT_IN_RAID_INSTANCE        = 0x00000800,// 11 not usable in raid instance
     SPELL_ATTR_EX6_UNK12                       = 0x00001000,// 12 for auras SPELL_AURA_TRACK_CREATURES, SPELL_AURA_TRACK_RESOURCES and SPELL_AURA_TRACK_STEALTHED select non-stacking tracking spells
@@ -529,7 +529,7 @@ enum SpellAttributesEx7
     SPELL_ATTR_EX7_UNK25                       = 0x02000000,// 25
     SPELL_ATTR_EX7_UNK26                       = 0x04000000,// 26
     SPELL_ATTR_EX7_UNK27                       = 0x08000000,// 27
-    SPELL_ATTR_EX7_UNK28                       = 0x10000000,// 28
+    SPELL_ATTR_EX7_REPLACEABLE_AURA            = 0x10000000,// 28
     SPELL_ATTR_EX7_UNK29                       = 0x20000000,// 29
     SPELL_ATTR_EX7_UNK30                       = 0x40000000,// 30
     SPELL_ATTR_EX7_UNK31                       = 0x80000000,// 31
@@ -2100,9 +2100,14 @@ enum CreatureType
     CREATURE_TYPE_GAS_CLOUD        = 13
 };
 
-uint32 const CREATURE_TYPEMASK_DEMON_OR_UNDEAD = (1 << (CREATURE_TYPE_DEMON - 1)) | (1 << (CREATURE_TYPE_UNDEAD - 1));
-uint32 const CREATURE_TYPEMASK_HUMANOID_OR_UNDEAD = (1 << (CREATURE_TYPE_HUMANOID - 1)) | (1 << (CREATURE_TYPE_UNDEAD - 1));
-uint32 const CREATURE_TYPEMASK_MECHANICAL_OR_ELEMENTAL = (1 << (CREATURE_TYPE_MECHANICAL - 1)) | (1 << (CREATURE_TYPE_ELEMENTAL - 1));
+// Unions of CreatureType
+enum CreatureTypeMask
+{
+    CREATURE_TYPEMASK_NONE = 0,                                                                       // In this typemask fits players only
+    CREATURE_TYPEMASK_DEMON_OR_UNDEAD = (1 << (CREATURE_TYPE_DEMON - 1)) | (1 << (CREATURE_TYPE_UNDEAD - 1)),
+    CREATURE_TYPEMASK_HUMANOID_OR_UNDEAD = (1 << (CREATURE_TYPE_HUMANOID - 1)) | (1 << (CREATURE_TYPE_UNDEAD - 1)),
+    CREATURE_TYPEMASK_MECHANICAL_OR_ELEMENTAL = (1 << (CREATURE_TYPE_MECHANICAL - 1)) | (1 << (CREATURE_TYPE_ELEMENTAL - 1)),
+};
 
 // CreatureFamily.dbc
 enum CreatureFamily

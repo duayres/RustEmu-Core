@@ -9326,25 +9326,19 @@ int32 Unit::ModifyPower(Powers power, int32 dVal)
     return gain;
 }
 
-bool Unit::isVisibleForOrDetect(Unit const* u, WorldObject const* viewPoint, bool detect, bool inVisibleList, bool is3dDistance) const
+bool Unit::isVisibleForOrDetect(Unit const* u, WorldObject const* viewPoint, bool detect, bool inVisibleList, bool is3dDistance, bool skipLOScheck) const
 {
-    if (!u || !IsInMap(u))
+    if (!u)
         return false;
 
     // Always can see self
     if (u == this)
         return true;
 
-    // player visible for other player if not logout and at same transport
-    // including case when player is out of world
-    bool at_same_transport =
-        GetTypeId() == TYPEID_PLAYER &&  u->GetTypeId() == TYPEID_PLAYER &&
-        !((Player*)this)->GetSession()->PlayerLogout() && !((Player*)u)->GetSession()->PlayerLogout() &&
-        !((Player*)this)->GetSession()->PlayerLoading() && !((Player*)u)->GetSession()->PlayerLoading() &&
-        ((Player*)this)->GetTransport() && ((Player*)this)->GetTransport() == ((Player*)u)->GetTransport();
+    bool at_same_transport = (IsBoarded() && (GetTransportInfo() == u->GetTransportInfo()));
 
     // not in world
-    if (!at_same_transport && (!IsInWorld() || !u->IsInWorld()))
+    if (!at_same_transport && (!IsInMap(u) || !IsInWorld() || !u->IsInWorld()))
         return false;
 
     // forbidden to seen (while Removing corpse)
@@ -9352,11 +9346,12 @@ bool Unit::isVisibleForOrDetect(Unit const* u, WorldObject const* viewPoint, boo
         return false;
 
     Map& _map = *u->GetMap();
+
     // Grid dead/alive checks
     if (u->GetTypeId() == TYPEID_PLAYER)
     {
         // non visible at grid for any stealth state
-        if (!IsVisibleInGridForPlayer((Player*)u))
+        if (!IsVisibleInGridForPlayer((Player *)u))
             return false;
 
         // if player is dead then he can't detect anyone in any cases
@@ -9377,10 +9372,11 @@ bool Unit::isVisibleForOrDetect(Unit const* u, WorldObject const* viewPoint, boo
         if (!IsWithinDistInMap(viewPoint, World::GetMaxVisibleDistanceInFlight() + (inVisibleList ? World::GetVisibleObjectGreyDistance() : 0.0f), is3dDistance))
             return false;
     }
-    else if (!at_same_transport)                            // distance for show player/pet/creature (no transport case)
+    else if (!at_same_transport)                             // distance for show player/pet/creature (no transport case)
     {
         // Any units far than max visible distance for viewer or not in our map are not visible too
-        if (!IsWithinDistInMap(viewPoint, _map.GetVisibilityDistance() + (inVisibleList ? World::GetVisibleUnitGreyDistance() : 0.0f), is3dDistance))
+        // FIXME Visibility distance doubled for on-transport measurement
+        if (!IsWithinDistInMap(viewPoint, _map.GetVisibilityDistance() + (inVisibleList ? World::GetVisibleUnitGreyDistance() : 0.0f) + (IsBoarded() ? _map.GetVisibilityDistance() : 0.0f), is3dDistance))
             return false;
     }
 
@@ -9392,18 +9388,24 @@ bool Unit::isVisibleForOrDetect(Unit const* u, WorldObject const* viewPoint, boo
     // unit is also invisible for alive.. if an isinvisibleforalive unit dies we
     // should be able to see it too
     if (u->isAlive() && isAlive() && isInvisibleForAlive() != u->isInvisibleForAlive())
-        if (u->GetTypeId() != TYPEID_PLAYER || !((Player*)u)->isGameMaster())
+        if (u->GetTypeId() != TYPEID_PLAYER || !((Player *)u)->isGameMaster())
             return false;
+
+    // Death Knights in starting zones with Undying Resolve buff or
+    // in Acherus with Dominion Over Acherus buff - won't see opposite faction
+    if (u->GetTypeId() == TYPEID_PLAYER && GetTypeId() == TYPEID_PLAYER && !((Player*)u)->isGameMaster() &&
+        ((Player*)u)->GetTeam() != ((Player*)this)->GetTeam() && (u->HasAura(51915) || u->HasAura(51721)))
+        return false;
 
     // Visible units, always are visible for all units, except for units under invisibility and phases
     if (m_Visibility == VISIBILITY_ON && u->m_invisibilityMask == 0)
         return true;
 
     // GMs see any players, not higher GMs and all units in any phase
-    if (u->GetTypeId() == TYPEID_PLAYER && ((Player*)u)->isGameMaster())
+    if (u->GetTypeId() == TYPEID_PLAYER && ((Player *)u)->isGameMaster())
     {
         if (GetTypeId() == TYPEID_PLAYER)
-            return ((Player*)this)->GetSession()->GetSecurity() <= ((Player*)u)->GetSession()->GetSecurity();
+            return ((Player *)this)->GetSession()->GetSecurity() <= ((Player *)u)->GetSession()->GetSecurity();
         else
             return true;
     }
@@ -9412,17 +9414,22 @@ bool Unit::isVisibleForOrDetect(Unit const* u, WorldObject const* viewPoint, boo
     if (m_Visibility == VISIBILITY_OFF)
         return false;
 
+    // Arena visibility before arena start
+    if (GetTypeId() == TYPEID_PLAYER && HasAura(32727)) // Arena Preparation
+        if (Player * p_target = ((Unit*)u)->GetCharmerOrOwnerPlayerOrPlayerItself())
+            return ((Player*)this)->GetBGTeam() == p_target->GetBGTeam();
+
     // raw invisibility
     bool invisible = (m_invisibilityMask != 0 || u->m_invisibilityMask != 0);
 
     // detectable invisibility case
     if (invisible && (
-                // Invisible units, always are visible for units under same invisibility type
-                (m_invisibilityMask & u->m_invisibilityMask) != 0 ||
-                // Invisible units, always are visible for unit that can detect this invisibility (have appropriate level for detect)
-                u->canDetectInvisibilityOf(this) ||
-                // Units that can detect invisibility always are visible for units that can be detected
-                canDetectInvisibilityOf(u)))
+        // Invisible units, always are visible for units under same invisibility type
+        (m_invisibilityMask & u->m_invisibilityMask) != 0 ||
+        // Invisible units, always are visible for unit that can detect this invisibility (have appropriate level for detect)
+        u->canDetectInvisibilityOf(this) ||
+        // Units that can detect invisibility always are visible for units that can be detected
+        canDetectInvisibilityOf(u)))
     {
         invisible = false;
     }
@@ -9446,9 +9453,15 @@ bool Unit::isVisibleForOrDetect(Unit const* u, WorldObject const* viewPoint, boo
         else
         {
             // Hunter mark functionality
-            AuraList const& auras = GetAurasByType(SPELL_AURA_MOD_STALKED);
-            for (AuraList::const_iterator iter = auras.begin(); iter != auras.end(); ++iter)
+            AuraList const& aurasstalked = GetAurasByType(SPELL_AURA_MOD_STALKED);
+            for (AuraList::const_iterator iter = aurasstalked.begin(); iter != aurasstalked.end(); ++iter)
                 if ((*iter)->GetCasterGuid() == u->GetObjectGuid())
+                    return true;
+
+            // Flare functionality
+            AuraList const& aurasimunity = GetAurasByType(SPELL_AURA_DISPEL_IMMUNITY);
+            for (AuraList::const_iterator iter = aurasimunity.begin(); iter != aurasimunity.end(); ++iter)
+                if ((*iter)->GetMiscValue() == uint8(invisible ? DISPEL_INVISIBILITY : DISPEL_STEALTH))
                     return true;
 
             // else apply detecting check for stealth
@@ -9469,11 +9482,15 @@ bool Unit::isVisibleForOrDetect(Unit const* u, WorldObject const* viewPoint, boo
     if (m_Visibility != VISIBILITY_GROUP_STEALTH)
         return true;
 
+    // Check same transport/vehicle before stealth check
+    if (IsBoarded() && GetTransportInfo() == u->GetTransportInfo())
+        return true;
+
     // NOW ONLY STEALTH CASE
 
-    // if in non-detect mode then invisible for unit
-    // mobs always detect players (detect == true)... return 'false' for those mobs which have (detect == false)
-    // players detect players only in Player::HandleStealthedUnitsDetection()
+    //if in non-detect mode then invisible for unit
+    //mobs always detect players (detect == true)... return 'false' for those mobs which have (detect == false)
+    //players detect players only in Player::HandleStealthedUnitsDetection()
     if (!detect)
         return (u->GetTypeId() == TYPEID_PLAYER) ? ((Player*)u)->HaveAtClient(this) : false;
 
@@ -9487,14 +9504,14 @@ bool Unit::isVisibleForOrDetect(Unit const* u, WorldObject const* viewPoint, boo
     if (IsWithinDist(u, 0.24f))
         return true;
 
-    // If a mob or player is stunned he will not be able to detect stealth
+    //If a mob or player is stunned he will not be able to detect stealth
     if (u->hasUnitState(UNIT_STAT_STUNNED) && (u != this))
         return false;
 
     // set max ditance
     float visibleDistance = (u->GetTypeId() == TYPEID_PLAYER) ? MAX_PLAYER_STEALTH_DETECT_RANGE : ((Creature const*)u)->GetAttackDistance(this);
 
-    // Always invisible from back (when stealth detection is on), also filter max distance cases
+    //Always invisible from back (when stealth detection is on), also filter max distance cases
     bool isInFront = viewPoint->isInFrontInMap(this, visibleDistance);
     if (!isInFront)
         return false;
@@ -9502,29 +9519,33 @@ bool Unit::isVisibleForOrDetect(Unit const* u, WorldObject const* viewPoint, boo
     // if doesn't have stealth detection (Shadow Sight), then check how stealthy the unit is, otherwise just check los
     if (!u->HasAuraType(SPELL_AURA_DETECT_STEALTH))
     {
-        // Calculation if target is in front
+        //Calculation if target is in front
 
-        // Visible distance based on stealth value (stealth rank 4 300MOD, 10.5 - 3 = 7.5)
+        //Visible distance based on stealth value (stealth rank 4 300MOD, 10.5 - 3 = 7.5)
         visibleDistance = 10.5f - (GetTotalAuraModifier(SPELL_AURA_MOD_STEALTH) / 100.0f);
 
-        // Visible distance is modified by
+        //Visible distance is modified by
         //-Level Diff (every level diff = 1.0f in visible distance)
         visibleDistance += int32(u->GetLevelForTarget(this)) - int32(GetLevelForTarget(u));
 
-        // This allows to check talent tree and will add addition stealth dependent on used points)
+        //This allows to check talent tree and will add addition stealth dependent on used points)
         int32 stealthMod = GetTotalAuraModifier(SPELL_AURA_MOD_STEALTH_LEVEL);
         if (stealthMod < 0)
             stealthMod = 0;
 
         //-Stealth Mod(positive like Master of Deception) and Stealth Detection(negative like paranoia)
-        // based on wowwiki every 5 mod we have 1 more level diff in calculation
-        visibleDistance += (int32(u->GetTotalAuraModifier(SPELL_AURA_MOD_STEALTH_DETECT)) - stealthMod) / 5.0f;
+        //based on wowwiki every 5 mod we have 1 more level diff in calculation
+        int32 detectMod = u->GetTotalAuraModifierByMiscValue(SPELL_AURA_MOD_STEALTH_DETECT, 0); // skip Detect Traps
+        visibleDistance += (detectMod - stealthMod) / 5.0f;
         visibleDistance = visibleDistance > MAX_PLAYER_STEALTH_DETECT_RANGE ? MAX_PLAYER_STEALTH_DETECT_RANGE : visibleDistance;
 
         // recheck new distance
         if (visibleDistance <= 0 || !IsWithinDist(viewPoint, visibleDistance))
             return false;
     }
+
+    if (skipLOScheck)
+        return true;
 
     // Now check is target visible with LoS
     float ox, oy, oz;
@@ -12605,6 +12626,112 @@ uint32 Unit::CalculateSpellDurationWithHaste(SpellEntry const* spellProto, uint3
     uint32 duration = ceil(float(oldduration) * GetFloatValue(UNIT_MOD_CAST_SPEED));
 
     return duration;
+}
+
+bool Unit::IsVisibleTargetForSpell(WorldObject const* caster, SpellEntry const* spellInfo, WorldLocation const* location) const
+{
+    bool no_stealth = false;
+    switch (spellInfo->SpellFamilyName)
+    {
+    case SPELLFAMILY_DRUID:
+    {
+        // Starfall (AoE dummy)
+        if (spellInfo->GetSpellFamilyFlags().test<CF_DRUID_STARFALL2>())
+            no_stealth = true;
+        break;
+    }
+    default:
+        break;
+    }
+
+    // spell can hit all targets in some cases:
+    if (!VMAP::VMapFactory::checkSpellForLoS(spellInfo->Id))
+        return true;
+
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX6_IGNORE_DETECTION))
+        return true;
+
+    // some totem spells must ignore LOS, only visibility/detect checks applied
+    if (caster->GetTypeId() == TYPEID_UNIT && ((Creature*)caster)->IsTotem())
+        return isVisibleForOrDetect(static_cast<Unit const*>(caster), caster, true, false, true);
+
+    // spell can't hit stealth/invisible targets
+    if (no_stealth && caster->isType(TYPEMASK_UNIT) && !isVisibleForOrDetect(static_cast<Unit const*>(caster), caster, false, false, true, true))
+        return false;
+
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX2_IGNORE_LOS))
+        return true;
+
+    DEBUG_FILTER_LOG(LOG_FILTER_SPELL_CAST, "Unit::IsVisibleTargetForSpell check LOS for spell %u, caster %s, target %s",
+        spellInfo->Id, caster->GetObjectGuid().GetString().c_str(), GetObjectGuid().GetString().c_str());
+    return IsWithinLOSInMap(caster);
+}
+
+bool Unit::HasMorePoweredBuff(uint32 spellId)
+{
+    SpellEntry const* spellInfo = sSpellStore.LookupEntry(spellId);
+
+    if (!spellInfo || !spellInfo->HasAttribute(SPELL_ATTR_EX7_REPLACEABLE_AURA))
+        return false;
+
+    for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
+    {
+        if (spellInfo->Effect[i] != SPELL_EFFECT_APPLY_AURA  &&
+            spellInfo->Effect[i] != SPELL_EFFECT_APPLY_AREA_AURA_PARTY &&
+            spellInfo->Effect[i] != SPELL_EFFECT_APPLY_AREA_AURA_RAID
+            )
+            continue;
+
+        AuraType auraType = AuraType(spellInfo->EffectApplyAuraName[SpellEffectIndex(i)]);
+
+        if (!auraType || auraType >= TOTAL_AURAS)
+            continue;
+
+        SpellAuraHolderMap const& holders = GetSpellAuraHolderMap();
+        for (SpellAuraHolderMap::const_iterator itr = holders.begin(); itr != holders.end(); ++itr)
+        {
+            if (!itr->second || itr->second->IsDeleted())
+                continue;
+
+            uint32 foundSpellId = itr->first;
+
+            if (!foundSpellId || foundSpellId == spellId)
+                continue;
+
+            SpellEntry const* foundSpellInfo = sSpellStore.LookupEntry(foundSpellId);;
+
+            if (!foundSpellInfo)
+                continue;
+
+            if (!foundSpellInfo->HasAttribute(SPELL_ATTR_EX7_REPLACEABLE_AURA))
+                continue;
+
+            for (uint8 j = 0; j < MAX_EFFECT_INDEX; ++j)
+            {
+                if (foundSpellInfo->Effect[j] != SPELL_EFFECT_APPLY_AURA  &&
+                    foundSpellInfo->Effect[j] != SPELL_EFFECT_APPLY_AREA_AURA_PARTY &&
+                    foundSpellInfo->Effect[j] != SPELL_EFFECT_APPLY_AREA_AURA_RAID
+                    )
+                    continue;
+
+                if (foundSpellInfo->Effect[j] != spellInfo->Effect[i])
+                    continue;
+
+                if (foundSpellInfo->EffectApplyAuraName[j] != spellInfo->EffectApplyAuraName[i])
+                    continue;
+
+                if (foundSpellInfo->EffectMiscValue[j] != spellInfo->EffectMiscValue[i])
+                    continue;
+
+                if (spellInfo->CalculateSimpleValue(SpellEffectIndex(i)) < foundSpellInfo->CalculateSimpleValue(SpellEffectIndex(j)))
+                    return true;
+                else
+                    return false;
+            }
+        }
+    }
+
+    return false;
 }
 
 void Unit::UpdateSplineMovement(uint32 t_diff)

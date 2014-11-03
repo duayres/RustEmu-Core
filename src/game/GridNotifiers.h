@@ -562,6 +562,44 @@ namespace MaNGOS
             float i_range;
     };
 
+    class NearestCorpseInObjectRangeCheck
+    {
+    public:
+        NearestCorpseInObjectRangeCheck(WorldObject const& obj, float range)
+            : i_obj(obj), i_range(range) {}
+        WorldObject const& GetFocusObject() const { return i_obj; }
+        bool operator()(Creature* u)
+        {
+            if (u->GetObjectGuid() != i_obj.GetObjectGuid() &&
+                (!u->isAlive() || u->IsCorpse()) &&
+                !u->IsDeadByDefault() &&
+                (u->GetCreatureTypeMask() & CREATURE_TYPEMASK_MECHANICAL_OR_ELEMENTAL) == 0 &&
+                i_obj.IsWithinDistInMap(u, i_range))
+            {
+                i_range = i_obj.GetDistance(u);         // use found unit range as new range limit for next check
+                return true;
+            }
+            return false;
+        }
+        bool operator()(Player* u)
+        {
+            if (!u->isAlive() && !u->IsTaxiFlying() && i_obj.IsWithinDistInMap(u, i_range))
+            {
+                i_range = i_obj.GetDistance(u);         // use found unit range as new range limit for next check
+                return true;
+            }
+            return false;
+        }
+        bool operator()(Corpse* u);
+        float GetLastRange() const { return i_range; }
+    private:
+        WorldObject const& i_obj;
+        float  i_range;
+
+        // prevent clone this object
+        NearestCorpseInObjectRangeCheck(NearestCorpseInObjectRangeCheck const&);
+    };
+
     class ExplodeCorpseObjectCheck
     {
         public:

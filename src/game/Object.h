@@ -141,6 +141,7 @@ class MANGOS_DLL_SPEC Object
             ClearUpdateMask(true);
             m_inWorld = false;
         }
+        bool IsInitialized() const { return (m_uint32Values ? true : false); }
 
         ObjectGuid const& GetObjectGuid() const { return GetGuidValue(OBJECT_FIELD_GUID); }
         uint32 GetGUIDLow() const { return GetObjectGuid().GetCounter(); }

@@ -274,6 +274,9 @@ bool IsPositiveTarget(uint32 targetA, uint32 targetB);
 bool IsNonPositiveSpell(uint32 spellId);
 bool IsNonPositiveSpell(SpellEntry const* spellproto);
 
+bool IsJumpSpell(uint32 spellId);
+bool IsJumpSpell(SpellEntry const* spellproto);
+
 bool IsExplicitPositiveTarget(uint32 targetA);
 bool IsExplicitNegativeTarget(uint32 targetA);
 
@@ -329,6 +332,58 @@ inline bool IsSpellWithCasterSourceTargetsOnly(SpellEntry const* spellInfo)
             return false;
     }
     return true;
+}
+
+inline bool IsTargetExplicitRequired(uint32 target)
+{
+    switch (target)
+    {
+    case TARGET_NONE:
+    case TARGET_IN_FRONT_OF_CASTER:
+    case TARGET_IN_FRONT_OF_CASTER_30:
+    case TARGET_GO_IN_FRONT_OF_CASTER_90:
+        //case TARGET_AREAEFFECT_INSTANT:
+        //case TARGET_AREAEFFECT_CUSTOM:
+        //case TARGET_INNKEEPER_COORDINATES:
+        //case TARGET_LARGE_FRONTAL_CONE:
+        //case TARGET_LEAP_FORWARD:
+        //case TARGET_NARROW_FRONTAL_CONE:
+        //case TARGET_AREAEFFECT_PARTY_AND_CLASS:
+        //case TARGET_DIRECTLY_FORWARD:
+        //case TARGET_RANDOM_NEARBY_LOC:
+        //case TARGET_RANDOM_CIRCUMFERENCE_POINT:
+        //case TARGET_DEST_RADIUS:
+        return false;
+    default:
+        break;
+    }
+    return true;
+}
+
+inline bool IsEffectRequiresTarget(SpellEntry const* spellInfo, SpellEffectIndex i)
+{
+    switch (spellInfo->Effect[i])
+    {
+    case SPELL_EFFECT_NONE:
+        return false;
+
+        // this - hack for current mangos operate state with spells
+    case SPELL_EFFECT_DUMMY:
+        break;
+
+    case SPELL_EFFECT_SEND_EVENT:
+    default:
+        return IsTargetExplicitRequired(spellInfo->EffectImplicitTargetA[i]) || IsTargetExplicitRequired(spellInfo->EffectImplicitTargetB[i]);
+    }
+    return true;
+}
+
+inline bool IsSpellRequiresTarget(SpellEntry const* spellInfo)
+{
+    for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
+        if (IsEffectRequiresTarget(spellInfo, SpellEffectIndex(i)))
+            return true;
+    return false;
 }
 
 inline bool IsPointEffectTarget(Targets target)
@@ -586,6 +641,11 @@ inline bool IsBinaryResistedSpell(SpellEntry const* spellInfo)
         return true;
 
     return false;
+}
+
+inline bool IsSpellAllowDeadTarget(SpellEntry const* spellInfo)
+{
+    return spellInfo ? spellInfo->HasAttribute(SPELL_ATTR_EX2_ALLOW_DEAD_TARGET) : false;
 }
 
 inline uint32 GetDispellMask(DispelType dispel)
@@ -1171,6 +1231,7 @@ class SpellMgr
 
         bool IsSkillBonusSpell(uint32 spellId) const;
 
+        static bool IsTargetMatchedWithCreatureType(SpellEntry const* spellInfo, Unit* pTarget);
         static bool IsReflectableSpell(SpellEntry const* spellInfo);
         // Spell correctness for client using
         static bool IsSpellValid(SpellEntry const* spellInfo, Player* pl = NULL, bool msg = true);

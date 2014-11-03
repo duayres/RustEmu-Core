@@ -127,7 +127,7 @@ uint32 GetSpellCastTime(SpellEntry const* spellInfo, Spell const* spell)
         if (Player* modOwner = spell->GetCaster()->GetSpellModOwner())
             modOwner->ApplySpellMod(spellInfo->Id, SPELLMOD_CASTING_TIME, castTime, spell);
 
-        if (!spellInfo->HasAttribute(SPELL_ATTR_UNK4) && !spellInfo->HasAttribute(SPELL_ATTR_TRADESPELL))
+        if (!spellInfo->HasAttribute(SPELL_ATTR_ABILITY) && !spellInfo->HasAttribute(SPELL_ATTR_TRADESPELL))
             castTime = int32(castTime * spell->GetCaster()->GetFloatValue(UNIT_MOD_CAST_SPEED));
         else
         {
@@ -672,276 +672,379 @@ bool IsExplicitNegativeTarget(uint32 targetA)
     return false;
 }
 
-bool IsPositiveEffect(SpellEntry const* spellproto, SpellEffectIndex effIndex)
+bool IsPositiveEffect(SpellEntry const *spellproto, SpellEffectIndex effIndex)
 {
+    if (!spellproto)
+        return false;
+
+    switch (spellproto->Id)
+    {
+    case 37675:                                         // Chaos Blast
+    case 42786:                                         // Echo Of Ymiron
+    case 56266:                                         // Vortex
+    case 62470:                                         // Deafening Thunder
+    case 63138:                                         // Sara's Fervor (Ulduar - Yogg Saron encounter)
+    case 63134:                                         // Sara's Blessing (Ulduar - Yogg Saron encounter)
+    case 63355:                                         // Crunch Armor
+    case 66271:                                         // Carrying Seaforium (IoC)
+    case 66406:                                         // Snobolled! (Trial of the Crusader, Gormok the Impaler encounter)
+    case 68377:                                         // Carrying Huge Seaforium (IoC)
+    case 71010:                                         // Web Wrap (Icecrown Citadel, trash mob Nerub'ar Broodkeeper)
+    case 71265:                                         // Swarming Shadows (Lanathel)
+    case 72219:                                         // Gastric Bloat 10 N
+    case 72551:                                         // Gastric Bloat 10 H
+    case 72552:                                         // Gastric Bloat 25 N
+    case 72553:                                         // Gastric Bloat 25 H
+    case 72546:                                         // Harvest Soul (Lich King)
+    case 57508:                                         // Volazj Insanity Phase 1
+    case 57509:                                         // Volazj Insanity Phase 2
+    case 57510:                                         // Volazj Insanity Phase 3
+    case 57511:                                         // Volazj Insanity Phase 4
+    case 57512:                                         // Volazj Insanity Phase 5
+    case 55126:                                         // Sladran Snake Trap
+    case 39288:                                         // Kargath's Executioner
+    case 39289:                                         // Kargath's Executioner
+    case 39290:                                         // Kargath's Executioner
+    case 66550:                                         // Teleport(BattlegroundIC)
+    case 66551:                                         // Teleport(BattlegroundIC)
+    case 62910:                                         // Mimiron's Inferno (Ulduar - Flame Leviathan)
+        return false;
+    case 552:                                           // Abolish Disease
+    case 12042:                                         // Arcane Power
+    case 24732:                                         // Bat Costume
+    case 59286:                                         // Opening
+    case 43730:                                         // Electrified
+    case 47540:                                         // Penance start dummy aura - Rank 1
+    case 53005:                                         // Penance start dummy aura - Rank 2
+    case 53006:                                         // Penance start dummy aura - Rank 3
+    case 53007:                                         // Penance start dummy aura - Rank 4
+    case 47747:                                         // Charge Rift (Nexus: Anomalus)
+    case 47757:                                         // Penance heal effect trigger - Rank 1
+    case 52986:                                         // Penance heal effect trigger - Rank 2
+    case 52987:                                         // Penance heal effect trigger - Rank 3
+    case 52988:                                         // Penance heal effect trigger - Rank 4
+    case 61716:                                         // Rabbit Costume
+    case 61819:                                         // Manabonked! (item)
+    case 61834:                                         // Manabonked! (minigob)
+    case 64343:                                         // Impact
+    case 64844:                                         // Divine Hymn
+    case 64904:                                         // Hymn of Hope
+    case 67369:                                         // Grunty Focus
+    case 67398:                                         // Zergling Periodic Effect
+    case 72771:                                         // Scent of Blood (Saurfang)
+        return true;
+    default:
+        break;
+    }
+
     switch (spellproto->Effect[effIndex])
     {
-        case SPELL_EFFECT_DUMMY:
-            // some explicitly required dummy effect sets
-            switch (spellproto->Id)
-            {
-                case 28441:                                 // AB Effect 000
-                    return false;
-                case 10258:                                 // Awaken Vault Warder
-                case 18153:                                 // Kodo Kombobulator
-                case 32312:                                 // Move 1
-                case 37388:                                 // Move 2
-                case 45863:                                 // Cosmetic - Incinerate to Random Target
-                case 49634:                                 // Sergeant's Flare
-                case 54530:                                 // Opening
-                case 56099:                                 // Throw Ice
-                case 62105:                                 // To'kini's Blowgun
-                case 63745:                                 // Sara's Blessing
-                case 63747:                                 // Sara's Fervor
-                case 64402:                                 // Rocket Strike
-                    return true;
-                default:
-                    break;
-            }
-            break;
-        case SPELL_EFFECT_SCRIPT_EFFECT:
-            // some explicitly required script effect sets
-            switch (spellproto->Id)
-            {
-                case 42436:                                 // Drink!
-                case 46650:                                 // Open Brutallus Back Door
-                case 62488:                                 // Activate Construct
-                case 64503:                                 // Water
-                    return true;
-                default:
-                    break;
-            }
-            break;
-            // always positive effects (check before target checks that provided non-positive result in some case for positive effects)
-        case SPELL_EFFECT_HEAL:
-        case SPELL_EFFECT_LEARN_SPELL:
-        case SPELL_EFFECT_SKILL_STEP:
-        case SPELL_EFFECT_HEAL_PCT:
-        case SPELL_EFFECT_ENERGIZE_PCT:
-        case SPELL_EFFECT_QUEST_COMPLETE:
-        case SPELL_EFFECT_KILL_CREDIT_PERSONAL:
-        case SPELL_EFFECT_KILL_CREDIT_GROUP:
-            return true;
-
-            // non-positive aura use
-        case SPELL_EFFECT_APPLY_AURA:
-        case SPELL_EFFECT_APPLY_AREA_AURA_FRIEND:
+    case SPELL_EFFECT_DUMMY:
+        // some explicitly required dummy effect sets
+        switch (spellproto->Id)
         {
-            switch (spellproto->EffectApplyAuraName[effIndex])
+        case 28441:                                 // AB Effect 000
+        case 52748:                                 // Voracious Appetite
+        case 54044:                                 // Carrion Feeder
+            return false;
+        case 18153:                                 // Kodo Kombobulator
+        case 32312:                                 // Move 1
+        case 37388:                                 // Move 2
+        case 45863:                                 // Cosmetic - Incinerate to Random Target
+        case 48021:                                 // support for quest 12173
+        case 49634:                                 // Sergeant's Flare
+        case 54530:                                 // Opening
+        case 56099:                                 // Throw Ice
+        case 62105:                                 // To'kini's Blowgun
+        case 63745:                                 // Sara's Blessing
+        case 63747:                                 // Sara's Fervor
+        case 64402:                                 // Rocket Strike
+            return true;
+        default:
+            break;
+        }
+        break;
+    case SPELL_EFFECT_SCRIPT_EFFECT:
+        // some explicitly required script effect sets
+        switch (spellproto->Id)
+        {
+        case 46650:                                 // Open Brutallus Back Door
+        case 62488:                                 // Activate Construct
+        case 64503:                                 // Water
+            return true;
+        default:
+            break;
+        }
+        break;
+        // always positive effects (check before target checks that provided non-positive result in some case for positive effects)
+    case SPELL_EFFECT_HEAL:
+    case SPELL_EFFECT_LEARN_SPELL:
+    case SPELL_EFFECT_SKILL_STEP:
+    case SPELL_EFFECT_HEAL_PCT:
+    case SPELL_EFFECT_ENERGIZE_PCT:
+    case SPELL_EFFECT_QUEST_COMPLETE:
+    case SPELL_EFFECT_KILL_CREDIT_PERSONAL:
+    case SPELL_EFFECT_KILL_CREDIT_GROUP:
+        return true;
+
+    case SPELL_EFFECT_SCHOOL_DAMAGE:
+    case SPELL_EFFECT_THREAT:
+        return false;
+
+    case SPELL_EFFECT_PERSISTENT_AREA_AURA:
+        switch (spellproto->Id)
+        {
+        case 62821:                                 // Toasty Fire (Ulduar Hodir); unclear why this spell has SPELL_ATTR_EX_NEGATIVE
+            return true;
+        case 63540:                                 // Paralytic Field (Ulduar Thorim)
+        case 62241:
+            return false;
+        default:
+            break;
+        }
+        break;
+
+        // non-positive aura use
+    case SPELL_EFFECT_APPLY_AURA:
+    case SPELL_EFFECT_APPLY_AREA_AURA_FRIEND:
+    {
+        switch (spellproto->EffectApplyAuraName[effIndex])
+        {
+        case SPELL_AURA_PHASE:
+        {
+            switch (spellproto->Id)
             {
-                case SPELL_AURA_DUMMY:
-                {
-                    // dummy aura can be positive or negative dependent from casted spell
-                    switch (spellproto->Id)
-                    {
-                        case 13139:                         // net-o-matic special effect
-                        case 23445:                         // evil twin
-                        case 35679:                         // Protectorate Demolitionist
-                        case 38637:                         // Nether Exhaustion (red)
-                        case 38638:                         // Nether Exhaustion (green)
-                        case 38639:                         // Nether Exhaustion (blue)
-                        case 11196:                         // Recently Bandaged
-                        case 44689:                         // Relay Race Accept Hidden Debuff - DND
-                        case 58600:                         // Restricted Flight Area
-                            return false;
-                            // some spells have unclear target modes for selection, so just make effect positive
-                        case 27184:
-                        case 27190:
-                        case 27191:
-                        case 27201:
-                        case 27202:
-                        case 27203:
-                        case 47669:
-                        case 64996:                         // Reorigination
-                            return true;
-                        default:
-                            break;
-                    }
-                }   break;
-                case SPELL_AURA_MOD_DAMAGE_DONE:            // dependent from base point sign (negative -> negative)
-                case SPELL_AURA_MOD_RESISTANCE:
-                case SPELL_AURA_MOD_STAT:
-                case SPELL_AURA_MOD_SKILL:
-                case SPELL_AURA_MOD_DODGE_PERCENT:
-                case SPELL_AURA_MOD_HEALING_PCT:
-                case SPELL_AURA_MOD_HEALING_DONE:
-                    if (spellproto->CalculateSimpleValue(effIndex) < 0)
-                        return false;
-                    break;
-                case SPELL_AURA_MOD_DAMAGE_TAKEN:           // dependent from bas point sign (positive -> negative)
-                    if (spellproto->CalculateSimpleValue(effIndex) < 0)
-                        return true;
-                    // let check by target modes (for Amplify Magic cases/etc)
-                    break;
-                case SPELL_AURA_MOD_SPELL_CRIT_CHANCE:
-                case SPELL_AURA_MOD_INCREASE_HEALTH_PERCENT:
-                case SPELL_AURA_MOD_DAMAGE_PERCENT_DONE:
-                    if (spellproto->CalculateSimpleValue(effIndex) > 0)
-                        return true;                        // some expected positive spells have SPELL_ATTR_EX_NEGATIVE or unclear target modes
-                    break;
-                case SPELL_AURA_ADD_TARGET_TRIGGER:
-                    return true;
-                case SPELL_AURA_PERIODIC_TRIGGER_SPELL:
-                    if (spellproto->Id != spellproto->EffectTriggerSpell[effIndex])
-                    {
-                        uint32 spellTriggeredId = spellproto->EffectTriggerSpell[effIndex];
-                        SpellEntry const* spellTriggeredProto = sSpellStore.LookupEntry(spellTriggeredId);
-
-                        if (spellTriggeredProto)
-                        {
-                            // non-positive targets of main spell return early
-                            for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
-                            {
-                                // if non-positive trigger cast targeted to positive target this main cast is non-positive
-                                // this will place this spell auras as debuffs
-                                if (spellTriggeredProto->Effect[i] &&
-                                        IsPositiveTarget(spellTriggeredProto->EffectImplicitTargetA[i], spellTriggeredProto->EffectImplicitTargetB[i]) &&
-                                        !IsPositiveEffect(spellTriggeredProto, SpellEffectIndex(i)))
-                                    return false;
-                            }
-                        }
-                    }
-                    break;
-                case SPELL_AURA_PROC_TRIGGER_SPELL:
-                    // many positive auras have negative triggered spells at damage for example and this not make it negative (it can be canceled for example)
-                    break;
-                case SPELL_AURA_MOD_STUN:                   // have positive and negative spells, we can't sort its correctly at this moment.
-                    if (effIndex == EFFECT_INDEX_0 && spellproto->Effect[EFFECT_INDEX_1] == 0 && spellproto->Effect[EFFECT_INDEX_2] == 0)
-                        return false;                       // but all single stun aura spells is negative
-
-                    // Petrification
-                    if (spellproto->Id == 17624)
-                        return false;
-                    break;
-                case SPELL_AURA_MOD_PACIFY_SILENCE:
-                    switch (spellproto->Id)
-                    {
-                        case 24740:                         // Wisp Costume
-                        case 47585:                         // Dispersion
-                            return true;
-                        default: break;
-                    }
-                    return false;
-                case SPELL_AURA_MOD_ROOT:
-                case SPELL_AURA_MOD_SILENCE:
-                case SPELL_AURA_GHOST:
-                case SPELL_AURA_PERIODIC_LEECH:
-                case SPELL_AURA_MOD_STALKED:
-                case SPELL_AURA_PERIODIC_DAMAGE_PERCENT:
-                case SPELL_AURA_PREVENT_RESURRECTION:
-                    return false;
-                case SPELL_AURA_PERIODIC_DAMAGE:            // used in positive spells also.
-                    // part of negative spell if casted at self (prevent cancel)
-                    if (spellproto->EffectImplicitTargetA[effIndex] == TARGET_SELF ||
-                            spellproto->EffectImplicitTargetA[effIndex] == TARGET_SELF2)
-                        return false;
-                    break;
-                case SPELL_AURA_MOD_DECREASE_SPEED:         // used in positive spells also
-                    // part of positive spell if casted at self
-                    if ((spellproto->EffectImplicitTargetA[effIndex] == TARGET_SELF ||
-                            spellproto->EffectImplicitTargetA[effIndex] == TARGET_SELF2) &&
-                            spellproto->SpellFamilyName == SPELLFAMILY_GENERIC)
-                        return false;
-                    // but not this if this first effect (don't found better check)
-                    if (spellproto->HasAttribute(SPELL_ATTR_UNK26) && effIndex == EFFECT_INDEX_0)
-                        return false;
-                    break;
-                case SPELL_AURA_TRANSFORM:
-                    // some spells negative
-                    switch (spellproto->Id)
-                    {
-                        case 36897:                         // Transporter Malfunction (race mutation to horde)
-                        case 36899:                         // Transporter Malfunction (race mutation to alliance)
-                            return false;
-                    }
-                    break;
-                case SPELL_AURA_MOD_SCALE:
-                    // some spells negative
-                    switch (spellproto->Id)
-                    {
-                        case 802:                           // Mutate Bug, wrongly negative by target modes
-                        case 38449:                         // Blessing of the Tides
-                            return true;
-                        case 36900:                         // Soul Split: Evil!
-                        case 36901:                         // Soul Split: Good
-                        case 36893:                         // Transporter Malfunction (decrease size case)
-                        case 36895:                         // Transporter Malfunction (increase size case)
-                            return false;
-                    }
-                    break;
-                case SPELL_AURA_MECHANIC_IMMUNITY:
-                {
-                    // non-positive immunities
-                    switch (spellproto->EffectMiscValue[effIndex])
-                    {
-                        case MECHANIC_BANDAGE:
-                        case MECHANIC_SHIELD:
-                        case MECHANIC_MOUNT:
-                        case MECHANIC_INVULNERABILITY:
-                            return false;
-                        default:
-                            break;
-                    }
-                }   break;
-                case SPELL_AURA_ADD_FLAT_MODIFIER:          // mods
-                case SPELL_AURA_ADD_PCT_MODIFIER:
-                {
-                    // non-positive mods
-                    switch (spellproto->EffectMiscValue[effIndex])
-                    {
-                        case SPELLMOD_COST:                 // dependent from bas point sign (negative -> positive)
-                            if (spellproto->CalculateSimpleValue(effIndex) > 0)
-                                return false;
-                            break;
-                        default:
-                            break;
-                    }
-                }   break;
-                case SPELL_AURA_MOD_MELEE_HASTE:
-                {
-                    switch (spellproto->Id)
-                    {
-                        case 38449:                         // Blessing of the Tides
-                            return true;
-                        default:
-                            break;
-                    }
-                    break;
-                }
-                case SPELL_AURA_FORCE_REACTION:
-                {
-                    switch (spellproto->Id)
-                    {
-                        case 42792:                         // Recently Dropped Flag (prevent cancel)
-                        case 46221:                         // Animal Blood
-                            return false;
-                        default:
-                            break;
-                    }
-                    break;
-                }
-                case SPELL_AURA_PHASE:
-                {
-                    switch (spellproto->Id)
-                    {
-                        case 57508:                         // Insanity (16)
-                        case 57509:                         // Insanity (32)
-                        case 57510:                         // Insanity (64)
-                        case 57511:                         // Insanity (128)
-                        case 57512:                         // Insanity (256)
-                            return false;
-                        default:
-                            break;
-                    }
-                    break;
-                }
-                default:
-                    break;
+            case 57508:                         // Insanity (Volazj ecounter)
+            case 57509:
+            case 57510:
+            case 57511:
+            case 57512:
+                return false;
+            default:
+                break;
             }
             break;
         }
+        case SPELL_AURA_DUMMY:
+        {
+            // dummy aura can be positive or negative dependent from casted spell
+            switch (spellproto->Id)
+            {
+            case 13139:                         // net-o-matic special effect
+            case 23445:                         // evil twin
+            case 35679:                         // Protectorate Demolitionist
+            case 38637:                         // Nether Exhaustion (red)
+            case 38638:                         // Nether Exhaustion (green)
+            case 38639:                         // Nether Exhaustion (blue)
+            case 11196:                         // Recently Bandaged
+            case 44689:                         // Relay Race Accept Hidden Debuff - DND
+            case 58600:                         // Restricted Flight Area
+                return false;
+                // some spells have unclear target modes for selection, so just make effect positive
+            case 27184:
+            case 27190:
+            case 27191:
+            case 27201:
+            case 27202:
+            case 27203:
+            case 47669:
+            case 64996:                         // Reorigination
+                return true;
+            default:
+                break;
+            }
+        }   break;
+        case SPELL_AURA_MOD_DAMAGE_DONE:            // dependent from base point sign (negative -> negative)
+        case SPELL_AURA_MOD_RESISTANCE:
+        case SPELL_AURA_MOD_STAT:
+        case SPELL_AURA_MOD_SKILL:
+        case SPELL_AURA_MOD_DODGE_PERCENT:
+        case SPELL_AURA_MOD_HEALING_PCT:
+        case SPELL_AURA_MOD_HEALING_DONE:
+            if (spellproto->CalculateSimpleValue(effIndex) < 0)
+                return false;
+            break;
+        case SPELL_AURA_MOD_DAMAGE_TAKEN:           // dependent from bas point sign (positive -> negative)
+            if (spellproto->CalculateSimpleValue(effIndex) < 0)
+                return true;
+            // let check by target modes (for Amplify Magic cases/etc)
+            break;
+        case SPELL_AURA_MOD_SPELL_CRIT_CHANCE:
+        case SPELL_AURA_MOD_INCREASE_HEALTH_PERCENT:
+        case SPELL_AURA_MOD_DAMAGE_PERCENT_DONE:
+            if (spellproto->CalculateSimpleValue(effIndex) > 0)
+                return true;                        // some expected positive spells have SPELL_ATTR_EX_NEGATIVE or unclear target modes
+            break;
+        case SPELL_AURA_ADD_TARGET_TRIGGER:
+            return true;
+        case SPELL_AURA_PERIODIC_TRIGGER_SPELL:
+            if (spellproto->Id != spellproto->EffectTriggerSpell[effIndex])
+            {
+                uint32 spellTriggeredId = spellproto->EffectTriggerSpell[effIndex];
+                SpellEntry const *spellTriggeredProto = sSpellStore.LookupEntry(spellTriggeredId);
+
+                if (spellTriggeredProto)
+                {
+                    // non-positive targets of main spell return early
+                    for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
+                    {
+                        // if non-positive trigger cast targeted to positive target this main cast is non-positive
+                        // this will place this spell auras as debuffs
+                        if (spellTriggeredProto->Effect[i] &&
+                            IsPositiveTarget(spellTriggeredProto->EffectImplicitTargetA[i], spellTriggeredProto->EffectImplicitTargetB[i]) &&
+                            !IsPositiveEffect(spellTriggeredProto, SpellEffectIndex(i)))
+                            return false;
+                    }
+                }
+            }
+            break;
+        case SPELL_AURA_PROC_TRIGGER_SPELL:
+        {
+            switch (spellproto->Id) // Impact should be poisitive aura
+            {
+            case 11103:
+            case 12357:
+            case 12358:
+            case 64343:
+                return true;
+            default:
+                break;
+            }
+            // many positive auras have negative triggered spells at damage for example and this not make it negative (it can be canceled for example)
+            break;
+        }
+        case SPELL_AURA_MOD_STUN:                   //have positive and negative spells, we can't sort its correctly at this moment.
+            if (effIndex == EFFECT_INDEX_0 && spellproto->Effect[EFFECT_INDEX_1] == 0 && spellproto->Effect[EFFECT_INDEX_2] == 0)
+                return false;                       // but all single stun aura spells is negative
+
+            // Petrification
+            if (spellproto->Id == 17624)
+                return false;
+            break;
+        case SPELL_AURA_MOD_PACIFY_SILENCE:
+            switch (spellproto->Id)
+            {
+            case 24740:                         // Wisp Costume
+            case 47585:                         // Dispersion
+                return true;
+            default: break;
+            }
+            return false;
+        case SPELL_AURA_MOD_ROOT:
+        case SPELL_AURA_MOD_SILENCE:
+        case SPELL_AURA_GHOST:
+        case SPELL_AURA_PERIODIC_LEECH:
+        case SPELL_AURA_MOD_STALKED:
+        case SPELL_AURA_PERIODIC_DAMAGE_PERCENT:
+            return false;
+        case SPELL_AURA_PERIODIC_DAMAGE:            // used in positive spells also.
+            // part of negative spell if casted at self (prevent cancel)
+            if (spellproto->EffectImplicitTargetA[effIndex] == TARGET_SELF ||
+                spellproto->EffectImplicitTargetA[effIndex] == TARGET_SELF2)
+                return false;
+            break;
+        case SPELL_AURA_MOD_DECREASE_SPEED:         // used in positive spells also
+            // part of positive spell if casted at self
+            if ((spellproto->EffectImplicitTargetA[effIndex] == TARGET_SELF ||
+                spellproto->EffectImplicitTargetA[effIndex] == TARGET_SELF2) &&
+                spellproto->SpellFamilyName == SPELLFAMILY_GENERIC)
+                return false;
+            // but not this if this first effect (don't found better check)
+            if (spellproto->HasAttribute(SPELL_ATTR_NEGATIVE_1) && effIndex == EFFECT_INDEX_0)
+                return false;
+            break;
+        case SPELL_AURA_TRANSFORM:
+            // some spells negative
+            switch (spellproto->Id)
+            {
+            case 36897:                         // Transporter Malfunction (race mutation to horde)
+            case 36899:                         // Transporter Malfunction (race mutation to alliance)
+                return false;
+            }
+            break;
+        case SPELL_AURA_MOD_SCALE:
+            // some spells negative
+            switch (spellproto->Id)
+            {
+            case 802:                           // Mutate Bug, wrongly negative by target modes
+            case 38449:                         // Blessing of the Tides
+                return true;
+            case 36900:                         // Soul Split: Evil!
+            case 36901:                         // Soul Split: Good
+            case 36893:                         // Transporter Malfunction (decrease size case)
+            case 36895:                         // Transporter Malfunction (increase size case)
+                return false;
+            }
+            break;
+        case SPELL_AURA_MECHANIC_IMMUNITY:
+        {
+            // non-positive immunities
+            switch (spellproto->EffectMiscValue[effIndex])
+            {
+            case MECHANIC_BANDAGE:
+            case MECHANIC_SHIELD:
+            case MECHANIC_MOUNT:
+            case MECHANIC_INVULNERABILITY:
+                return false;
+            default:
+                break;
+            }
+        }   break;
+        case SPELL_AURA_ADD_FLAT_MODIFIER:          // mods
+        case SPELL_AURA_ADD_PCT_MODIFIER:
+        {
+            // non-positive mods
+            switch (spellproto->EffectMiscValue[effIndex])
+            {
+            case SPELLMOD_COST:                 // dependent from bas point sign (negative -> positive)
+                if (spellproto->Id == 12042)     // Arcane Power workaround
+                    break;
+                if (spellproto->CalculateSimpleValue(effIndex) > 0)
+                    return false;
+                break;
+            default:
+                break;
+            }
+        }   break;
+        case SPELL_AURA_MOD_MELEE_HASTE:
+        {
+            switch (spellproto->Id)
+            {
+            case 38449:                         // Blessing of the Tides
+                return true;
+            default:
+                break;
+            }
+            break;
+        }
+        case SPELL_AURA_FORCE_REACTION:
+        {
+            switch (spellproto->Id)
+            {
+            case 42792:                         // Recently Dropped Flag (prevent cancel)
+            case 46221:                         // Animal Blood
+                return false;
+            default:
+                break;
+            }
+            break;
+        }
+        case SPELL_AURA_MOD_MECHANIC_DAMAGE_TAKEN_PERCENT:
+        {
+            if (spellproto->CalculateSimpleValue(effIndex) < 0)
+                return true;
+            else
+                return false;
+        }
         default:
             break;
+        }
+        break;
+    }
+    case SPELL_AURA_PREVENT_RESURRECTION:
+        return false;
+    default:
+        break;
     }
 
     // non-positive targets
@@ -958,14 +1061,14 @@ bool IsPositiveEffect(SpellEntry const* spellproto, SpellEffectIndex effIndex)
 
 bool IsPositiveSpell(uint32 spellId)
 {
-    SpellEntry const* spellproto = sSpellStore.LookupEntry(spellId);
+    SpellEntry const *spellproto = sSpellStore.LookupEntry(spellId);
     if (!spellproto)
         return false;
 
     return IsPositiveSpell(spellproto);
 }
 
-bool IsPositiveSpell(SpellEntry const* spellproto)
+bool IsPositiveSpell(SpellEntry const *spellproto)
 {
     // spells with at least one negative effect are considered negative
     // some self-applied spells have negative effects but in self casting case negative check ignored.
@@ -997,6 +1100,44 @@ bool IsNonPositiveSpell(SpellEntry const* spellProto)
         return false;
 
     return true;
+}
+
+bool IsJumpEffect(SpellEntry const* spellProto, SpellEffectIndex effIndex)
+{
+    if (!spellProto)
+        return false;
+
+    switch (spellProto->Effect[effIndex])
+    {
+    case SPELL_EFFECT_LEAP:
+    case SPELL_EFFECT_JUMP:
+    case SPELL_EFFECT_JUMP2:
+    case SPELL_EFFECT_LEAP_BACK:
+        return true;
+    }
+
+    return false;
+}
+
+bool IsJumpSpell(SpellEntry const* spellProto)
+{
+    // spells with at least one jump effect are considered jump
+    for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
+    {
+        if (spellProto->Effect[i] && IsJumpEffect(spellProto, SpellEffectIndex(i)))
+            return true;
+    }
+
+    return false;
+}
+
+bool IsJumpSpell(uint32 spellId)
+{
+    SpellEntry const* spellProto = sSpellStore.LookupEntry(spellId);
+    if (!spellProto)
+        return false;
+
+    return IsJumpSpell(spellProto);
 }
 
 bool IsSingleTargetSpell(SpellEntry const* spellInfo)
@@ -2817,6 +2958,50 @@ bool SpellMgr::IsSkillBonusSpell(uint32 spellId) const
     }
 
     return false;
+}
+
+bool SpellMgr::IsTargetMatchedWithCreatureType(SpellEntry const* pSpellInfo, Unit* pTarget)
+{
+    if (!pSpellInfo || !pTarget || !pTarget->IsInitialized())
+        return false;
+
+
+    if (IsSpellWithCasterSourceTargetsOnly(pSpellInfo))
+        return true;
+
+    uint32 spellCreatureTargetMask = 0;
+
+    switch (pSpellInfo->Id)
+    {
+        // Curse of Doom: not find another way to fix spell target check :/
+    case 603:
+    case 30910:
+    case 47867:
+    {
+        // not allow cast at player
+        if (pTarget->GetTypeId() == TYPEID_PLAYER)
+            return false;
+
+        spellCreatureTargetMask = 0x7FF;
+        break;
+    }
+        // Dismiss Pet and Taming Lesson skipped
+    case 2641:
+    case 23356:
+        /*spellCreatureTargetMask =  0;*/
+        break;
+    default:
+        spellCreatureTargetMask = pSpellInfo->TargetCreatureType;
+        break;
+    }
+
+    if (spellCreatureTargetMask)
+    {
+        uint32 TargetCreatureType = pTarget->GetCreatureTypeMask();
+
+        return !TargetCreatureType || (spellCreatureTargetMask & TargetCreatureType);
+    }
+    return true;
 }
 
 bool SpellMgr::IsReflectableSpell(SpellEntry const* spellInfo)

@@ -80,6 +80,7 @@ enum SpellNotifyPushType
     PUSH_IN_BACK,
     PUSH_SELF_CENTER,
     PUSH_DEST_CENTER,
+    PUSH_INHERITED_CENTER,
     PUSH_TARGET_CENTER
 };
 
@@ -586,6 +587,7 @@ class Spell
         // Spell target filling
         //*****************************************
         void FillTargetMap();
+        bool FillCustomTargetMap(SpellEffectIndex effIndex, UnitList& targetUnitMap, uint8& effToIndex);
         void SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, UnitList& targetUnitMap);
 
         void FillAreaTargets(UnitList& targetUnitMap, float radius, SpellNotifyPushType pushType, SpellTargets spellTargets, WorldObject* originalCaster = NULL);
