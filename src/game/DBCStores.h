@@ -64,6 +64,9 @@ bool Map2ZoneCoordinates(float& x, float& y, uint32 zone);
 typedef std::map<uint32/*pair32(map,diff)*/, MapDifficultyEntry const*> MapDifficultyMap;
 MapDifficultyEntry const* GetMapDifficultyData(uint32 mapId, Difficulty difficulty);
 
+typedef std::map<uint32/* pair32(dungeonId,expansion) */, LFGDungeonExpansionEntry const*> LFGDungeonExpansionMap;
+LFGDungeonExpansionEntry const* GetLFGExpansionEntry(uint32 dungeonId, uint32 expansion);
+
 // natural order for difficulties up-down iteration
 // difficulties for dungeons/battleground ordered in normal way
 // and if more high version not exist must be used lesser version
@@ -150,6 +153,9 @@ extern DBCStorage <ItemLimitCategoryEntry>       sItemLimitCategoryStore;
 extern DBCStorage <ItemRandomPropertiesEntry>    sItemRandomPropertiesStore;
 extern DBCStorage <ItemRandomSuffixEntry>        sItemRandomSuffixStore;
 extern DBCStorage <ItemSetEntry>                 sItemSetStore;
+extern DBCStorage <LFGDungeonEntry>              sLFGDungeonStore;
+extern DBCStorage <LFGDungeonExpansionEntry>     sLFGDungeonExpansionStore;
+extern LFGDungeonExpansionMap                    sLFGDungeonExpansionMap;
 extern DBCStorage <LiquidTypeEntry>              sLiquidTypeStore;
 extern DBCStorage <LockEntry>                    sLockStore;
 extern DBCStorage <MailTemplateEntry>            sMailTemplateStore;

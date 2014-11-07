@@ -171,6 +171,8 @@ set(SRC_GRP_OBJECT
     ItemEnchantmentMgr.cpp
     ItemEnchantmentMgr.h
     ItemPrototype.h
+    LFG.cpp
+    LFG.h
     LootMgr.cpp
     LootMgr.h
     NullCreatureAI.cpp
@@ -351,6 +353,8 @@ set(SRC_GRP_WORLD_HANDLERS
     InstanceData.cpp
     InstanceData.h
     ItemHandler.cpp
+    LFGMgr.cpp
+    LFGMgr.h
     LFGHandler.cpp
     LootHandler.cpp
     Mail.cpp

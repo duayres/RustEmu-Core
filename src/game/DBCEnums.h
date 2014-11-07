@@ -542,7 +542,13 @@ enum VehicleSeatFlagsB
     SEAT_FLAG_B_USABLE_FORCED_3     = 0x00000100,
     SEAT_FLAG_B_USABLE_FORCED_4     = 0x02000000,
     SEAT_FLAG_B_CAN_SWITCH          = 0x04000000,
-    SEAT_FLAG_B_PLAYERFRAME_UI      = 0x80000000            // Lua_UnitHasVehiclePlayerFrameUI
+    SEAT_FLAG_B_PLAYERFRAME_UI      = 0x80000000,            // Lua_UnitHasVehiclePlayerFrameUI
+};
+
+enum MapDifficultyFlags
+{
+    MAP_DIFFICULTY_FLAG_NONE        = 0x00000001,           // Not used in 3.3.5
+    MAP_DIFFICULTY_FLAG_CONDITION   = 0x00000002            // This map difficulty has condition
 };
 
 #endif

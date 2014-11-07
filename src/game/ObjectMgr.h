@@ -82,8 +82,15 @@ struct AreaTrigger
     uint32 requiredItem2;
     uint32 heroicKey;
     uint32 heroicKey2;
-    uint32 requiredQuest;
-    uint32 requiredQuestHeroic;
+    uint32 requiredQuestA;
+    uint32 requiredQuestHeroicA;
+    uint32 requiredQuestH;
+    uint32 requiredQuestHeroicH;
+    uint32 minGS;
+    uint32 maxGS;
+    uint32 achiev0;
+    uint32 achiev1;
+    uint32 combatMode;
     uint32 target_mapId;
     float  target_X;
     float  target_Y;
@@ -91,17 +98,39 @@ struct AreaTrigger
     float  target_Orientation;
 
     // Operators
-    bool IsMinimal() const
-    {
-        return requiredLevel == 0 && requiredItem == 0 && requiredItem2 == 0 && heroicKey == 0 &&
-               heroicKey2 == 0 && requiredQuest == 0 && requiredQuestHeroic == 0;
+    bool IsMinimal() const {
+        return (requiredLevel == 0
+            && requiredItem == 0
+            && requiredItem2 == 0
+            && heroicKey == 0
+            && heroicKey2 == 0
+            && requiredQuestA == 0
+            && requiredQuestHeroicA == 0
+            && requiredQuestH == 0
+            && requiredQuestHeroicH == 0
+            && minGS == 0
+            && maxGS == 0
+            && achiev0 == 0
+            && achiev1 == 0);
     }
 
     bool IsLessOrEqualThan(AreaTrigger const* l) const      // Expected to have same map
     {
         MANGOS_ASSERT(target_mapId == l->target_mapId);
-        return requiredLevel <= l->requiredLevel && requiredItem <= l->requiredItem && requiredItem2 <= l->requiredItem2
-               && heroicKey <= l->heroicKey && heroicKey2 <= l->heroicKey2 && requiredQuest <= l->requiredQuest && requiredQuestHeroic <= l->requiredQuestHeroic;
+        return (requiredLevel <= l->requiredLevel
+            && requiredItem <= l->requiredItem
+            && requiredItem2 <= l->requiredItem2
+            && heroicKey <= l->heroicKey
+            && heroicKey2 <= l->heroicKey2
+            && requiredQuestA <= l->requiredQuestA
+            && requiredQuestHeroicA <= l->requiredQuestHeroicA
+            && requiredQuestH <= l->requiredQuestH
+            && requiredQuestHeroicH <= l->requiredQuestHeroicH
+            && minGS <= l->minGS
+            && maxGS <= l->maxGS
+            && achiev0 <= l->achiev0
+            && achiev1 <= l->achiev1
+            );
     }
 };
 

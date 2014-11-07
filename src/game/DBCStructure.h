@@ -1183,6 +1183,44 @@ struct ItemSetEntry
     uint32    required_skill_value;                         // 52       m_requiredSkillRank
 };
 
+struct LFGDungeonEntry
+{
+    uint32  ID;                                             // 0
+    //char*   name[16];                                     // 1-17 Name lang
+    uint32  minlevel;                                       // 18
+    uint32  maxlevel;                                       // 19
+    uint32  reclevel;                                       // 20
+    uint32  recminlevel;                                    // 21
+    uint32  recmaxlevel;                                    // 22
+    uint32  map;                                            // 23
+    uint32  difficulty;                                     // 24
+    //uint32  unk;                                          // 25
+    uint32  type;                                           // 26
+    //uint32  unk2;                                         // 27
+    //char*   unk3;                                         // 28
+    uint32  expansion;                                      // 29
+    //uint32  unk4;                                         // 30
+    uint32  grouptype;                                      // 31
+    //char*   desc[16];                                     // 32-47 Description
+    //uint32 unk5                                           // 48 language flags?
+    // Helpers
+    uint32 Entry() const { return ID + (type << 24); }
+};
+
+struct LFGDungeonExpansionEntry
+{
+    uint32  ID;                                             // 0 id
+    uint32  dungeonID;                                      // 1 LFGDungeonEntry.ID
+    uint32  expansion;                                      // 2 expansion
+    uint32  randomEntry;                                    // 3 LFGDungeonEntry.ID (only random ids!), inside of which is used this record
+    uint32  minlevel;                                       // 4
+    uint32  maxlevel;                                       // 5
+    uint32  recminlevel;                                    // 6
+    uint32  recmaxlevel;                                    // 7
+    // Helpers
+    bool IsRandom() const { return randomEntry == 0; }
+};
+
 /*struct LfgDungeonsEntry
 {
     m_ID
@@ -1319,14 +1357,14 @@ struct MapEntry
 
 struct MapDifficultyEntry
 {
-    // uint32      Id;                                      // 0        m_ID
+    //uint32      Id;                                       // 0        m_ID
     uint32      MapId;                                      // 1        m_mapID
     uint32      Difficulty;                                 // 2        m_difficulty (for arenas: arena slot)
-    // char*       areaTriggerText[16];                     // 3-18     m_message_lang (text showed when transfer to map failed)
-    // uint32      textFlags;                               // 19
+    char*       areaTriggerText[16];                        // 3-18     m_message_lang (text showed when transfer to map failed)
+    uint32      mapDifficultyFlags;                         // 19
     uint32      resetTime;                                  // 20       m_raidDuration in secs, 0 if no fixed reset time
     uint32      maxPlayers;                                 // 21       m_maxPlayers some heroic versions have 0 when expected same amount as in normal version
-    // char*       difficultyString;                        // 22       m_difficultystring
+    //char*       difficultyString;                         // 22       m_difficultystring
 };
 
 struct MovieEntry

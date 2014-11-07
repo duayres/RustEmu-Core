@@ -359,6 +359,9 @@ class MANGOS_DLL_SPEC Group
         void LinkMember(GroupReference* pRef) { m_memberMgr.insertFirst(pRef); }
         void DelinkMember(GroupReference* /*pRef*/) { }
 
+        // LFG
+        LFGGroupState* GetLFGState() { return m_LFGState; };
+
         InstanceGroupBind* BindToInstance(DungeonPersistentState* save, bool permanent, bool load = false);
         void UnbindInstance(uint32 mapid, uint8 difficulty, bool unload = false);
         InstanceGroupBind* GetBoundInstance(uint32 mapId, Player* player);
@@ -458,5 +461,6 @@ class MANGOS_DLL_SPEC Group
         Rolls               RollId;
         BoundInstancesMap   m_boundInstances[MAX_DIFFICULTY];
         uint8*              m_subGroupsCounts;
+        LFGGroupState*      m_LFGState;
 };
 #endif

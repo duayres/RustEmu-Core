@@ -383,12 +383,53 @@ struct EnchantDuration
 typedef std::list<EnchantDuration> EnchantDurationList;
 typedef std::list<Item*> ItemDurationList;
 
-enum LfgRoles
+struct LookingForGroupSlot
 {
-    LEADER                      = 0x01,
-    TANK                        = 0x02,
-    HEALER                      = 0x04,
-    DAMAGE                      = 0x08
+    LookingForGroupSlot() : entry(0), type(0) {}
+    bool Empty() const { return !entry && !type; }
+    void Clear() { entry = 0; type = 0; }
+    void Set(uint32 _entry, uint32 _type) { entry = _entry; type = _type; }
+    bool Is(uint32 _entry, uint32 _type) const { return entry == _entry && type == _type; }
+    bool canAutoJoin() const { return entry && (type == LFG_TYPE_DUNGEON || type == LFG_TYPE_HEROIC_DUNGEON); }
+
+    uint32 entry;
+    uint32 type;
+};
+
+#define MAX_LOOKING_FOR_GROUP_SLOT 3
+
+struct LookingForGroup
+{
+    LookingForGroup() {}
+    bool HaveInSlot(LookingForGroupSlot const& slot) const { return HaveInSlot(slot.entry, slot.type); }
+    bool HaveInSlot(uint32 _entry, uint32 _type) const
+    {
+        for (int i = 0; i < MAX_LOOKING_FOR_GROUP_SLOT; ++i)
+            if (slots[i].Is(_entry, _type))
+                return true;
+        return false;
+    }
+
+    bool canAutoJoin() const
+    {
+        for (int i = 0; i < MAX_LOOKING_FOR_GROUP_SLOT; ++i)
+            if (slots[i].canAutoJoin())
+                return true;
+        return false;
+    }
+
+    bool Empty() const
+    {
+        for (int i = 0; i < MAX_LOOKING_FOR_GROUP_SLOT; ++i)
+            if (!slots[i].Empty())
+                return false;
+        return more.Empty();
+    }
+
+    LookingForGroupSlot slots[MAX_LOOKING_FOR_GROUP_SLOT];
+    LookingForGroupSlot more;
+    std::string comment;
+    uint8 roles;
 };
 
 enum RaidGroupError
@@ -771,6 +812,8 @@ enum TeleportToOptions
     TELE_TO_NOT_LEAVE_COMBAT    = 0x04,
     TELE_TO_NOT_UNSUMMON_PET    = 0x08,
     TELE_TO_SPELL               = 0x10,
+    TELE_TO_CHECKED             = 0x1000,
+    TELE_TO_NODELAY             = 0x2000
 };
 
 /// Type of environmental damages
@@ -1050,6 +1093,7 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         void SendInitialPacketsBeforeAddToMap();
         void SendInitialPacketsAfterAddToMap();
+        void SendTransferAborted(uint32 mapid, uint8 reason, uint8 arg = 0);
         void SendInstanceResetWarning(uint32 mapid, Difficulty difficulty, uint32 time);
 
         Creature* GetNPCIfCanInteractWith(ObjectGuid guid, uint32 npcflagmask);
@@ -1167,6 +1211,10 @@ class MANGOS_DLL_SPEC Player : public Unit
         void SetBankBagSlotCount(uint8 count) { SetByteValue(PLAYER_BYTES_2, 2, count); }
         bool HasItemCount(uint32 item, uint32 count, bool inBankAlso = false) const;
         bool HasItemFitToSpellReqirements(SpellEntry const* spellInfo, Item const* ignoreItem = NULL);
+        bool HasItemFitToAreaTriggerReqirements(AreaTrigger const* at) const;
+        bool HasHeroicKeyFitToAreaTriggerReqirements(AreaTrigger const* at) const;
+        bool HasQuestFitToAreaTriggerReqirements(AreaTrigger const* at, bool isRegularTargetMap) const;
+        bool HasAchievementFitToAreaTriggerReqirements(AreaTrigger const* at, Difficulty difficulty);
         bool CanNoReagentCast(SpellEntry const* spellInfo) const;
         bool HasItemOrGemWithIdEquipped(uint32 item, uint32 count, uint8 except_slot = NULL_SLOT) const;
         bool HasItemOrGemWithLimitCategoryEquipped(uint32 limitCategory, uint32 count, uint8 except_slot = NULL_SLOT) const;
@@ -2238,6 +2286,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         void SetAtLoginFlag(AtLoginFlags f) { m_atLoginFlags |= f; }
         void RemoveAtLoginFlag(AtLoginFlags f, bool in_db_also = false);
 
+        LookingForGroup m_lookingForGroup;
         // Temporarily removed pet cache
         uint32 GetTemporaryUnsummonedPetNumber() const { return m_temporaryUnsummonedPetNumber; }
         void SetTemporaryUnsummonedPetNumber(uint32 petnumber) { m_temporaryUnsummonedPetNumber = petnumber; }
@@ -2270,8 +2319,17 @@ class MANGOS_DLL_SPEC Player : public Unit
         static void ConvertInstancesToGroup(Player* player, Group* group = NULL, ObjectGuid player_guid = ObjectGuid());
         DungeonPersistentState* GetBoundInstanceSaveForSelfOrGroup(uint32 mapid);
 
-        AreaLockStatus GetAreaTriggerLockStatus(AreaTrigger const* at, Difficulty difficulty, uint32& miscRequirement);
-        void SendTransferAbortedByLockStatus(MapEntry const* mapEntry, AreaLockStatus lockStatus, uint32 miscRequirement = 0);
+        AreaLockStatus GetAreaLockStatus(uint32 mapId, Difficulty difficulty);
+        AreaLockStatus GetAreaTriggerLockStatus(AreaTrigger const* at, Difficulty difficulty);
+        bool CanEnterToArea(uint32 mapId, Difficulty difficulty) { return GetAreaLockStatus(mapId, difficulty) == AREA_LOCKSTATUS_OK; };
+        bool CanUseAreaTrigger(AreaTrigger const* at, Difficulty difficulty) { return GetAreaTriggerLockStatus(at, difficulty) == AREA_LOCKSTATUS_OK; };
+        bool CheckTransferPossibility(uint32 mapId);
+        bool CheckTransferPossibility(AreaTrigger const*& at, bool b_onlyMainReq = false);
+
+        bool NeedEjectFromThisMap();
+
+        // LFG
+        LFGPlayerState* GetLFGState() { return m_LFGState; };
 
         /*********************************************************/
         /***                   GROUP SYSTEM                    ***/
@@ -2669,6 +2727,8 @@ class MANGOS_DLL_SPEC Player : public Unit
         uint32 m_timeSyncServer;
 
         uint32 m_cachedGS;
+        // LFG
+        LFGPlayerState* m_LFGState;
 };
 
 void AddItemsSetItem(Player* player, Item* item);

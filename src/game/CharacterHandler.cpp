@@ -706,26 +706,10 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
         }
     }
 
-    uint32 miscRequirement = 0;
-    AreaLockStatus lockStatus = AREA_LOCKSTATUS_OK;
-    if (AreaTrigger const* at = sObjectMgr.GetMapEntranceTrigger(pCurrChar->GetMapId()))
-        lockStatus = pCurrChar->GetAreaTriggerLockStatus(at, pCurrChar->GetDifficulty(pCurrChar->GetMap()->IsRaid()), miscRequirement);
-    else
+    if (pCurrChar->NeedEjectFromThisMap() || !pCurrChar->GetMap()->Add(pCurrChar))
     {
-        // Some basic checks in case of a map without areatrigger
-        MapEntry const* mapEntry = sMapStore.LookupEntry(pCurrChar->GetMapId());
-        if (!mapEntry)
-            lockStatus = AREA_LOCKSTATUS_UNKNOWN_ERROR;
-        else if (pCurrChar->GetSession()->Expansion() < mapEntry->Expansion())
-            lockStatus = AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION;
-    }
-    if (lockStatus != AREA_LOCKSTATUS_OK || !pCurrChar->GetMap()->Add(pCurrChar))
-    {
-        // normal delayed teleport protection not applied (and this correct) for this case (Player object just created)
         AreaTrigger const* at = sObjectMgr.GetGoBackTrigger(pCurrChar->GetMapId());
-        if (at)
-            lockStatus = pCurrChar->GetAreaTriggerLockStatus(at, pCurrChar->GetDifficulty(pCurrChar->GetMap()->IsRaid()), miscRequirement);
-        if (!at || lockStatus != AREA_LOCKSTATUS_OK || !pCurrChar->TeleportTo(at->target_mapId, at->target_X, at->target_Y, at->target_Z, pCurrChar->GetOrientation()))
+        if (!at || !pCurrChar->TeleportTo(at->target_mapId, at->target_X, at->target_Y, at->target_Z, pCurrChar->GetOrientation()))
             pCurrChar->TeleportToHomebind();
     }
 

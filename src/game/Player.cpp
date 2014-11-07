@@ -563,6 +563,8 @@ Player::Player(WorldSession* session): Unit(), m_mover(this), m_camera(this), m_
     m_lastFallZ = 0;
 
     m_cachedGS = 0;
+
+    m_LFGState = new LFGPlayerState(this);
 }
 
 Player::~Player()
@@ -603,6 +605,7 @@ Player::~Player()
 
     delete m_declinedname;
     delete m_runes;
+    delete m_LFGState;
 }
 
 void Player::CleanupsBeforeDelete()
@@ -1705,22 +1708,27 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
     }
 
     // Check requirements for teleport
-    if (at)
+    if (GetMapId() != at->target_mapId)
     {
-        uint32 miscRequirement = 0;
-        AreaLockStatus lockStatus = GetAreaTriggerLockStatus(at, GetDifficulty(mEntry->IsRaid()), miscRequirement);
-        if (lockStatus != AREA_LOCKSTATUS_OK)
+        if (!(options & TELE_TO_CHECKED))
         {
-            // Teleport not requested by area-trigger
-            // TODO - Assume a player with expansion 0 travels from BootyBay to Ratched, and he is attempted to be teleported to outlands
-            //        then he will repop near BootyBay instead of normally continuing his journey
-            // This code is probably added to catch passengers on ships to northrend who shouldn't go there
-            if (lockStatus == AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION && !assignedAreaTrigger && GetTransport())
-                RepopAtGraveyard();                         // Teleport to near graveyard if on transport, looks blizz like :)
+            if (!CheckTransferPossibility(at->target_mapId))
+            {
+                if (IsBoarded())
+                    TeleportToHomebind();
 
-            SendTransferAbortedByLockStatus(mEntry, lockStatus, miscRequirement);
-            return false;
+                DEBUG_LOG("Player::TeleportTo %s is NOT teleported to map %u (requirements check failed)", GetName(), at->target_mapId);
+
+                return false;                                       // normal client can't teleport to this map...
+            }
+            else
+                options |= TELE_TO_CHECKED;
         }
+        DEBUG_LOG("Player::TeleportTo %s is being far teleported to map %u %s", GetName(), at->target_mapId, IsBeingTeleportedFar() ? "(stage 2)" : "");
+    }
+    else
+    {
+        DEBUG_LOG("Player::TeleportTo %s is being near teleported to map %u %s", GetName(), at->target_mapId, IsBeingTeleportedNear() ? "(stage 2)" : "");
     }
 
     if (Group* grp = GetGroup())                            // TODO: Verify that this is correct place
@@ -2626,6 +2634,8 @@ void Player::GiveLevel(uint32 level)
         MailDraft(mailReward->mailTemplateId).SendMailTo(this, MailSender(MAIL_CREATURE, mailReward->senderEntry));
 
     GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_REACH_LEVEL);
+
+    GetLFGState()->Update();
 }
 
 void Player::UpdateFreeTalentPoints(bool resetIfNeed)
@@ -20146,64 +20156,10 @@ void Player::SendUpdateToOutOfRangeGroupMembers()
         pet->ResetAuraUpdateMask();
 }
 
-void Player::SendTransferAbortedByLockStatus(MapEntry const* mapEntry, AreaLockStatus lockStatus, uint32 miscRequirement)
+void Player::SendTransferAborted(uint32 mapid, uint8 reason, uint8 arg)
 {
-    MANGOS_ASSERT(mapEntry);
-
-    DEBUG_LOG("SendTransferAbortedByLockStatus: Called for %s on map %u, LockAreaStatus %u, miscRequirement %u)", GetGuidStr().c_str(), mapEntry->MapID, lockStatus, miscRequirement);
-
-    switch (lockStatus)
-    {
-        case AREA_LOCKSTATUS_TOO_LOW_LEVEL:
-            GetSession()->SendAreaTriggerMessage(GetSession()->GetMangosString(LANG_LEVEL_MINREQUIRED), miscRequirement);
-            break;
-        case AREA_LOCKSTATUS_ZONE_IN_COMBAT:
-            GetSession()->SendTransferAborted(mapEntry->MapID, TRANSFER_ABORT_ZONE_IN_COMBAT);
-            break;
-        case AREA_LOCKSTATUS_INSTANCE_IS_FULL:
-            GetSession()->SendTransferAborted(mapEntry->MapID, TRANSFER_ABORT_MAX_PLAYERS);
-            break;
-        case AREA_LOCKSTATUS_QUEST_NOT_COMPLETED:
-            if (mapEntry->MapID == 269)                     // Exception for Black Morass
-            {
-                GetSession()->SendAreaTriggerMessage(GetSession()->GetMangosString(LANG_TELEREQ_QUEST_BLACK_MORASS));
-                break;
-            }
-            else if (mapEntry->IsContinent())               // do not report anything for quest areatrigge
-            {
-                DEBUG_LOG("SendTransferAbortedByLockStatus: LockAreaStatus %u, do not teleport, no message sent (mapId %u)", lockStatus, mapEntry->MapID);
-                break;
-            }
-            // No break here!
-        case AREA_LOCKSTATUS_MISSING_ITEM:
-            GetSession()->SendTransferAborted(mapEntry->MapID, TRANSFER_ABORT_DIFFICULTY, GetDifficulty(mapEntry->IsRaid()));
-            break;
-        case AREA_LOCKSTATUS_MISSING_DIFFICULTY:
-        {
-            Difficulty difficulty = GetDifficulty(mapEntry->IsRaid());
-            GetSession()->SendTransferAborted(mapEntry->MapID, TRANSFER_ABORT_DIFFICULTY, difficulty > RAID_DIFFICULTY_10MAN_HEROIC ? RAID_DIFFICULTY_10MAN_HEROIC : difficulty);
-            break;
-        }
-        case AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION:
-            GetSession()->SendTransferAborted(mapEntry->MapID, TRANSFER_ABORT_INSUF_EXPAN_LVL, miscRequirement);
-            break;
-        case AREA_LOCKSTATUS_NOT_ALLOWED:
-            GetSession()->SendTransferAborted(mapEntry->MapID, TRANSFER_ABORT_MAP_NOT_ALLOWED);
-            break;
-        case AREA_LOCKSTATUS_RAID_LOCKED:
-            GetSession()->SendTransferAborted(mapEntry->MapID, TRANSFER_ABORT_NEED_GROUP);
-            break;
-        case AREA_LOCKSTATUS_UNKNOWN_ERROR:
-            GetSession()->SendTransferAborted(mapEntry->MapID, TRANSFER_ABORT_ERROR);
-            break;
-        case AREA_LOCKSTATUS_OK:
-            sLog.outError("SendTransferAbortedByLockStatus: LockAreaStatus AREA_LOCKSTATUS_OK received for %s (mapId %u)", GetGuidStr().c_str(), mapEntry->MapID);
-            MANGOS_ASSERT(false);
-            break;
-        default:
-            sLog.outError("SendTransfertAbortedByLockstatus: unhandled LockAreaStatus %u, when %s attempts to enter in map %u", lockStatus, GetGuidStr().c_str(), mapEntry->MapID);
-            break;
-    }
+    if (GetSession())
+        GetSession()->SendTransferAborted(mapid, reason, arg);
 }
 
 void Player::SendInstanceResetWarning(uint32 mapid, Difficulty difficulty, uint32 time)
@@ -20784,6 +20740,88 @@ bool Player::HasItemFitToSpellReqirements(SpellEntry const* spellInfo, Item cons
         default:
             sLog.outError("HasItemFitToSpellReqirements: Not handled spell requirement for item class %u", spellInfo->EquippedItemClass);
             break;
+    }
+
+    return false;
+}
+
+bool Player::HasItemFitToAreaTriggerReqirements(AreaTrigger const* at) const
+{
+    if (at->requiredItem)
+    {
+        if (!HasItemCount(at->requiredItem, 1) && (!at->requiredItem2 || !HasItemCount(at->requiredItem2, 1)))
+            return false;
+    }
+    else if (at->requiredItem2 && !HasItemCount(at->requiredItem2, 1))
+        return false;
+
+    return true;
+}
+
+bool Player::HasHeroicKeyFitToAreaTriggerReqirements(AreaTrigger const* at) const
+{
+    if (at->heroicKey)
+    {
+        if (!HasItemCount(at->heroicKey, 1) && (!at->heroicKey2 || !HasItemCount(at->heroicKey2, 1)))
+            return false;
+    }
+    else if (at->heroicKey2 && !HasItemCount(at->heroicKey2, 1))
+        return false;
+
+    return true;
+}
+
+bool Player::HasQuestFitToAreaTriggerReqirements(AreaTrigger const* at, bool isRegularTargetMap) const
+{
+    if (GetTeam() == ALLIANCE)
+    {
+        if ((!isRegularTargetMap &&
+            (at->requiredQuestHeroicA && !GetQuestRewardStatus(at->requiredQuestHeroicA))) ||
+            (isRegularTargetMap &&
+            (at->requiredQuestA && !GetQuestRewardStatus(at->requiredQuestA))))
+        {
+            return false;
+        }
+    }
+    else if (GetTeam() == HORDE)
+    {
+        if ((!isRegularTargetMap &&
+            (at->requiredQuestHeroicH && !GetQuestRewardStatus(at->requiredQuestHeroicH))) ||
+            (isRegularTargetMap &&
+            (at->requiredQuestH && !GetQuestRewardStatus(at->requiredQuestH))))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool Player::HasAchievementFitToAreaTriggerReqirements(AreaTrigger const* at, Difficulty difficulty)
+{
+    uint32 uiAchievementID = 0;
+    if (difficulty == RAID_DIFFICULTY_10MAN_HEROIC)
+        uiAchievementID = at->achiev0;
+    else if (difficulty == RAID_DIFFICULTY_25MAN_HEROIC)
+        uiAchievementID = at->achiev1;
+
+    if (!uiAchievementID)
+        return true;
+
+    if (GetAchievementMgr().HasAchievement(uiAchievementID))
+        return true;
+
+    if (Group* group = GetGroup())
+    {
+        for (GroupReference* itr = group->GetFirstMember(); itr != NULL; itr = itr->next())
+        {
+            Player* member = itr->getSource();
+            if (member && member->IsInWorld())
+            {
+                if (member->GetAchievementMgr().HasAchievement(uiAchievementID))
+                    return true;
+            }
+        }
     }
 
     return false;
@@ -23241,10 +23279,8 @@ void Player::_fillGearScoreData(Item* item, GearScoreVec* gearScore, uint32& two
     }
 }
 
-AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, Difficulty difficulty, uint32& miscRequirement)
+AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, Difficulty difficulty)
 {
-    miscRequirement = 0;
-
     if (!at)
         return AREA_LOCKSTATUS_UNKNOWN_ERROR;
 
@@ -23252,106 +23288,308 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, Difficult
     if (!mapEntry)
         return AREA_LOCKSTATUS_UNKNOWN_ERROR;
 
-    bool isRegularTargetMap = !mapEntry->IsDungeon() || GetDifficulty(mapEntry->IsRaid()) == REGULAR_DIFFICULTY;
-
     MapDifficultyEntry const* mapDiff = GetMapDifficultyData(at->target_mapId, difficulty);
     if (mapEntry->IsDungeon() && !mapDiff)
         return AREA_LOCKSTATUS_MISSING_DIFFICULTY;
 
-    // Expansion requirement
-    if (GetSession()->Expansion() < mapEntry->Expansion())
-    {
-        miscRequirement = mapEntry->Expansion();
-        return AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION;
-    }
-
-    // Gamemaster can always enter
     if (isGameMaster())
         return AREA_LOCKSTATUS_OK;
 
-    // Level Requirements
-    if (getLevel() < at->requiredLevel && !sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL))
-    {
-        miscRequirement = at->requiredLevel;
-        return AREA_LOCKSTATUS_TOO_LOW_LEVEL;
-    }
-    if (!isRegularTargetMap && !sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL) && getLevel() < uint32(maxLevelForExpansion[mapEntry->Expansion()]))
-    {
-        miscRequirement = maxLevelForExpansion[mapEntry->Expansion()];
-        return AREA_LOCKSTATUS_TOO_LOW_LEVEL;
-    }
+    if (GetSession()->Expansion() < mapEntry->Expansion())
+        return AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION;
 
-    // Raid Requirements
-    if (mapEntry->IsRaid() && !sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_RAID))
+    if (getLevel() < at->requiredLevel && !sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_LEVEL))
+        return AREA_LOCKSTATUS_TOO_LOW_LEVEL;
+
+    if (mapEntry->IsDungeon() && mapEntry->IsRaid() && !sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_RAID))
         if (!GetGroup() || !GetGroup()->isRaidGroup())
             return AREA_LOCKSTATUS_RAID_LOCKED;
 
-    // Item Requirements: must have requiredItem OR requiredItem2, report the first one that's missing
-    if (at->requiredItem)
-    {
-        if (!HasItemCount(at->requiredItem, 1) &&
-                (!at->requiredItem2 || !HasItemCount(at->requiredItem2, 1)))
-        {
-            miscRequirement = at->requiredItem;
-            return AREA_LOCKSTATUS_MISSING_ITEM;
-        }
-    }
-    else if (at->requiredItem2 && !HasItemCount(at->requiredItem2, 1))
-    {
-        miscRequirement = at->requiredItem2;
+    // must have one or the other, report the first one that's missing
+    if (!HasItemFitToAreaTriggerReqirements(at))
         return AREA_LOCKSTATUS_MISSING_ITEM;
-    }
-    // Heroic item requirements
-    if (!isRegularTargetMap && at->heroicKey)
-    {
-        if (!HasItemCount(at->heroicKey, 1) && (!at->heroicKey2 || !HasItemCount(at->heroicKey2, 1)))
-        {
-            miscRequirement = at->heroicKey;
-            return AREA_LOCKSTATUS_MISSING_ITEM;
-        }
-    }
-    else if (!isRegularTargetMap && at->heroicKey2 && !HasItemCount(at->heroicKey2, 1))
-    {
-        miscRequirement = at->heroicKey2;
-        return AREA_LOCKSTATUS_MISSING_ITEM;
-    }
 
-    // Quest Requirements
-    if (isRegularTargetMap && at->requiredQuest && !GetQuestRewardStatus(at->requiredQuest))
-    {
-        miscRequirement = at->requiredQuest;
+    bool isRegularTargetMap = GetDifficulty(mapEntry->IsRaid()) == REGULAR_DIFFICULTY;
+
+    if (!isRegularTargetMap && !HasHeroicKeyFitToAreaTriggerReqirements(at))
+        return AREA_LOCKSTATUS_MISSING_ITEM;
+
+    if (!HasQuestFitToAreaTriggerReqirements(at, isRegularTargetMap))
         return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-    }
-    if (!isRegularTargetMap && at->requiredQuestHeroic && !GetQuestRewardStatus(at->requiredQuestHeroic))
-    {
-        miscRequirement = at->requiredQuestHeroic;
+
+    if (!HasAchievementFitToAreaTriggerReqirements(at, difficulty))
         return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
-    }
 
     // If the map is not created, assume it is possible to enter it.
     DungeonPersistentState* state = GetBoundInstanceSaveForSelfOrGroup(at->target_mapId);
     Map* map = sMapMgr.FindMap(at->target_mapId, state ? state->GetInstanceId() : 0);
 
-    // ToDo add achievement check
-
-    // Map's state check
+    if (map && at->combatMode == 1)
+    {
+        if (map->GetInstanceData() && map->GetInstanceData()->IsEncounterInProgress())
+        {
+            DEBUG_LOG("MAP: Player '%s' can't enter instance '%s' while an encounter is in progress.", GetObjectGuid().GetString().c_str(), map->GetMapName());
+            return AREA_LOCKSTATUS_ZONE_IN_COMBAT;
+        }
+    }
     if (map && map->IsDungeon())
     {
         // cannot enter if the instance is full (player cap), GMs don't count
-        if (((DungeonMap*)map)->GetPlayersCountExceptGMs() >= ((DungeonMap*)map)->GetMaxPlayers())
+        if (((DungeonMap*)map)->isFull())
             return AREA_LOCKSTATUS_INSTANCE_IS_FULL;
 
-        // In Combat check
-        if (map && map->GetInstanceData() && map->GetInstanceData()->IsEncounterInProgress())
-            return AREA_LOCKSTATUS_ZONE_IN_COMBAT;
-
-        // Bind Checks
         InstancePlayerBind* pBind = GetBoundInstance(at->target_mapId, GetDifficulty(mapEntry->IsRaid()));
         if (pBind && pBind->perm && pBind->state != state)
             return AREA_LOCKSTATUS_HAS_BIND;
+
         if (pBind && pBind->perm && pBind->state != map->GetPersistentState())
             return AREA_LOCKSTATUS_HAS_BIND;
     }
 
     return AREA_LOCKSTATUS_OK;
 };
+
+AreaLockStatus Player::GetAreaLockStatus(uint32 mapId, Difficulty difficulty)
+{
+    return GetAreaTriggerLockStatus(sObjectMgr.GetMapEntranceTrigger(mapId), difficulty);
+};
+
+bool Player::CheckTransferPossibility(uint32 mapId)
+{
+    if (mapId == GetMapId())
+        return true;
+
+    MapEntry const* targetMapEntry = sMapStore.LookupEntry(mapId);
+    if (!targetMapEntry)
+    {
+        sLog.outError("Player::CheckTransferPossibility: player %s try teleport to map %u, but map not exists!", GetGuidStr().c_str(), mapId);
+        return false;
+    }
+
+    // Battleground requirements checked in another place
+    if (InBattleGround() && targetMapEntry->IsBattleGroundOrArena())
+        return true;
+
+    AreaTrigger const* at = sObjectMgr.GetMapEntranceTrigger(mapId);
+    if (!at)
+    {
+        if (isGameMaster())
+        {
+            sLog.outDetail("Player::CheckTransferPossibility: gamemaster %s try teleport to map %u, but entrance trigger not exists (possible for some test maps).", GetGuidStr().c_str(), mapId);
+            return true;
+        }
+
+        if (targetMapEntry->IsContinent())
+        {
+            if (GetSession()->Expansion() < targetMapEntry->Expansion())
+            {
+                sLog.outError("Player::CheckTransferPossibility: player %s try teleport to map %u, but not has sufficient expansion (%u instead of %u)", GetGuidStr().c_str(), mapId, GetSession()->Expansion(), targetMapEntry->Expansion());
+                return false;
+            }
+            return true;
+        }
+        sLog.outError("Player::CheckTransferPossibility: player %s try teleport to map %u, but entrance trigger not exists!", GetGuidStr().c_str(), mapId);
+        return false;
+    }
+
+    return CheckTransferPossibility(at, targetMapEntry->IsContinent());
+}
+
+bool Player::CheckTransferPossibility(AreaTrigger const*& at, bool b_onlyMainReq)
+{
+    if (!at)
+        return false;
+
+    if (at->target_mapId == GetMapId())
+        return true;
+
+    MapEntry const* targetMapEntry = sMapStore.LookupEntry(at->target_mapId);
+
+    if (!targetMapEntry)
+        return false;
+
+    if (!isGameMaster())
+    {
+        // ghost resurrected at enter attempt to dungeon with corpse (including fail enter cases)
+        if (!isAlive() && targetMapEntry->IsDungeon())
+        {
+            uint32 corpseMapId = 0;
+            if (Corpse* corpse = GetCorpse())
+                corpseMapId = corpse->GetMapId();
+
+            // check back way from corpse to entrance
+            uint32 instance_map = corpseMapId;
+            do
+            {
+                // most often fast case
+                if (instance_map == targetMapEntry->MapID)
+                    break;
+
+                InstanceTemplate const* instance = ObjectMgr::GetInstanceTemplate(instance_map);
+                instance_map = instance ? instance->parent : 0;
+            } while (instance_map);
+
+            // corpse not in dungeon or some linked deep dungeons
+            if (!instance_map)
+            {
+                WorldPacket data(SMSG_AREA_TRIGGER_NO_CORPSE);
+                GetSession()->SendPacket(&data);
+                return false;
+            }
+
+            // need find areatrigger to inner dungeon for landing point
+            if (at->target_mapId != corpseMapId)
+            {
+                if (AreaTrigger const* corpseAt = sObjectMgr.GetMapEntranceTrigger(corpseMapId))
+                {
+                    targetMapEntry = sMapStore.LookupEntry(corpseAt->target_mapId);
+                    at = corpseAt;
+                }
+            }
+
+            // now we can resurrect player, and then check teleport requirements
+            ResurrectPlayer(50);
+            SpawnCorpseBones();
+        }
+    }
+
+    AreaLockStatus status = GetAreaTriggerLockStatus(at, GetDifficulty(targetMapEntry->IsRaid()));
+
+    DEBUG_LOG("Player::CheckTransferPossibility %s check lock status of map %u (difficulty %u), result is %u", GetGuidStr().c_str(), at->target_mapId, GetDifficulty(targetMapEntry->IsRaid()), status);
+
+    if (b_onlyMainReq)
+    {
+        switch (status)
+        {
+        case AREA_LOCKSTATUS_MISSING_ITEM:
+        case AREA_LOCKSTATUS_QUEST_NOT_COMPLETED:
+        case AREA_LOCKSTATUS_INSTANCE_IS_FULL:
+        case AREA_LOCKSTATUS_ZONE_IN_COMBAT:
+        case AREA_LOCKSTATUS_TOO_LOW_LEVEL:
+            return true;
+        default:
+            break;
+        }
+    }
+
+    switch (status)
+    {
+    case AREA_LOCKSTATUS_OK:
+        return true;
+    case AREA_LOCKSTATUS_TOO_LOW_LEVEL:
+        GetSession()->SendAreaTriggerMessage(GetSession()->GetMangosString(LANG_LEVEL_MINREQUIRED), at->requiredLevel);
+        return false;
+    case AREA_LOCKSTATUS_ZONE_IN_COMBAT:
+        SendTransferAborted(at->target_mapId, TRANSFER_ABORT_ZONE_IN_COMBAT);
+        return false;
+    case AREA_LOCKSTATUS_INSTANCE_IS_FULL:
+        SendTransferAborted(at->target_mapId, TRANSFER_ABORT_MAX_PLAYERS);
+        return false;
+    case AREA_LOCKSTATUS_QUEST_NOT_COMPLETED:
+        if (at->target_mapId == 269)
+        {
+            GetSession()->SendAreaTriggerMessage(GetSession()->GetMangosString(LANG_TELEREQ_QUEST_BLACK_MORASS));
+            return false;
+        }
+        // No break here!
+    case AREA_LOCKSTATUS_MISSING_ITEM:
+    {
+        MapDifficultyEntry const* mapDiff = GetMapDifficultyData(targetMapEntry->MapID, GetDifficulty(targetMapEntry->IsRaid()));
+        if (mapDiff && (mapDiff->mapDifficultyFlags & MAP_DIFFICULTY_FLAG_CONDITION))
+        {
+            GetSession()->SendAreaTriggerMessage("%s", mapDiff->areaTriggerText[GetSession()->GetSessionDbcLocale()]);
+        }
+        // do not report anything for quest areatriggers
+        DEBUG_LOG("HandleAreaTriggerOpcode: LockAreaStatus %u, do action", uint8(GetAreaTriggerLockStatus(at, GetDifficulty(targetMapEntry->IsRaid()))));
+        return false;
+    }
+    case AREA_LOCKSTATUS_MISSING_DIFFICULTY:
+    {
+        Difficulty difficulty = GetDifficulty(targetMapEntry->IsRaid());
+        SendTransferAborted(at->target_mapId, TRANSFER_ABORT_DIFFICULTY, difficulty > RAID_DIFFICULTY_10MAN_HEROIC ? RAID_DIFFICULTY_10MAN_HEROIC : difficulty);
+        return false;
+    }
+    case AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION:
+        SendTransferAborted(at->target_mapId, TRANSFER_ABORT_INSUF_EXPAN_LVL, targetMapEntry->Expansion());
+        return false;
+    case AREA_LOCKSTATUS_NOT_ALLOWED:
+    case AREA_LOCKSTATUS_HAS_BIND:
+        SendTransferAborted(at->target_mapId, TRANSFER_ABORT_MAP_NOT_ALLOWED);
+        return false;
+        // TODO: messages for other cases
+    case AREA_LOCKSTATUS_RAID_LOCKED:
+        SendTransferAborted(at->target_mapId, TRANSFER_ABORT_NEED_GROUP);
+        return false;
+        // TODO: messages for other cases
+    case AREA_LOCKSTATUS_UNKNOWN_ERROR:
+    default:
+        SendTransferAborted(at->target_mapId, TRANSFER_ABORT_ERROR);
+        sLog.outError("Player::CheckTransferPossibility player %s has unhandled AreaLockStatus %u in map %u (difficulty %u), do nothing", GetGuidStr().c_str(), status, at->target_mapId, GetDifficulty(targetMapEntry->IsRaid()));
+        return false;
+    }
+
+    return false;
+};
+
+bool Player::NeedEjectFromThisMap()
+{
+    MapEntry const* mapEntry = sMapStore.LookupEntry(GetMapId());
+
+    if (!mapEntry)
+    {
+        sLog.outError("Player::NeedGoingToHomebind %s are in (map: %u) and there is no MapEntry to this map.", GetObjectGuid().GetString().c_str(), GetMapId());
+        return true;
+    }
+
+    Map* map = GetMap();
+
+    if (!map)
+    {
+        sLog.outError("Player::NeedGoingToHomebind %s are in (map: %u) and there is no Map to this player.", GetObjectGuid().GetString().c_str(), GetMapId());
+        return true;
+    }
+
+    if (isGameMaster())
+        return false;
+
+    if (GetSession()->Expansion() < mapEntry->Expansion())
+        return true;
+
+    if (map->IsDungeon())
+    {
+        // Dead player going to Graveyard in other case
+        if (!isAlive())
+            return false;
+
+        if (((DungeonMap*)map)->isFull())
+            return true;
+
+        InstancePlayerBind* pBind = GetBoundInstance(GetMapId(), GetDifficulty(mapEntry->IsRaid()));
+        if (pBind && pBind->perm && pBind->state != map->GetPersistentState())
+            return true;
+
+        if ((mapEntry->IsRaid() && !sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_RAID)) && (!GetGroup() || !GetGroup()->isRaidGroup()))
+            return true;
+
+        AreaTrigger const* at = sObjectMgr.GetMapEntranceTrigger(GetMapId());
+        if (at)
+        {
+            if (!HasItemFitToAreaTriggerReqirements(at))
+                return true;
+
+            Difficulty difficulty = GetDifficulty(mapEntry->IsRaid());
+
+            if (difficulty != REGULAR_DIFFICULTY && !HasHeroicKeyFitToAreaTriggerReqirements(at))
+                return true;
+
+            if (!HasQuestFitToAreaTriggerReqirements(at, difficulty == REGULAR_DIFFICULTY))
+                return true;
+
+            if (!HasAchievementFitToAreaTriggerReqirements(at, difficulty))
+                return true;
+        }
+
+    }
+
+    return false;
+}
