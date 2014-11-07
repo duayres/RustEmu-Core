@@ -1353,13 +1353,14 @@ bool DungeonMap::Add(Player* player)
                 }
                 // if the group/leader is permanently bound to the instance
                 // players also become permanently bound when they enter
-                if (groupBind->perm)
+                if (groupBind->perm && IsDungeon())
                 {
-                    WorldPacket data(SMSG_INSTANCE_SAVE_CREATED, 4);
-                    data << uint32(0);
+                    WorldPacket data(SMSG_PENDING_RAID_LOCK, 9);
+                    data << uint32(60000);
+                    data << groupBind->state->GetCompletedEncountersMask();
+                    data << uint8(0);
                     player->GetSession()->SendPacket(&data);
-                    player->BindToInstance(GetPersistanceState(), true);
-                    sCalendarMgr.SendCalendarRaidLockoutAdd(player, GetPersistanceState());
+                    player->SetPendingBind(GetPersistanceState(), 60000);
                 }
             }
         }
@@ -1450,28 +1451,28 @@ bool DungeonMap::Reset(InstanceResetMethod method)
     return m_mapRefManager.isEmpty();
 }
 
-void DungeonMap::PermBindAllPlayers(Player* player)
+void DungeonMap::PermBindAllPlayers(Player *player, bool permanent)
 {
-    Group* group = player->GetGroup();
+    Group *group = player->GetGroup();
     // group members outside the instance group don't get bound
     for (MapRefManager::iterator itr = m_mapRefManager.begin(); itr != m_mapRefManager.end(); ++itr)
     {
         Player* plr = itr->getSource();
         // players inside an instance cannot be bound to other instances
         // some players may already be permanently bound, in this case nothing happens
-        InstancePlayerBind* bind = plr->GetBoundInstance(GetId(), GetDifficulty());
+        InstancePlayerBind *bind = plr->GetBoundInstance(GetId(), GetDifficulty());
         if (!bind || !bind->perm)
         {
-            plr->BindToInstance(GetPersistanceState(), true);
+            plr->BindToInstance(GetPersistanceState(), permanent);
             WorldPacket data(SMSG_INSTANCE_SAVE_CREATED, 4);
             data << uint32(0);
             plr->GetSession()->SendPacket(&data);
-            sCalendarMgr.SendCalendarRaidLockoutAdd(plr, GetPersistanceState());
+            sCalendarMgr.SendCalendarRaidLockoutAdd(plr->GetObjectGuid(), GetPersistanceState());
         }
 
         // if the leader is not in the instance the group will not get a perm bind
         if (group && group->GetLeaderGuid() == plr->GetObjectGuid())
-            group->BindToInstance(GetPersistanceState(), true);
+            group->BindToInstance(GetPersistanceState(), permanent);
     }
 }
 

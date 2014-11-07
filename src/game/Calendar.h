@@ -259,8 +259,8 @@ class CalendarMgr
         void SendCalendarClearPendingAction(Player* player);
         void SendCalendarEventModeratorStatusAlert(CalendarInvite const* invite);
         void SendCalendarEventUpdateAlert(CalendarEvent const* event, time_t oldEventTime);
-        void SendCalendarRaidLockoutRemove(Player* player, DungeonPersistentState const* save);
-        void SendCalendarRaidLockoutAdd(Player* player, DungeonPersistentState const* save);
+        void SendCalendarRaidLockoutRemove(ObjectGuid const& guid, DungeonPersistentState const* save);
+        void SendCalendarRaidLockoutAdd(ObjectGuid const& guid, DungeonPersistentState const* save);
 
         void SendPacketToAllEventRelatives(WorldPacket packet, CalendarEvent const* event);
 

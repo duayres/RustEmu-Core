@@ -1008,12 +1008,13 @@ void CalendarMgr::SendPacketToAllEventRelatives(WorldPacket packet, CalendarEven
                 player->SendDirectMessage(&packet);
 }
 
-void CalendarMgr::SendCalendarRaidLockoutRemove(Player* player, DungeonPersistentState const* save)
+void CalendarMgr::SendCalendarRaidLockoutRemove(ObjectGuid const& guid, DungeonPersistentState const* save)
 {
+    Player* player = sObjectMgr.GetPlayer(guid);
     if (!save || !player)
         return;
 
-    DEBUG_LOG("SMSG_CALENDAR_RAID_LOCKOUT_REMOVED [%s]", player->GetObjectGuid().GetString().c_str());
+    DEBUG_LOG("SMSG_CALENDAR_RAID_LOCKOUT_REMOVED [%u]", guid.GetCounter());
     time_t currTime = time(NULL);
 
     WorldPacket data(SMSG_CALENDAR_RAID_LOCKOUT_REMOVED, 4 + 4 + 4 + 8);
@@ -1025,12 +1026,13 @@ void CalendarMgr::SendCalendarRaidLockoutRemove(Player* player, DungeonPersisten
     player->SendDirectMessage(&data);
 }
 
-void CalendarMgr::SendCalendarRaidLockoutAdd(Player* player, DungeonPersistentState const* save)
+void CalendarMgr::SendCalendarRaidLockoutAdd(ObjectGuid const& guid, DungeonPersistentState const* save)
 {
+    Player* player = sObjectMgr.GetPlayer(guid);
     if (!save || !player)
         return;
 
-    DEBUG_LOG("SMSG_CALENDAR_RAID_LOCKOUT_ADDED [%s]", player->GetObjectGuid().GetString().c_str());
+    DEBUG_LOG("SMSG_CALENDAR_RAID_LOCKOUT_ADDED [%u]", guid.GetCounter());
     time_t currTime = time(NULL);
 
     WorldPacket data(SMSG_CALENDAR_RAID_LOCKOUT_ADDED, 4 + 4 + 4 + 4 + 8);

@@ -80,7 +80,9 @@ void Channel::Join(Player* player, const char* password)
         return;
     }
 
-    if (HasFlag(CHANNEL_FLAG_LFG) && sWorld.getConfig(CONFIG_BOOL_RESTRICTED_LFG_CHANNEL) && player->GetSession()->GetSecurity() == SEC_PLAYER)
+    if (HasFlag(CHANNEL_FLAG_LFG) &&
+        sWorld.getConfig(CONFIG_BOOL_RESTRICTED_LFG_CHANNEL) && player->GetSession()->GetSecurity() == SEC_PLAYER &&
+        player->GetGroup())
     {
         MakeNotInLfg(&data);
         SendToOne(&data, guid);

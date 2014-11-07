@@ -25,6 +25,7 @@
 
 class Group;
 class Player;
+class ObjectGuid;
 
 
 // Reward info
@@ -53,16 +54,36 @@ struct LFGReward
 // Stores player or group queue info
 struct LFGQueueInfo
 {
-    LFGQueueInfo() : tanks(LFG_TANKS_NEEDED), healers(LFG_HEALERS_NEEDED), dps(LFG_DPS_NEEDED) {};
+    LFGQueueInfo() : tanks(LFG_TANKS_NEEDED), healers(LFG_HEALERS_NEEDED), dps(LFG_DPS_NEEDED)
+    {
+        joinTime = time_t(time(NULL));
+    };
     time_t joinTime;                                        // Player queue join time (to calculate wait times)
     uint8 tanks;                                            // Tanks needed
     uint8 healers;                                          // Healers needed
     uint8 dps;                                              // Dps needed
 };
 
+struct LFGQueueStatus
+{
+    LFGDungeonEntry const* dungeon;                          // Dungeon
+    time_t                 avgWaitTime;                      // Average Wait time
+    time_t                 waitTime;                         // Wait Time
+    time_t                 waitTimeTanks;                    // Wait Tanks
+    time_t                 waitTimeHealer;                   // Wait Healers
+    time_t                 waitTimeDps;                      // Wait Dps
+    uint8                  tanks;                            // Tanks needed
+    uint8                  healers;                          // Healers needed
+    uint8                  dps;                              // Dps needed
+    time_t                 queuedTime;                       // Player wait time in queue
+};
+
 typedef std::multimap<uint32, LFGReward const*> LFGRewardMap;
 typedef std::pair<LFGRewardMap::const_iterator, LFGRewardMap::const_iterator> LFGRewardMapBounds;
 typedef std::map<ObjectGuid, LFGQueueInfo*> LFGQueueInfoMap;
+typedef std::map<uint32/*ID*/, LFGDungeonEntry const*> LFGDungeonMap;
+typedef std::set<Player*> LFGQueuePlayerSet;
+typedef std::set<Group*>  LFGQueueGroupSet;
 
 class LFGMgr
 {
@@ -73,10 +94,20 @@ public:
     void Update(uint32 diff);
 
     void Join(Player* player);
-    void Leave(Player* player, Group* group = NULL);
+    void Leave(Player* player);
+    void Leave(Group* group);
+
+    LFGQueuePlayerSet GetDungeonPlayerQueue(LFGDungeonEntry const* dungeon, Team team = TEAM_NONE);
+    LFGQueueGroupSet  GetDungeonGroupQueue(LFGDungeonEntry const* dungeon, Team team = TEAM_NONE);
+
+    void ClearLFRList(Player* player);
 
     void LoadRewards();
     LFGReward const* GetRandomDungeonReward(LFGDungeonEntry const* dungeon, Player* player);
+    void SendLFGRewards(Player* player);
+    void SendLFGReward(Player* player);
+
+    LFGDungeonEntry const* GetDungeon(uint32 dungeonID);
 
     bool IsRandomDungeon(LFGDungeonEntry const* dungeon);
     LFGDungeonSet GetRandomDungeonsForPlayer(Player* player);
@@ -89,11 +120,17 @@ public:
     LFGLockStatusType GetGroupLockStatus(Group* group, LFGDungeonEntry const* dungeon);
 
     LFGLockStatusMap GetPlayerLockMap(Player* player);
-    LFGLockStatusMap GetGroupLockMap(Group* group);
 
 private:
-    LFGRewardMap m_RewardMap;                           // Stores rewards for random dungeons
-    LFGQueueInfoMap m_queueInfoMap;                     // Queued groups
+    void _Join(ObjectGuid guid, LFGType type);
+    void _Leave(ObjectGuid guid, LFGType excludeType = LFG_TYPE_NONE);
+    void _JoinGroup(ObjectGuid guid, LFGType type);
+    void _LeaveGroup(ObjectGuid guid, LFGType excludeType = LFG_TYPE_NONE);
+    LFGRewardMap    m_RewardMap;                        // Stores rewards for random dungeons
+    LFGQueueInfoMap m_queueInfoMap[LFG_TYPE_MAX];       // Queued players
+    LFGQueueInfoMap m_groupQueueInfoMap[LFG_TYPE_MAX];  // Queued groups
+    LFGDungeonMap   m_dungeonMap;                       // sorted dungeon map
+    LFGQueueStatus  m_queueStatus[LFG_TYPE_MAX];        // Queue statisic
 
 };
 

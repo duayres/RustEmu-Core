@@ -364,14 +364,15 @@ struct DungeonEncounter
 {
     DungeonEncounter(DungeonEncounterEntry const* _dbcEntry, EncounterCreditType _creditType, uint32 _creditEntry, uint32 _lastEncounterDungeon)
         : dbcEntry(_dbcEntry), creditType(_creditType), creditEntry(_creditEntry), lastEncounterDungeon(_lastEncounterDungeon) { }
+
     DungeonEncounterEntry const* dbcEntry;
     EncounterCreditType creditType;
     uint32 creditEntry;
     uint32 lastEncounterDungeon;
 };
 
-typedef std::multimap<uint32, DungeonEncounter const*> DungeonEncounterMap;
-typedef std::pair<DungeonEncounterMap::const_iterator, DungeonEncounterMap::const_iterator> DungeonEncounterMapBounds;
+typedef std::list<DungeonEncounter const*> DungeonEncounterList;
+typedef std::map<uint32, DungeonEncounterList> DungeonEncounterMap;
 
 struct GraveYardData
 {
@@ -558,6 +559,7 @@ class ObjectMgr
 
         void PackGroupIds();
         Group* GetGroupById(uint32 id) const;
+        Group* GetGroup(ObjectGuid guid) const;
         void AddGroup(Group* group);
         void RemoveGroup(Group* group);
 
@@ -682,6 +684,14 @@ class ObjectMgr
         {
             QuestPOIMap::const_iterator itr = mQuestPOIMap.find(questId);
             if (itr != mQuestPOIMap.end())
+                return &itr->second;
+            return NULL;
+        }
+
+        DungeonEncounterList const* GetDungeonEncounterList(uint32 mapId, Difficulty difficulty)
+        {
+            std::map<uint32, DungeonEncounterList>::const_iterator itr = mDungeonEncounters.find(MAKE_PAIR32(mapId, difficulty));
+            if (itr != mDungeonEncounters.end())
                 return &itr->second;
             return NULL;
         }
@@ -1099,11 +1109,6 @@ class ObjectMgr
             return m_ItemRequiredTarget.equal_range(uiItemEntry);
         }
 
-        DungeonEncounterMapBounds GetDungeonEncounterBounds(uint32 creditEntry) const
-        {
-            return m_DungeonEncounters.equal_range(creditEntry);
-        }
-
         GossipMenusMapBounds GetGossipMenusMapBounds(uint32 uiMenuId) const
         {
             return m_mGossipMenusMap.equal_range(uiMenuId);
@@ -1287,7 +1292,7 @@ class ObjectMgr
         std::map<int32 /*minEntryOfBracket*/, uint32 /*count*/> m_loadedStringCount;
         GossipMenuItemsLocaleMap mGossipMenuItemsLocaleMap;
         PointOfInterestLocaleMap mPointOfInterestLocaleMap;
-        DungeonEncounterMap m_DungeonEncounters;
+        DungeonEncounterMap mDungeonEncounters;
 
         CreatureModelRaceMap    m_mCreatureModelRaceMap;
 

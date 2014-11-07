@@ -1242,7 +1242,7 @@ enum Opcodes
     SMSG_ITEM_PURCHASE_REFUND_RESULT                = 0x4B5,
     CMSG_CORPSE_TRANSPORT_QUERY                     = 0x4B6,
     SMSG_CORPSE_TRANSPORT_QUERY                     = 0x4B7,
-    CMSG_UNUSED5                                    = 0x4B8,
+    CMSG_LFG_SET_ROLES_2                            = 0x4B8,
     CMSG_UNUSED6                                    = 0x4B9,
     CMSG_CALENDAR_EVENT_SIGNUP                      = 0x4BA,
     SMSG_CALENDAR_CLEAR_PENDING_ACTION              = 0x4BB,
