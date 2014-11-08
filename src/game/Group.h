@@ -222,8 +222,8 @@ class MANGOS_DLL_SPEC Group
             std::string name;
             uint8       group;
             GroupFlagMask  flags;
-            uint32      lastMap;
             uint8       roles;
+            uint32      lastMap;            
         };
         typedef std::list<MemberSlot> MemberSlotList;
         typedef MemberSlotList::const_iterator member_citerator;
