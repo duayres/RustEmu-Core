@@ -211,7 +211,7 @@ bool Group::LoadGroupFromDB(Field* fields)
     return true;
 }
 
-bool Group::LoadMemberFromDB(uint32 guidLow, uint8 subgroup, bool assistant)
+bool Group::LoadMemberFromDB(uint32 guidLow, uint8 subgroup, GroupFlagMask flags, uint8 roles)
 {
     MemberSlot member;
     member.guid      = ObjectGuid(HIGHGUID_PLAYER, guidLow);
@@ -220,8 +220,9 @@ bool Group::LoadMemberFromDB(uint32 guidLow, uint8 subgroup, bool assistant)
     if (!sObjectMgr.GetPlayerNameByGUID(member.guid, member.name))
         return false;
 
-    member.group     = subgroup;
-    member.assistant = assistant;
+    member.group = subgroup;
+    member.flags = flags;
+    member.roles = roles;
     m_memberSlots.push_back(member);
 
     SubGroupCounterIncrease(subgroup);
@@ -316,6 +317,9 @@ bool Group::AddMember(ObjectGuid guid, const char* name)
 
     SendUpdate();
 
+    if (isLFDGroup())
+        sLFGMgr.AddMemberToLFDGroup(guid);
+
     if (Player* player = sObjectMgr.GetPlayer(guid))
     {
         if (!IsLeader(player->GetObjectGuid()) && !isBGGroup())
@@ -346,7 +350,6 @@ bool Group::AddMember(ObjectGuid guid, const char* name)
         if (isRaidGroup())
             player->UpdateForQuestWorldObjects();
 
-        sLFGMgr.Leave(player);
     }
 
     return true;
@@ -388,7 +391,8 @@ uint32 Group::RemoveMember(ObjectGuid guid, uint8 method)
 
             _homebindIfInstance(player);
 
-            sLFGMgr.Leave(player);
+            if (isLFDGroup())
+                sLFGMgr.RemoveMemberFromLFDGroup(guid);
         }
 
         if (leaderChanged)
@@ -452,6 +456,9 @@ void Group::Disband(bool hideDestroy)
 
         if (!player->GetSession())
             continue;
+
+        if (isLFDGroup())
+            sLFGMgr.RemoveMemberFromLFDGroup(player->GetObjectGuid());
 
         WorldPacket data;
         if (!hideDestroy)
@@ -1046,8 +1053,8 @@ void Group::SendUpdate()
         WorldPacket data(SMSG_GROUP_LIST, (1 + 1 + 1 + 1 + 8 + 4 + GetMembersCount() * 20));
         data << uint8(m_groupType);                         // group type (flags in 3.3)
         data << uint8(citr->group);                         // groupid
-        data << uint8(GetFlags(*citr));                     // group flags
-        data << uint8(isBGGroup() ? 1 : 0);                 // 2.0.x, isBattleGroundGroup?
+        data << uint8(citr->flags);                         // group flags
+        data << uint8(citr->roles);                         // roles mask
         if (m_groupType & GROUPTYPE_LFD)
         {
             data << uint8(0);
@@ -1068,8 +1075,8 @@ void Group::SendUpdate()
             data << citr2->guid;
             data << uint8(onlineState);                     // online-state
             data << uint8(citr2->group);                    // groupid
-            data << uint8(GetFlags(*citr2));                // group flags
-            data << uint8(0);                               // 3.3, role?
+            data << uint8(citr2->flags);                    // group flags
+            data << uint8(citr2->roles);                    // 3.3, role?
         }
 
         data << m_leaderGuid;                               // leader guid
@@ -1142,10 +1149,12 @@ void Group::OfflineReadyCheck()
     }
 }
 
-bool Group::_addMember(ObjectGuid guid, const char* name, bool isAssistant)
+bool Group::_addMember(ObjectGuid guid, const char* name)
 {
     // get first not-full group
     uint8 groupid = 0;
+    GroupFlagMask flags = GROUP_MEMBER;
+    uint8 roles = 0;
     if (m_subGroupsCounts)
     {
         bool groupFound = false;
@@ -1162,10 +1171,10 @@ bool Group::_addMember(ObjectGuid guid, const char* name, bool isAssistant)
             return false;
     }
 
-    return _addMember(guid, name, isAssistant, groupid);
+    return _addMember(guid, name, groupid, flags, roles);
 }
 
-bool Group::_addMember(ObjectGuid guid, const char* name, bool isAssistant, uint8 group)
+bool Group::_addMember(ObjectGuid guid, const char* name, uint8 group, GroupFlagMask flags, uint8 roles)
 {
     if (IsFull())
         return false;
@@ -1185,8 +1194,8 @@ bool Group::_addMember(ObjectGuid guid, const char* name, bool isAssistant, uint
     member.guid      = guid;
     member.name      = name;
     member.group     = group;
-    member.assistant = isAssistant;
-    member.lastMap   = lastMap;
+    member.flags     = flags;
+    member.roles     = roles;
     m_memberSlots.push_back(member);
 
     SubGroupCounterIncrease(group);
@@ -1222,8 +1231,8 @@ bool Group::_addMember(ObjectGuid guid, const char* name, bool isAssistant, uint
     if (!isBGGroup())
     {
         // insert into group table
-        CharacterDatabase.PExecute("INSERT INTO group_member(groupId,memberGuid,assistant,subgroup) VALUES('%u','%u','%u','%u')",
-                                   m_Id, member.guid.GetCounter(), ((member.assistant == 1) ? 1 : 0), member.group);
+        CharacterDatabase.PExecute("INSERT INTO group_member(groupId,memberGuid,memberFlags,subgroup,roles) VALUES('%u','%u','%u','%u','%u')",
+            m_Id, member.guid.GetCounter(), member.flags, member.group, member.roles);
     }
 
     return true;
@@ -1376,63 +1385,72 @@ bool Group::_setMembersGroup(ObjectGuid guid, uint8 group)
     return true;
 }
 
-bool Group::_setAssistantFlag(ObjectGuid guid, const bool& state)
+void Group::SetGroupUniqueFlag(ObjectGuid guid, GroupFlagsAssignment assignment, uint8 apply)
 {
-    member_witerator slot = _getMemberWSlot(guid);
-    if (slot == m_memberSlots.end())
-        return false;
+    static SqlStatementID updGgoupMember;
 
-    slot->assistant = state;
-    if (!isBGGroup())
-        CharacterDatabase.PExecute("UPDATE group_member SET assistant='%u' WHERE memberGuid='%u'", (state == true) ? 1 : 0, guid.GetCounter());
-    return true;
-}
+    GroupFlagMask mask = GROUP_MEMBER;
+    GroupFlagMask excludeMask = GROUP_MEMBER;
 
-bool Group::_setMainTank(ObjectGuid guid)
-{
-    if (m_mainTankGuid == guid)
-        return false;
-
-    if (guid)
+    switch (assignment)
     {
-        member_citerator slot = _getMemberCSlot(guid);
-        if (slot == m_memberSlots.end())
-            return false;
+    case GROUP_ASSIGN_MAINTANK:
+        mask = GROUP_MAIN_TANK;
+        excludeMask = GROUP_MAIN_ASSISTANT;
+        break;
+    case GROUP_ASSIGN_MAINASSIST:
+        mask = GROUP_MAIN_ASSISTANT;
+        excludeMask = GROUP_MAIN_TANK;
+        break;
+    case GROUP_ASSIGN_ASSISTANT:
+        mask = GROUP_ASSISTANT;
+        break;
+    default:
+        sLog.outError("Group::SetGroupUniqueFlag unknown assignment % on player %u", assignment, guid.GetCounter());
+        return;
+    };
 
-        if (m_mainAssistantGuid == guid)
-            _setMainAssistant(ObjectGuid());
-    }
-
-    m_mainTankGuid = guid;
-
-    if (!isBGGroup())
-        CharacterDatabase.PExecute("UPDATE groups SET mainTank='%u' WHERE groupId='%u'", m_mainTankGuid.GetCounter(), m_Id);
-
-    return true;
-}
-
-bool Group::_setMainAssistant(ObjectGuid guid)
-{
-    if (m_mainAssistantGuid == guid)
-        return false;
-
-    if (guid)
+    if (!guid.IsEmpty())
     {
-        member_witerator slot = _getMemberWSlot(guid);
-        if (slot == m_memberSlots.end())
-            return false;
+        SqlStatement stmt = CharacterDatabase.CreateStatement(updGgoupMember, "UPDATE group_member SET memberFlags = ? WHERE memberGuid = ?");
 
-        if (m_mainTankGuid == guid)
-            _setMainTank(ObjectGuid());
+        if (apply)
+        {
+            for (member_witerator itr = m_memberSlots.begin(); itr != m_memberSlots.end(); ++itr)
+            {
+                if (itr->guid != guid)
+                {
+                    if ((itr->flags & mask) && sWorld.getConfig(CONFIG_BOOL_RAID_FLAGS_UNIQUE))
+                    {
+                        GroupFlagMask oldMask = itr->flags;
+                        itr->flags = GroupFlagMask(oldMask & ~mask);
+                        if (itr->flags != oldMask)
+                            stmt.PExecute(uint8(itr->flags), itr->guid.GetCounter());
+                    }
+                }
+                else
+                {
+                    GroupFlagMask oldMask = itr->flags;
+                    itr->flags = GroupFlagMask((oldMask | mask) & ~excludeMask);
+                    if (itr->flags != oldMask)
+                        stmt.PExecute(uint8(itr->flags), itr->guid.GetCounter());
+                }
+            }
+        }
+        else
+        {
+            member_witerator slot = _getMemberWSlot(guid);
+            if (slot != m_memberSlots.end())
+            {
+                GroupFlagMask oldMask = slot->flags;
+                slot->flags = GroupFlagMask(oldMask & ~mask);
+                if (slot->flags != oldMask)
+                    stmt.PExecute(uint8(slot->flags), slot->guid.GetCounter());
+            }
+        }
+
+        SendUpdate();
     }
-
-    m_mainAssistantGuid = guid;
-
-    if (!isBGGroup())
-        CharacterDatabase.PExecute("UPDATE groups SET mainAssistant='%u' WHERE groupId='%u'",
-                                   m_mainAssistantGuid.GetCounter(), m_Id);
-
-    return true;
 }
 
 bool Group::SameSubGroup(Player const* member1, Player const* member2) const
@@ -1869,7 +1887,7 @@ void Group::_homebindIfInstance(Player* player)
     if (player && !player->isGameMaster())
     {
         Map* map = player->GetMap();
-        if (map->IsDungeon())
+        if (map && map->IsDungeon())
         {
             // leaving the group in an instance, the homebind timer is started
             // unless the player is permanently saved to the instance
@@ -1969,6 +1987,55 @@ void Group::RewardGroupAtKill(Unit* pVictim, Player* player_tap)
             // member (alive or dead) or his corpse at req. distance
             if (player_tap->IsAtGroupRewardDistance(pVictim))
                 RewardGroupAtKill_helper(player_tap, pVictim, count, PvP, group_rate, sum_level, is_dungeon, not_gray_member_with_max_level, member_with_max_level, xp);
+        }
+    }
+}
+
+bool Group::ConvertToLFG(LFGType type)
+{
+    if (isBGGroup())
+        return false;
+
+    switch (type)
+    {
+    case LFG_TYPE_DUNGEON:
+    case LFG_TYPE_QUEST:
+    case LFG_TYPE_ZONE:
+    case LFG_TYPE_HEROIC_DUNGEON:
+        if (isRaidGroup())
+            return false;
+        m_groupType = GroupType(m_groupType | GROUPTYPE_LFD);
+        break;
+    case LFG_TYPE_RANDOM_DUNGEON:
+        if (isRaidGroup())
+            return false;
+        m_groupType = GroupType(m_groupType | GROUPTYPE_LFD | GROUPTYPE_UNK1);
+        break;
+    case LFG_TYPE_RAID:
+        if (!isRaidGroup())
+            ConvertToRaid();
+        m_groupType = GroupType(m_groupType | GROUPTYPE_LFD);
+        break;
+    default:
+        return false;
+    }
+
+    m_lootMethod = NEED_BEFORE_GREED;
+    SendUpdate();
+
+    static SqlStatementID updGgoup;
+    SqlStatement stmt = CharacterDatabase.CreateStatement(updGgoup, "UPDATE groups SET groupType= ? WHERE groupId= ?");
+    stmt.PExecute(uint8(m_groupType), GetObjectGuid().GetCounter());
+}
+
+void Group::SetGroupRoles(ObjectGuid guid, uint8 roles)
+{
+    for (member_witerator itr = m_memberSlots.begin(); itr != m_memberSlots.end(); ++itr)
+    {
+        if (itr->guid == guid)
+        {
+            itr->roles = roles;
+            return;
         }
     }
 }

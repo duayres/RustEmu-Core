@@ -602,8 +602,11 @@ void World::LoadConfigSettings(bool reload)
 
     setConfig(CONFIG_BOOL_LFG_ENABLE, "LFG.Enable", false);
     setConfig(CONFIG_BOOL_LFR_ENABLE, "LFR.Enable", false);
-    setConfigMinMax(CONFIG_UINT32_LFG_MAXKICKS, "LFG.MaxKicks", 5, 1, getConfig(CONFIG_UINT32_LFG_MAXKICKS));
-    setConfigMinMax(CONFIG_UINT32_LFG_KICKVOTES, "LFG.KickVotes", 4, 1, getConfig(CONFIG_UINT32_LFG_KICKVOTES));
+    setConfig(CONFIG_BOOL_LFG_DEBUG_ENABLE, "LFG.Debug", false);
+    setConfig(CONFIG_BOOL_LFR_EXTEND, "LFR.Extend", false);
+    setConfigMinMax(CONFIG_UINT32_LFG_MAXKICKS, "LFG.MaxKicks", 5, 1, 10);
+    setConfigMinMax(CONFIG_UINT32_LFG_KICKVOTES, "LFG.KickVotes", 3, 1, 5);
+
     
     setConfigMinMax(CONFIG_UINT32_START_PLAYER_MONEY, "StartPlayerMoney", 0, 0, MAX_MONEY_AMOUNT);
 
@@ -816,6 +819,8 @@ void World::LoadConfigSettings(bool reload)
     setConfig(CONFIG_UINT32_TIMERBAR_FIRE_MAX,        "TimerBar.Fire.Max", 1);
 
     setConfig(CONFIG_BOOL_PET_UNSUMMON_AT_MOUNT,      "PetUnsummonAtMount", true);
+
+    setConfig(CONFIG_BOOL_RAID_FLAGS_UNIQUE, "RaidFlags.Unique", false);
 
     m_relocation_ai_notify_delay = sConfig.GetIntDefault("Visibility.AIRelocationNotifyDelay", 1000u);
     m_relocation_lower_limit_sq  = pow(sConfig.GetFloatDefault("Visibility.RelocationLowerLimit", 10), 2);

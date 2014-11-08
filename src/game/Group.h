@@ -98,16 +98,44 @@ enum GroupType                                              // group type flags?
     GROUPTYPE_BG     = 0x01,
     GROUPTYPE_RAID   = 0x02,
     GROUPTYPE_BGRAID = GROUPTYPE_BG | GROUPTYPE_RAID,       // mask
-    // 0x04?
+    GROUPTYPE_UNK1   = 0x04,                                // 0x04?
     GROUPTYPE_LFD    = 0x08,
+    GROUPTYPE_UNK2   = 0x10
     // 0x10, leave/change group?, I saw this flag when leaving group and after leaving BG while in group
+};
+
+enum GroupFlags
+{
+    GROUP_FLAG_ASSISTANT      = 0,
+    GROUP_FLAG_MAIN_ASSISTANT = 1,
+    GROUP_FLAG_MAIN_TANK      = 2
 };
 
 enum GroupFlagMask
 {
-    GROUP_ASSISTANT      = 0x01,
-    GROUP_MAIN_ASSISTANT = 0x02,
-    GROUP_MAIN_TANK      = 0x04,
+    GROUP_MEMBER         = 0x00,
+    GROUP_ASSISTANT      = (1 << GROUP_FLAG_ASSISTANT),
+    GROUP_MAIN_ASSISTANT = (1 << GROUP_FLAG_MAIN_ASSISTANT),
+    GROUP_MAIN_TANK      = (1 << GROUP_FLAG_MAIN_TANK),
+
+    // unions
+    GROUP_MEMBER_AMT     = ( GROUP_ASSISTANT   |
+                             GROUP_MAIN_ASSISTANT |
+                             GROUP_MAIN_TANK      ),
+    GROUP_MEMBER_AT      = ( GROUP_ASSISTANT   |
+                             GROUP_MAIN_TANK      ),
+    GROUP_MEMBER_AM      = ( GROUP_ASSISTANT   |
+                             GROUP_MAIN_ASSISTANT ),
+    GROUP_MEMBER_MT      = ( GROUP_MAIN_ASSISTANT |
+                             GROUP_MAIN_TANK      )
+
+};
+
+enum GroupFlagsAssignment
+{
+    GROUP_ASSIGN_MAINASSIST = 0,
+    GROUP_ASSIGN_MAINTANK   = 1,
+    GROUP_ASSIGN_ASSISTANT  = 2
 };
 
 enum GroupUpdateFlags
@@ -134,7 +162,7 @@ enum GroupUpdateFlags
     GROUP_UPDATE_FLAG_PET_AURAS         = 0x00040000,       // uint64 mask, for each bit set uint32 spellid + uint8 unk, pet auras...
     GROUP_UPDATE_FLAG_VEHICLE_SEAT      = 0x00080000,       // uint32 vehicle_seat_id (index from VehicleSeat.dbc)
     GROUP_UPDATE_PET                    = 0x0007FC00,       // all pet flags
-    GROUP_UPDATE_FULL                   = 0x0007FFFF,       // all known flags
+    GROUP_UPDATE_FULL                   = 0x0007FFFF        // all known flags
 };
 
 #define GROUP_UPDATE_FLAGS_COUNT          20
@@ -193,8 +221,9 @@ class MANGOS_DLL_SPEC Group
             ObjectGuid  guid;
             std::string name;
             uint8       group;
-            bool        assistant;
+            GroupFlagMask  flags;
             uint32      lastMap;
+            uint8       roles;
         };
         typedef std::list<MemberSlot> MemberSlotList;
         typedef MemberSlotList::const_iterator member_citerator;
@@ -212,7 +241,7 @@ class MANGOS_DLL_SPEC Group
         // group manipulation methods
         bool   Create(ObjectGuid guid, const char* name);
         bool   LoadGroupFromDB(Field* fields);
-        bool   LoadMemberFromDB(uint32 guidLow, uint8 subgroup, bool assistant);
+        bool   LoadMemberFromDB(uint32 guidLow, uint8 subgroup, GroupFlagMask flags, uint8 roles);
         bool   AddInvite(Player* player);
         uint32 RemoveInvite(Player* player);
         void   RemoveAllInvites();
@@ -232,10 +261,9 @@ class MANGOS_DLL_SPEC Group
         bool IsFull() const { return (m_groupType == GROUPTYPE_NORMAL) ? (m_memberSlots.size() >= MAX_GROUP_SIZE) : (m_memberSlots.size() >= MAX_RAID_SIZE); }
         bool isRaidGroup() const { return m_groupType & GROUPTYPE_RAID; }
         bool isBGGroup()   const { return m_bgGroup != NULL; }
-        bool isLFDGroup() const { return m_groupType &  GROUPTYPE_LFD; }
         bool IsCreated()   const { return GetMembersCount() > 0; }
         ObjectGuid GetLeaderGuid() const { return m_leaderGuid; }
-        const char* GetLeaderName() const { return m_leaderName.c_str(); }
+        const char * GetLeaderName() const { return m_leaderName.c_str(); }
         LootMethod    GetLootMethod() const { return m_lootMethod; }
         ObjectGuid GetLooterGuid() const { return m_looterGuid; }
         ItemQualities GetLootThreshold() const { return m_lootThreshold; }
@@ -257,7 +285,7 @@ class MANGOS_DLL_SPEC Group
             if (mslot == m_memberSlots.end())
                 return false;
 
-            return mslot->assistant;
+            return mslot->flags & GROUP_ASSISTANT;
         }
         Player* GetInvited(ObjectGuid guid) const;
         Player* GetInvited(const std::string& name) const;
@@ -295,29 +323,7 @@ class MANGOS_DLL_SPEC Group
         ObjectGuid GetMainTankGuid() const { return m_mainTankGuid; }
         ObjectGuid GetMainAssistantGuid() const { return m_mainAssistantGuid; }
 
-        void SetAssistant(ObjectGuid guid, bool state)
-        {
-            if (!isRaidGroup())
-                return;
-            if (_setAssistantFlag(guid, state))
-                SendUpdate();
-        }
-        void SetMainTank(ObjectGuid guid)
-        {
-            if (!isRaidGroup())
-                return;
-
-            if (_setMainTank(guid))
-                SendUpdate();
-        }
-        void SetMainAssistant(ObjectGuid guid)
-        {
-            if (!isRaidGroup())
-                return;
-
-            if (_setMainAssistant(guid))
-                SendUpdate();
-        }
+        void SetGroupUniqueFlag(ObjectGuid guid, GroupFlagsAssignment assignment, uint8 apply);
 
         void SetTargetIcon(uint8 id, ObjectGuid whoGuid, ObjectGuid targetGuid);
 
@@ -362,6 +368,11 @@ class MANGOS_DLL_SPEC Group
 
         // LFG
         LFGGroupState* GetLFGState() { return m_LFGState; };
+        bool ConvertToLFG(LFGType type);
+        bool isLFDGroup()  const { return m_groupType & GROUPTYPE_LFD; }
+        bool isLFGGroup()  const { return (m_groupType & GROUPTYPE_LFD && !(m_groupType & GROUPTYPE_RAID)); }
+        bool isLFRGroup()  const { return (m_groupType & GROUPTYPE_LFD && m_groupType & GROUPTYPE_RAID); }
+        void SetGroupRoles(ObjectGuid guid, uint8 roles);
 
         InstanceGroupBind* BindToInstance(DungeonPersistentState* save, bool permanent, bool load = false);
         void UnbindInstance(uint32 mapid, uint8 difficulty, bool unload = false);
@@ -370,17 +381,14 @@ class MANGOS_DLL_SPEC Group
         BoundInstancesMap& GetBoundInstances(Difficulty difficulty) { return m_boundInstances[difficulty]; }
 
     protected:
-        bool _addMember(ObjectGuid guid, const char* name, bool isAssistant = false);
-        bool _addMember(ObjectGuid guid, const char* name, bool isAssistant, uint8 group);
+        bool _addMember(ObjectGuid guid, const char* name);
+        bool _addMember(ObjectGuid guid, const char* name, uint8 group, GroupFlagMask flags = GROUP_MEMBER, uint8 roles = 0);
         bool _removeMember(ObjectGuid guid);                // returns true if leader has changed
         void _setLeader(ObjectGuid guid);
 
         void _removeRolls(ObjectGuid guid);
 
         bool _setMembersGroup(ObjectGuid guid, uint8 group);
-        bool _setAssistantFlag(ObjectGuid guid, const bool& state);
-        bool _setMainTank(ObjectGuid guid);
-        bool _setMainAssistant(ObjectGuid guid);
 
         void _homebindIfInstance(Player* player);
 
@@ -431,19 +439,7 @@ class MANGOS_DLL_SPEC Group
         void CountTheRoll(Rolls::iterator& roll);           // iterator update to next, in CountRollVote if true
         bool CountRollVote(ObjectGuid const& playerGUID, Rolls::iterator& roll, RollVote vote);
 
-        GroupFlagMask GetFlags(MemberSlot const& slot) const
-        {
-            uint8 flags = 0;
-            if (slot.assistant)
-                flags |= GROUP_ASSISTANT;
-            if (slot.guid == m_mainAssistantGuid)
-                flags |= GROUP_MAIN_ASSISTANT;
-            if (slot.guid == m_mainTankGuid)
-                flags |= GROUP_MAIN_TANK;
-            return GroupFlagMask(flags);
-        }
-
-        uint32              m_Id;                           // 0 for not created or BG groups
+        uint32              m_Id;
         MemberSlotList      m_memberSlots;
         GroupRefManager     m_memberMgr;
         InvitesList         m_invitees;
