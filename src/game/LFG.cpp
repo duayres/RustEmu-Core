@@ -1,20 +1,20 @@
 /*
-* Copyright (C) 2005-2011 MaNGOS <http://getmangos.com/>
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-*/
+ * Copyright (C) 2005-2011 MaNGOS <http://getmangos.com/>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
 
 #include "Common.h"
 #include "SharedDefines.h"
@@ -29,14 +29,14 @@ void LFGPlayerState::Clear()
     rolesMask = LFG_ROLE_MASK_NONE;
     update = true;
     m_state = LFG_STATE_NONE;
-    AddFlags(LFG_MEMBER_FLAG_NONE |
-        LFG_MEMBER_FLAG_CHARINFO |
-        LFG_MEMBER_FLAG_COMMENT |
-        LFG_MEMBER_FLAG_GROUPLEADER |
-        LFG_MEMBER_FLAG_GROUPGUID |
-        LFG_MEMBER_FLAG_AREA |
-        LFG_MEMBER_FLAG_STATUS |
-        LFG_MEMBER_FLAG_BIND);
+    AddFlags( LFG_MEMBER_FLAG_NONE | 
+              LFG_MEMBER_FLAG_CHARINFO |
+              LFG_MEMBER_FLAG_COMMENT | 
+              LFG_MEMBER_FLAG_GROUPLEADER |
+              LFG_MEMBER_FLAG_GROUPGUID |
+              LFG_MEMBER_FLAG_AREA  |
+              LFG_MEMBER_FLAG_STATUS  |
+              LFG_MEMBER_FLAG_BIND);
 
     m_DungeonsList.clear();
     m_LockMap.clear();
@@ -97,7 +97,7 @@ void LFGPlayerState::SetJoined()
 
 bool LFGPlayerState::IsSingleRole()
 {
-    if (LFGRoleMask(rolesMask & ~LFG_ROLE_MASK_TANK   & ~LFG_ROLE_MASK_LEADER) == LFG_ROLE_MASK_NONE
+    if (   LFGRoleMask(rolesMask & ~LFG_ROLE_MASK_TANK   & ~LFG_ROLE_MASK_LEADER) == LFG_ROLE_MASK_NONE
         || LFGRoleMask(rolesMask & ~LFG_ROLE_MASK_HEALER & ~LFG_ROLE_MASK_LEADER) == LFG_ROLE_MASK_NONE
         || LFGRoleMask(rolesMask & ~LFG_ROLE_MASK_TANK   & ~LFG_ROLE_MASK_LEADER) == LFG_ROLE_MASK_NONE)
         return true;
@@ -132,17 +132,26 @@ void LFGGroupState::Clear()
     m_kicksLeft = 5;
     m_DungeonsList.clear();
     m_flags = LFG_MEMBER_FLAG_NONE |
-        LFG_MEMBER_FLAG_COMMENT |
-        LFG_MEMBER_FLAG_ROLES |
-        LFG_MEMBER_FLAG_BIND;
+              LFG_MEMBER_FLAG_COMMENT |
+              LFG_MEMBER_FLAG_ROLES |
+              LFG_MEMBER_FLAG_BIND;
     m_proposal = NULL;
     m_roleCheckCancelTime = 0;
-    m_roleCheckState = LFG_ROLECHECK_NONE;
+    m_roleCheckState      = LFG_ROLECHECK_NONE;
     SetDungeon(NULL);
     SetState(LFG_STATE_NONE);
     SaveState();
     StopBoot();
+    SetRandomPlayersCount(0);
 }
+
+LFGType LFGGroupState::GetType()
+{
+    if (m_DungeonsList.empty())
+        return LFG_TYPE_NONE;
+    else
+        return LFGType((*m_DungeonsList.begin())->type);
+};
 
 uint8 LFGGroupState::GetVotesNeeded() const
 {
@@ -239,24 +248,24 @@ LFGAnswer LFGGroupState::GetBootResult()
 {
     uint8 votesNum = 0;
     uint8 agreeNum = 0;
-    uint8 denyNum = 0;
+    uint8 denyNum  = 0;
 
     for (LFGAnswerMap::const_iterator itr = m_bootVotes.begin(); itr != m_bootVotes.end(); ++itr)
     {
         switch (itr->second)
         {
-        case LFG_ANSWER_AGREE:
-            ++votesNum;
-            ++agreeNum;
-            break;
-        case LFG_ANSWER_DENY:
-            ++votesNum;
-            ++denyNum;
-            break;
-        case LFG_ANSWER_PENDING:
-            break;
-        default:
-            break;
+            case LFG_ANSWER_AGREE:
+                ++votesNum;
+                ++agreeNum;
+                break;
+            case LFG_ANSWER_DENY:
+                ++votesNum;
+                ++denyNum;
+                break;
+            case LFG_ANSWER_PENDING:
+                break;
+            default:
+                break;
         }
     }
     if (agreeNum >= GetVotesNeeded())
@@ -286,7 +295,6 @@ LFGProposal::LFGProposal(LFGDungeonEntry const* _dungeon)
 {
     m_dungeon = _dungeon;
     m_state = LFG_PROPOSAL_INITIATING;
-    m_group = NULL;
     m_cancelTime = 0;
     declinerGuids.clear();
     playerGuids.clear();
@@ -340,4 +348,22 @@ bool LFGProposal::IsDecliner(ObjectGuid guid)
 LFGType LFGProposal::GetType()
 {
     return (m_dungeon ? LFGType(m_dungeon->type) : LFG_TYPE_NONE);
+};
+
+Group* LFGProposal::GetGroup()
+{
+    if (m_groupGuid.IsEmpty())
+        return NULL;
+
+    return sObjectMgr.GetGroup(m_groupGuid);
+};
+
+void LFGProposal::SetGroup(Group* group)
+{
+    if (!group)
+    {
+        m_groupGuid.Clear();
+        return;
+    }
+    m_groupGuid = group->GetObjectGuid();
 };

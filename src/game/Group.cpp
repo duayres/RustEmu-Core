@@ -152,15 +152,15 @@ bool Group::Create(ObjectGuid guid, const char* name)
         CharacterDatabase.PExecute("DELETE FROM groups WHERE groupId ='%u'", m_Id);
         CharacterDatabase.PExecute("DELETE FROM group_member WHERE groupId ='%u'", m_Id);
 
-        CharacterDatabase.PExecute("INSERT INTO groups (groupId,leaderGuid,mainTank,mainAssistant,lootMethod,looterGuid,lootThreshold,icon1,icon2,icon3,icon4,icon5,icon6,icon7,icon8,groupType,difficulty,raiddifficulty) "
-                                   "VALUES ('%u','%u','%u','%u','%u','%u','%u','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','%u','%u','%u')",
-                                   m_Id, m_leaderGuid.GetCounter(), m_mainTankGuid.GetCounter(), m_mainAssistantGuid.GetCounter(), uint32(m_lootMethod),
-                                   m_looterGuid.GetCounter(), uint32(m_lootThreshold),
-                                   m_targetIcons[0].GetRawValue(), m_targetIcons[1].GetRawValue(),
-                                   m_targetIcons[2].GetRawValue(), m_targetIcons[3].GetRawValue(),
-                                   m_targetIcons[4].GetRawValue(), m_targetIcons[5].GetRawValue(),
-                                   m_targetIcons[6].GetRawValue(), m_targetIcons[7].GetRawValue(),
-                                   uint8(m_groupType), uint32(m_dungeonDifficulty), uint32(m_raidDifficulty));
+        CharacterDatabase.PExecute("INSERT INTO groups (groupId,leaderGuid,lootMethod,looterGuid,lootThreshold,icon1,icon2,icon3,icon4,icon5,icon6,icon7,icon8,groupType,difficulty,raiddifficulty) "
+            "VALUES ('%u','%u','%u','%u','%u','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','%u','%u','%u')",
+            m_Id, m_leaderGuid.GetCounter(), uint32(m_lootMethod),
+            m_looterGuid.GetCounter(), uint32(m_lootThreshold),
+            m_targetIcons[0].GetRawValue(), m_targetIcons[1].GetRawValue(),
+            m_targetIcons[2].GetRawValue(), m_targetIcons[3].GetRawValue(),
+            m_targetIcons[4].GetRawValue(), m_targetIcons[5].GetRawValue(),
+            m_targetIcons[6].GetRawValue(), m_targetIcons[7].GetRawValue(),
+            uint8(m_groupType), uint32(m_dungeonDifficulty), uint32(m_raidDifficulty));
     }
 
     if (!AddMember(guid, name))
@@ -175,38 +175,36 @@ bool Group::Create(ObjectGuid guid, const char* name)
 bool Group::LoadGroupFromDB(Field* fields)
 {
     //                                          0         1              2           3           4              5      6      7      8      9      10     11     12     13         14          15              16          17
-    // result = CharacterDatabase.Query("SELECT mainTank, mainAssistant, lootMethod, looterGuid, lootThreshold, icon1, icon2, icon3, icon4, icon5, icon6, icon7, icon8, groupType, difficulty, raiddifficulty, leaderGuid, groupId FROM groups");
+    // result = CharacterDatabase.Query("SELECT lootMethod, looterGuid, lootThreshold, icon1, icon2, icon3, icon4, icon5, icon6, icon7, icon8, groupType, difficulty, raiddifficulty, leaderGuid, groupId FROM groups");
 
-    m_Id = fields[17].GetUInt32();
-    m_leaderGuid = ObjectGuid(HIGHGUID_PLAYER, fields[16].GetUInt32());
+    m_Id = fields[15].GetUInt32();
+    m_leaderGuid = ObjectGuid(HIGHGUID_PLAYER, fields[14].GetUInt32());
 
     // group leader not exist
     if (!sObjectMgr.GetPlayerNameByGUID(m_leaderGuid, m_leaderName))
         return false;
 
-    m_groupType  = GroupType(fields[13].GetUInt8());
+    m_groupType  = GroupType(fields[11].GetUInt8());
 
     if (m_groupType & GROUPTYPE_RAID)
         _initRaidSubGroupsCounter();
 
-    uint32 diff = fields[14].GetUInt8();
+    uint32 diff = fields[12].GetUInt8();
     if (diff >= MAX_DUNGEON_DIFFICULTY)
         diff = DUNGEON_DIFFICULTY_NORMAL;
     m_dungeonDifficulty = Difficulty(diff);
 
-    uint32 r_diff = fields[15].GetUInt8();
+    uint32 r_diff = fields[13].GetUInt8();
     if (r_diff >= MAX_RAID_DIFFICULTY)
         r_diff = RAID_DIFFICULTY_10MAN_NORMAL;
     m_raidDifficulty = Difficulty(r_diff);
 
-    m_mainTankGuid = ObjectGuid(HIGHGUID_PLAYER, fields[0].GetUInt32());
-    m_mainAssistantGuid = ObjectGuid(HIGHGUID_PLAYER, fields[1].GetUInt32());
-    m_lootMethod = LootMethod(fields[2].GetUInt8());
-    m_looterGuid = ObjectGuid(HIGHGUID_PLAYER, fields[3].GetUInt32());
-    m_lootThreshold = ItemQualities(fields[4].GetUInt16());
+    m_lootMethod = LootMethod(fields[0].GetUInt8());
+    m_looterGuid = ObjectGuid(HIGHGUID_PLAYER, fields[1].GetUInt32());
+    m_lootThreshold = ItemQualities(fields[2].GetUInt16());
 
     for (int i = 0; i < TARGET_ICON_COUNT; ++i)
-        m_targetIcons[i] = ObjectGuid(fields[5 + i].GetUInt64());
+        m_targetIcons[i] = ObjectGuid(fields[3 + i].GetUInt64());
 
     return true;
 }
@@ -226,6 +224,12 @@ bool Group::LoadMemberFromDB(uint32 guidLow, uint8 subgroup, GroupFlagMask flags
     m_memberSlots.push_back(member);
 
     SubGroupCounterIncrease(subgroup);
+
+    if (Player* player = sObjectMgr.GetPlayer(member.guid))
+    {
+        if (player->IsInWorld())
+            player->GetLFGState()->SetRoles(roles);
+    }
 
     return true;
 }
@@ -1055,10 +1059,11 @@ void Group::SendUpdate()
         data << uint8(citr->group);                         // groupid
         data << uint8(citr->flags);                         // group flags
         data << uint8(citr->roles);                         // roles mask
-        if (m_groupType & GROUPTYPE_LFD)
+        if (isLFGGroup())
         {
-            data << uint8(0);
-            data << uint32(0);
+            uint32 dungeonID = GetLFGState()->GetDungeon() ? GetLFGState()->GetDungeon()->ID : 0;
+            data << uint8(GetLFGState()->GetState() == LFG_STATE_FINISHED_DUNGEON ? 2 : 0);
+            data << uint32(dungeonID);
         }
         data << GetObjectGuid();                            // group guid
         data << uint32(0);                                  // 3.3, this value increments every time SMSG_GROUP_LIST is sent
@@ -1155,6 +1160,10 @@ bool Group::_addMember(ObjectGuid guid, const char* name)
     uint8 groupid = 0;
     GroupFlagMask flags = GROUP_MEMBER;
     uint8 roles = 0;
+
+    if (isLFGGroup() && sObjectMgr.GetPlayer(guid))
+        roles = sObjectMgr.GetPlayer(guid)->GetLFGState()->GetRoles();
+
     if (m_subGroupsCounts)
     {
         bool groupFound = false;
@@ -2040,7 +2049,18 @@ void Group::SetGroupRoles(ObjectGuid guid, uint8 roles)
             static SqlStatementID updGgoupMember;
             SqlStatement stmt = CharacterDatabase.CreateStatement(updGgoupMember, "UPDATE group_member SET roles = ? WHERE memberGuid = ?");
             stmt.PExecute(uint8(itr->roles), itr->guid.GetCounter());
+            SendUpdate();
             return;
         }
     }
+}
+
+uint8 Group::GetGroupRoles(ObjectGuid guid)
+{
+    for (member_witerator itr = m_memberSlots.begin(); itr != m_memberSlots.end(); ++itr)
+    {
+        if (itr->guid == guid)
+            return itr->roles;
+    }
+    return 0;
 }

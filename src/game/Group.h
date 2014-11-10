@@ -320,9 +320,6 @@ class MANGOS_DLL_SPEC Group
         void ChangeMembersGroup(ObjectGuid guid, uint8 group);
         void ChangeMembersGroup(Player* player, uint8 group);
 
-        ObjectGuid GetMainTankGuid() const { return m_mainTankGuid; }
-        ObjectGuid GetMainAssistantGuid() const { return m_mainAssistantGuid; }
-
         void SetGroupUniqueFlag(ObjectGuid guid, GroupFlagsAssignment assignment, uint8 apply);
 
         void SetTargetIcon(uint8 id, ObjectGuid whoGuid, ObjectGuid targetGuid);
@@ -373,6 +370,7 @@ class MANGOS_DLL_SPEC Group
         bool isLFGGroup()  const { return (m_groupType & GROUPTYPE_LFD && !(m_groupType & GROUPTYPE_RAID)); }
         bool isLFRGroup()  const { return (m_groupType & GROUPTYPE_LFD && m_groupType & GROUPTYPE_RAID); }
         void SetGroupRoles(ObjectGuid guid, uint8 roles);
+        uint8 GetGroupRoles(ObjectGuid guid);
 
         InstanceGroupBind* BindToInstance(DungeonPersistentState* save, bool permanent, bool load = false);
         void UnbindInstance(uint32 mapid, uint8 difficulty, bool unload = false);
@@ -445,8 +443,6 @@ class MANGOS_DLL_SPEC Group
         InvitesList         m_invitees;
         ObjectGuid          m_leaderGuid;
         std::string         m_leaderName;
-        ObjectGuid          m_mainTankGuid;
-        ObjectGuid          m_mainAssistantGuid;
         GroupType           m_groupType;
         Difficulty          m_dungeonDifficulty;
         Difficulty          m_raidDifficulty;

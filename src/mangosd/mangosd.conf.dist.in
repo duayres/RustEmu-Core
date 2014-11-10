@@ -1760,7 +1760,6 @@ CharDelete.KeepDays = 30
 #    LFR.Extend              = 0
 #        enabling Raid finder extended operations (not blizzlike!)
 #    LFG.MaxKicks            = 5
-#
 ###################################################################################################################
 LFR.Enable              = 1
 LFG.Enable              = 0
