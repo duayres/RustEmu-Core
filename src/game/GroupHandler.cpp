@@ -260,13 +260,25 @@ void WorldSession::HandleGroupDeclineOpcode(WorldPacket& /*recv_data*/)
 void WorldSession::HandleGroupUninviteGuidOpcode(WorldPacket& recv_data)
 {
     ObjectGuid guid;
+    std::string reason;
+
     recv_data >> guid;
-    recv_data.read_skip<std::string>();                     // reason
+    recv_data >> reason;                     // reason
 
     // can't uninvite yourself
     if (guid == GetPlayer()->GetObjectGuid())
     {
         sLog.outError("WorldSession::HandleGroupUninviteGuidOpcode: leader %s tried to uninvite himself from the group.", GetPlayer()->GetGuidStr().c_str());
+        return;
+    }
+
+    Group* grp = GetPlayer()->GetGroup();
+    if (!grp)
+        return;
+
+    if (grp->IsMember(guid) && grp->isLFGGroup())
+    {
+        sLFGMgr.InitBoot(GetPlayer(), guid, reason);
         return;
     }
 
@@ -276,10 +288,6 @@ void WorldSession::HandleGroupUninviteGuidOpcode(WorldPacket& recv_data)
         SendPartyResult(PARTY_OP_LEAVE, "", res);
         return;
     }
-
-    Group* grp = GetPlayer()->GetGroup();
-    if (!grp)
-        return;
 
     if (grp->IsMember(guid))
     {
@@ -312,6 +320,18 @@ void WorldSession::HandleGroupUninviteOpcode(WorldPacket& recv_data)
         return;
     }
 
+    Group* grp = GetPlayer()->GetGroup();
+    if (!grp)
+        return;
+
+    ObjectGuid guid = grp->GetMemberGuid(membername);
+
+    if (grp->IsMember(guid) && grp->isLFGGroup())
+    {
+        sLFGMgr.InitBoot(GetPlayer(), guid, "");
+        return;
+    }
+
     PartyResult res = GetPlayer()->CanUninviteFromGroup();
     if (res != ERR_PARTY_RESULT_OK)
     {
@@ -319,11 +339,7 @@ void WorldSession::HandleGroupUninviteOpcode(WorldPacket& recv_data)
         return;
     }
 
-    Group* grp = GetPlayer()->GetGroup();
-    if (!grp)
-        return;
-
-    if (ObjectGuid guid = grp->GetMemberGuid(membername))
+    if (!guid.IsEmpty())
     {
         Player::RemoveFromGroup(grp, guid);
         return;

@@ -27,6 +27,23 @@
 #include <boost/thread/shared_lock_guard.hpp>
 #include "LFG.h"
 
+enum LFGenum
+{
+    LFG_TIME_ROLECHECK = 2 * MINUTE,
+    LFG_TIME_BOOT = 2 * MINUTE,
+    LFG_TIME_PROPOSAL = 2 * MINUTE,
+    LFG_TIME_JOIN_WARNING = 1 * IN_MILLISECONDS,
+    LFG_TANKS_NEEDED = 1,
+    LFG_HEALERS_NEEDED = 1,
+    LFG_DPS_NEEDED = 3,
+    LFG_QUEUEUPDATE_INTERVAL = 35 * IN_MILLISECONDS,
+    LFG_UPDATE_INTERVAL = 1 * IN_MILLISECONDS,
+    LFR_UPDATE_INTERVAL = 3 * IN_MILLISECONDS,
+    LFG_SPELL_DUNGEON_COOLDOWN = 71328,
+    LFG_SPELL_DUNGEON_DESERTER = 71041,
+    LFG_SPELL_LUCK_OF_THE_DRAW = 72221,
+};
+
 class Group;
 class Player;
 struct LFGDungeonExpansionEntry;
@@ -40,9 +57,7 @@ typedef std::multimap<uint32, LFGReward> LFGRewardMap;
 typedef std::pair<LFGRewardMap::const_iterator, LFGRewardMap::const_iterator> LFGRewardMapBounds;
 typedef std::map<ObjectGuid, LFGQueueInfo> LFGQueueInfoMap;
 typedef std::map<uint32/*ID*/, LFGDungeonEntry const*> LFGDungeonMap;
-typedef std::map<uint32/*ID*/, LFGDungeonExpansionEntry const*> LFGDungeonExpansionMap;
 typedef std::set<ObjectGuid>  LFGQueueSet;
-typedef std::map<ObjectGuid, LFGAnswer> LFGAnswerMap;
 typedef std::map<uint32/*ID*/, LFGProposal> LFGProposalMap;
 
 // Reward info
@@ -73,10 +88,15 @@ struct LFGQueueInfo
 {
     LFGQueueInfo(ObjectGuid _guid, LFGType type);
     ObjectGuid guid;                                        // guid (player or group) of queue owner
-    time_t     joinTime;                                    // Player queue join time (to calculate wait times)
+    time_t     joinTime;                                    // Player/group queue join time (to calculate wait times)
     uint8      tanks;                                       // Tanks needed
     uint8      healers;                                     // Healers needed
     uint8      dps;                                         // Dps needed
+
+    uint8      tryTanks;                                    // Tanks needed - best search result
+    uint8      tryHealers;                                  // Healers needed - best search result
+    uint8      tryDps;                                      // Dps needed - best search result
+
     // helpers
     LFGType    GetDungeonType() { return m_type; };
 private:
@@ -93,9 +113,9 @@ struct LFGQueueStatus
     time_t                 waitTimeTanks;                    // Wait Tanks
     time_t                 waitTimeHealer;                   // Wait Healers
     time_t                 waitTimeDps;                      // Wait Dps
-    uint8                  tanks;                            // Tanks
-    uint8                  healers;                          // Healers
-    uint8                  dps;                              // Dps
+    uint32                 tanks;                            // Tanks
+    uint32                 healers;                          // Healers
+    uint32                 dps;                              // Dps
     uint32                 playersWaited;                    // players summ
 };
 
@@ -133,18 +153,6 @@ private:
     time_t m_cancelTime;                                     // Time when we will cancel this proposal
 };
 
-/// Stores information of a current vote to kick someone from a group
-struct LFGPlayerBoot
-{
-    time_t cancelTime;                                     ///< Time left to vote
-    bool inProgress;                                       ///< Vote in progress
-    LFGAnswerMap votes;                                    ///< Player votes (-1 not answer | 0 Not agree | 1 agree)
-    ObjectGuid victim;                                     ///< Player guid to be kicked (can't vote)
-    uint8 votedNeeded;                                     ///< Votes needed to kick the player
-    std::string reason;                                    ///< kick reason
-};
-
-typedef std::map<ObjectGuid, LFGPlayerBoot>  LFGBootMap;
 typedef std::map<LFGDungeonEntry const*, LFGQueueStatus> LFGQueueStatusMap;
 typedef std::map<ObjectGuid, LFGRoleMask>  LFGRolesMap;
 typedef std::set<LFGQueueInfo*> LFGQueue;
@@ -159,9 +167,9 @@ public:
     // Update system
     void Update(uint32 diff);
 
-    void TruCompleteGroups(LFGType type);
-    bool TruCompleteGroup(Group* group, Player* player);
-    bool TruCreateGroup(LFGType type);
+    void TryCompleteGroups(LFGType type);
+    bool TryCompleteGroup(Group* group, Player* player);
+    bool TryCreateGroup(LFGType type);
 
     // Join system
     void Join(Player* player);
@@ -180,24 +188,25 @@ public:
     // reward system
     void LoadRewards();
     LFGReward const* GetRandomDungeonReward(LFGDungeonEntry const* dungeon, Player* player);
-    void SendLFGRewards(Player* player);
-    void SendLFGReward(Player* player);
+    void SendLFGRewards(Group* group);
+    void SendLFGReward(Player* player, LFGDungeonEntry const* dungeon);
+    void DungeonEncounterReached(Group* group);
 
     // Proposal system
     uint32 CreateProposal(LFGDungeonEntry const* dungeon, Group* group = NULL, LFGQueueSet* playerGuids = NULL);
     bool SendProposal(uint32 ID, ObjectGuid guid);
     LFGProposal* GetProposal(uint32 ID);
-    void RemoveProposal(uint32 ID);
+    void RemoveProposal(Player* decliner, uint32 ID);
+    void RemoveProposal(uint32 ID, bool success = false);
     void UpdateProposal(uint32 ID, ObjectGuid guid, bool accept);
-    void CleanupProposals();
+    void CleanupProposals(LFGType type);
     Player* LeaderElection(LFGQueueSet* playerGuids);
 
     // boot vote system
     void OfferContinue(Group* group);
     void InitBoot(Player* kicker, ObjectGuid victimGuid, std::string reason);
-    LFGPlayerBoot* GetBoot(ObjectGuid guid);
-    void DeleteBoot(ObjectGuid guid);
     void UpdateBoot(Player* player, bool accept);
+    void CleanupBoots(LFGType type);
 
     // teleport system
     void Teleport(Group* group, bool out = false);
@@ -209,30 +218,36 @@ public:
 
     // Statistic system
     LFGQueueStatus* GetDungeonQueueStatus(LFGType type);
-    void SetDungeonQueueStatus(LFGType type);
     void UpdateQueueStatus(Player* player);
-    void UpdateStatistic(LFGType type);
+    void UpdateQueueStatus(Group* group);
+    void UpdateQueueStatus(LFGType type);
+    void SendStatistic(LFGType type);
+    LFGQueueStatus* GetOverallQueueStatus();
 
     // Role check system
+    void CleanupRoleChecks(LFGType type);
+    void StartRoleCheck(Group* group);
     void UpdateRoleCheck(Group* group);
     bool CheckRoles(Group* group, Player* player = NULL);
     bool CheckRoles(LFGRolesMap* roleMap);
     bool RoleChanged(Player* player, uint8 roles);
-    void SetGroupRoles(Group* group);
+    void SetGroupRoles(Group* group, Player* player = NULL);
+    void SetRoles(LFGRolesMap* roleMap);
 
     // Social check system
     bool HasIgnoreState(ObjectGuid guid1, ObjectGuid guid2);
     bool HasIgnoreState(Group* group, ObjectGuid guid);
+    bool CheckTeam(Group* group, Player* player = NULL);
+    bool CheckTeam(ObjectGuid guid1, ObjectGuid guid2);
 
     // Dungeon operations
     LFGDungeonEntry const* GetDungeon(uint32 dungeonID);
-    LFGDungeonExpansionEntry const* GetDungeonExpansion(uint32 dungeonID);
     bool IsRandomDungeon(LFGDungeonEntry const* dungeon);
     LFGDungeonSet GetRandomDungeonsForPlayer(Player* player);
 
     // Group operations
     void AddMemberToLFDGroup(ObjectGuid guid);
-    void RemoveMemberFromLFDGroup(ObjectGuid guid);
+    void RemoveMemberFromLFDGroup(Group* group, ObjectGuid guid);
 
     // Dungeon expand operations
     LFGDungeonSet ExpandRandomDungeonsForGroup(LFGDungeonEntry const* randomDungeon, LFGQueueSet playerGuids);
@@ -249,16 +264,16 @@ public:
     LFGLockStatusMap GetPlayerLockMap(Player* player);
 
     // Search matrix
-    void AddToSearchMatrix(ObjectGuid guid);
+    void AddToSearchMatrix(ObjectGuid guid, bool inBegin = false);
     void RemoveFromSearchMatrix(ObjectGuid guid);
     LFGQueueSet* GetSearchVector(LFGDungeonEntry const* dungeon);
     bool IsInSearchFor(LFGDungeonEntry const* dungeon, ObjectGuid guid);
     void CleanupSearchMatrix();
 
     // multithread locking
-    typedef   boost::shared_mutex               LockType;
-    typedef   boost::shared_lock<LockType>     ReadGuard;
-    typedef   boost::unique_lock<LockType>    WriteGuard;
+    typedef boost::shared_mutex               LockType;
+    typedef boost::shared_lock<LockType>     ReadGuard;
+    typedef boost::unique_lock<LockType>    WriteGuard;
     LockType& GetLock() { return i_lock; }
 
 private:
@@ -271,13 +286,13 @@ private:
     LFGQueue        m_playerQueue[LFG_TYPE_MAX];        // Queue's for players
     LFGQueue        m_groupQueue[LFG_TYPE_MAX];         // Queue's for groups
     LFGDungeonMap   m_dungeonMap;                       // sorted dungeon map
-    LFGDungeonExpansionMap m_dungeonExpansionMap;       // sorted dungeon expansion map
     LFGQueueStatus  m_queueStatus[LFG_TYPE_MAX];        // Queue statisic
     LFGProposalMap  m_proposalMap;                      // Proposal store
-    LFGBootMap      m_bootMap;                          // boot store
     LFGSearchMap    m_searchMatrix;                     // Search matrix
 
     uint32          m_updateTimer;                      // update timer for cleanup/statistic
+    uint32          m_updateTimer2;                     // update timer for LFR extend system
+    uint32          m_updateTimer3;                     // update timer for statistic send
 
     LockType            i_lock;
 

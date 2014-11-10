@@ -5792,7 +5792,7 @@ void Spell::EffectPowerDrain(SpellEffectIndex eff_idx)
         drainDamageInfo.damage -= unitTarget->GetSpellCritDamageReduction(drainDamageInfo.damage);
 
     uint32 new_damage = std::min(curPower, drainDamageInfo.damage);
-    unitTarget->ModifyPower(drain_power, -new_damage);
+    unitTarget->ModifyPower(drain_power, -int32(new_damage));
 
     // Don`t restore from self drain
     if (drain_power == POWER_MANA && m_caster != unitTarget)

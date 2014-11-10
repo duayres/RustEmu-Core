@@ -14002,19 +14002,21 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
         SendQuestReward(pQuest, xp, questGiver);
 
     bool handled = false;
-
-    switch (questGiver->GetTypeId())
+    if (questGiver)
     {
+        switch (questGiver->GetTypeId())
+        {
         case TYPEID_UNIT:
             handled = sScriptMgr.OnQuestRewarded(this, (Creature*)questGiver, pQuest);
             break;
         case TYPEID_GAMEOBJECT:
             handled = sScriptMgr.OnQuestRewarded(this, (GameObject*)questGiver, pQuest);
             break;
+        }
     }
 
-    if (!handled && pQuest->GetQuestCompleteScript() != 0)
-        GetMap()->ScriptsStart(sQuestEndScripts, pQuest->GetQuestCompleteScript(), questGiver, this, Map::SCRIPT_EXEC_PARAM_UNIQUE_BY_SOURCE);
+    if (!handled && questGiver && pQuest->GetQuestCompleteScript() != 0)
+        GetMap()->ScriptsStart(sQuestEndScripts, pQuest->GetQuestCompleteScript(), questGiver, this);
 
     // cast spells after mark quest complete (some spells have quest completed state reqyurements in spell_area data)
     if (pQuest->GetRewSpellCast() > 0)
@@ -19701,8 +19703,9 @@ void Player::ToggleMetaGemsActive(uint8 exceptslot, bool apply)
     }
 }
 
-void Player::SetBattleGroundEntryPoint()
+void Player::SetBattleGroundEntryPoint(bool forLFG)
 {
+    m_bgData.forLFG = forLFG;
     // Taxi path store
     if (!m_taxi.empty())
     {
@@ -22756,7 +22759,7 @@ void Player::_SaveBGData()
 
     stmt.PExecute(GetGUIDLow());
 
-    if (m_bgData.bgInstanceID)
+    if (m_bgData.bgInstanceID || m_bgData.forLFG)
     {
         stmt = CharacterDatabase.CreateStatement(insBGData, "INSERT INTO character_battleground_data VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         /* guid, bgInstanceID, bgTeam, x, y, z, o, map, taxi[0], taxi[1], mountSpell */
