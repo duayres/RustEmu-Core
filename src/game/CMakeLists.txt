@@ -213,6 +213,8 @@ set(SRC_GRP_OBJECT
     Unit.cpp
     Unit.h
     UnitEvents.h
+    UpdateFieldFlags.cpp
+    UpdateFieldFlags.h
     UpdateFields.h
     UpdateMask.h
     Vehicle.cpp

@@ -51,6 +51,7 @@
 #include "movement/MoveSplineInit.h"
 #include "movement/MoveSpline.h"
 #include "CreatureLinkingMgr.h"
+#include "UpdateFieldFlags.h"
 
 #include <math.h>
 #include <stdarg.h>
@@ -5899,6 +5900,17 @@ bool Unit::HasAuraType(AuraType auraType) const
     return !GetAurasByType(auraType).empty();
 }
 
+bool Unit::HasAuraTypeWithCaster(AuraType auraType, ObjectGuid casterGuid) const
+{
+    AuraList const& mTotalAuraList = GetAurasByType(auraType);
+    for (AuraList::const_iterator itr = mTotalAuraList.begin(); itr != mTotalAuraList.end(); ++itr)
+    {
+        if ((*itr)->GetCasterGuid() == casterGuid)
+            return true;
+    }
+    return false;
+}
+
 bool Unit::HasAffectedAura(AuraType auraType, SpellEntry const* spellProto) const
 {
     Unit::AuraList const& auras = GetAurasByType(auraType);
@@ -7007,6 +7019,31 @@ void Unit::ModifyAuraState(AuraState flag, bool apply)
             }
         }
     }
+}
+
+void Unit::SetOwnerGuid(ObjectGuid ownerGuid)
+{
+    if (GetOwnerGuid() == ownerGuid)
+        return;
+
+    SetGuidValue(UNIT_FIELD_SUMMONEDBY, ownerGuid);
+    if (!ownerGuid || !ownerGuid.IsPlayer())
+        return;
+
+    // Update owner dependent fields
+    Player* pPlayer = ObjectMgr::GetPlayer(ownerGuid, true);
+    if (!pPlayer || !pPlayer->HaveAtClient(pPlayer)) // if player cannot see this unit yet, he will receive needed data with create object
+        return;
+
+    SetFieldNotifyFlag(UF_FLAG_OWNER);
+
+    UpdateData data;
+    WorldPacket packet;
+    BuildValuesUpdateBlockForPlayer(&data, pPlayer);
+    data.BuildPacket(&packet);
+    pPlayer->SendDirectMessage(&packet);
+
+    RemoveFieldNotifyFlag(UF_FLAG_OWNER);
 }
 
 Unit* Unit::GetOwner() const

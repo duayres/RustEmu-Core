@@ -396,6 +396,9 @@
     <ClCompile Include="..\..\src\game\Unit.cpp">
       <Filter>Object</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\game\UpdateFieldFlags.cpp">
+      <Filter>Object</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\game\Vehicle.cpp">
       <Filter>Object</Filter>
     </ClCompile>
@@ -865,6 +868,9 @@
       <Filter>Object</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\game\UnitEvents.h">
+      <Filter>Object</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\game\UpdateFieldFlags.h">
       <Filter>Object</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\game\UpdateFields.h">

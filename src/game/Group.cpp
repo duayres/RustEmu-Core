@@ -33,6 +33,7 @@
 #include "Util.h"
 #include "LootMgr.h"
 #include "LFGMgr.h"
+#include "UpdateFieldFlags.h"
 
 #define LOOT_ROLL_TIMEOUT  (1*MINUTE*IN_MILLISECONDS)
 
@@ -354,6 +355,49 @@ bool Group::AddMember(ObjectGuid guid, const char* name)
         if (isRaidGroup())
             player->UpdateForQuestWorldObjects();
 
+        // Broadcast new player group member fields to rest of the group
+        player->SetFieldNotifyFlag(UF_FLAG_PARTY_MEMBER);
+
+        UpdateData data;
+
+        // Broadcast group members' fields to player
+        for (GroupReference* itr = GetFirstMember(); itr != NULL; itr = itr->next())
+        {
+            //            if (itr->getSource() == player)
+            //                continue;
+
+            if (Player* pMember = itr->getSource())
+            {
+                if (player->HaveAtClient(pMember))
+                {
+                    pMember->SetFieldNotifyFlag(UF_FLAG_PARTY_MEMBER);
+                    pMember->BuildValuesUpdateBlockForPlayer(&data, player);
+                    pMember->RemoveFieldNotifyFlag(UF_FLAG_PARTY_MEMBER);
+                }
+
+                if (pMember->HaveAtClient(player))
+                {
+                    UpdateData membData;
+                    player->BuildValuesUpdateBlockForPlayer(&membData, pMember);
+
+                    if (membData.HasData())
+                    {
+                        WorldPacket packet;
+                        membData.BuildPacket(&packet);
+                        pMember->SendDirectMessage(&packet);
+                    }
+                }
+            }
+        }
+
+        if (data.HasData())
+        {
+            WorldPacket packet;
+            data.BuildPacket(&packet);
+            player->SendDirectMessage(&packet);
+        }
+
+        player->RemoveFieldNotifyFlag(UF_FLAG_PARTY_MEMBER);
     }
 
     return true;
