@@ -304,6 +304,8 @@ bool Map::Add(Player* player)
     if (i_data)
         i_data->OnPlayerEnter(player);
 
+    sLFGMgr.OnPlayerEnterMap(player, this);
+
     return true;
 }
 
@@ -571,6 +573,8 @@ void Map::Remove(Player* player, bool remove)
 {
     if (i_data)
         i_data->OnPlayerLeave(player);
+
+    sLFGMgr.OnPlayerLeaveMap(player, this);
 
     if (remove)
         player->CleanupsBeforeDelete();

@@ -172,7 +172,7 @@ void WorldSession::HandleLfgSetRolesOpcode(WorldPacket &recv_data)
     if (group)
     {
         bool isChanged = sLFGMgr.RoleChanged(GetPlayer(), roles);
-        DEBUG_LOG("CMSG_LFG_SET_ROLES: Group %u, Player %u, Roles: %u %", group->GetObjectGuid().GetCounter(), GetPlayer()->GetObjectGuid().GetCounter(), roles, isChanged ? "changed" : "not changed");
+        DEBUG_LOG("CMSG_LFG_SET_ROLES: Group %u, Player %u, Roles: %u %s", group->GetObjectGuid().GetCounter(), GetPlayer()->GetObjectGuid().GetCounter(), roles, isChanged ? "changed" : "not changed");
         sLFGMgr.UpdateRoleCheck(group);
     }
     else
@@ -213,7 +213,7 @@ void WorldSession::HandleLfgPlayerLockInfoRequestOpcode(WorldPacket &/*recv_data
     uint32 rsize = 0;
     uint32 lsize = 0;
     LFGDungeonSet    randomlist = sLFGMgr.GetRandomDungeonsForPlayer(GetPlayer());
-    LFGLockStatusMap*   lockSet = GetPlayer()->GetLFGState()->GetLockMap();
+    LFGLockStatusMap const* lockSet = GetPlayer()->GetLFGState()->GetLockMap();
 
     rsize = randomlist.size();
 
@@ -287,7 +287,7 @@ void WorldSession::HandleLfgPlayerLockInfoRequestOpcode(WorldPacket &/*recv_data
     else
     {
         data << uint32(lockSet->size());                             // Size of lock dungeons
-        for (LFGLockStatusMap::iterator itr = lockSet->begin(); itr != lockSet->end(); ++itr)
+        for (LFGLockStatusMap::const_iterator itr = lockSet->begin(); itr != lockSet->end(); ++itr)
         {
             data << uint32((*itr->first).Entry());                   // Dungeon entry + type
             data << uint32(itr->second);                             // Lock status
@@ -316,7 +316,7 @@ void WorldSession::HandleLfgPartyLockInfoRequestOpcode(WorldPacket & /*recv_data
     }
     else
     {
-        std::map<ObjectGuid,LFGLockStatusMap*> lockMap;
+        std::map<ObjectGuid,LFGLockStatusMap const*> lockMap;
         lockMap.clear();
         uint8 membersCount = 0;
 
@@ -327,7 +327,7 @@ void WorldSession::HandleLfgPartyLockInfoRequestOpcode(WorldPacket & /*recv_data
             if (!player->IsInWorld())
                 continue;
 
-            LFGLockStatusMap* lockSet = player->GetLFGState()->GetLockMap();
+            LFGLockStatusMap const* lockSet = player->GetLFGState()->GetLockMap();
 
             size += 8 + 4 + lockSet->size() * (4 + 4);
 
@@ -339,11 +339,11 @@ void WorldSession::HandleLfgPartyLockInfoRequestOpcode(WorldPacket & /*recv_data
 
         data << membersCount;
 
-        for (std::map<ObjectGuid,LFGLockStatusMap*>::const_iterator  itr1 = lockMap.begin(); itr1 != lockMap.end(); ++itr1)
+        for (std::map<ObjectGuid,LFGLockStatusMap const*>::const_iterator  itr1 = lockMap.begin(); itr1 != lockMap.end(); ++itr1)
         {
 
             data << itr1->first;
-            for (LFGLockStatusMap::iterator itr2 = itr1->second->begin(); itr2 != itr1->second->end(); ++itr2)
+            for (LFGLockStatusMap::const_iterator itr2 = itr1->second->begin(); itr2 != itr1->second->end(); ++itr2)
             {
                 data << uint32((*itr2->first).Entry());                   // Dungeon entry + type
                 data << uint32(itr2->second);                             // Lock status
@@ -377,7 +377,7 @@ void WorldSession::SendLfgJoinResult(LFGJoinResult checkResult, uint8 checkValue
 
     Group* group = GetPlayer()->GetGroup();
     uint8 membersCount = 0;
-    std::map<ObjectGuid,LFGLockStatusMap*> lockMap;
+    std::map<ObjectGuid,LFGLockStatusMap const*> lockMap;
     lockMap.clear();
 
     if (group && withLockMap)
@@ -390,7 +390,7 @@ void WorldSession::SendLfgJoinResult(LFGJoinResult checkResult, uint8 checkValue
             if (!player->IsInWorld())
                 continue;
 
-            LFGLockStatusMap* lockSet = player->GetLFGState()->GetLockMap();
+            LFGLockStatusMap const* lockSet = player->GetLFGState()->GetLockMap();
 
             size += 8 + 4 + lockSet->size() * (4 + 4);
 
@@ -410,11 +410,11 @@ void WorldSession::SendLfgJoinResult(LFGJoinResult checkResult, uint8 checkValue
     {
         data << membersCount;
 
-        for (std::map<ObjectGuid,LFGLockStatusMap*>::const_iterator  itr1 = lockMap.begin(); itr1 != lockMap.end(); ++itr1)
+        for (std::map<ObjectGuid,LFGLockStatusMap const*>::const_iterator  itr1 = lockMap.begin(); itr1 != lockMap.end(); ++itr1)
         {
 
             data << itr1->first;
-            for (LFGLockStatusMap::iterator itr2 = itr1->second->begin(); itr2 != itr1->second->end(); ++itr2)
+            for (LFGLockStatusMap::const_iterator itr2 = itr1->second->begin(); itr2 != itr1->second->end(); ++itr2)
             {
                 data << uint32((*itr2->first).Entry());                   // Dungeon entry + type
                 data << uint32(itr2->second);                             // Lock status
@@ -461,6 +461,8 @@ void WorldSession::SendLfgUpdateParty(LFGUpdateType updateType, LFGType type)
             extrainfo = true;
             join = true;
             break;
+        default:
+            break;
     }
 
     LFGDungeonSet const* dungeons = GetPlayer()->GetLFGState()->GetDungeons();
@@ -482,7 +484,16 @@ void WorldSession::SendLfgUpdateParty(LFGUpdateType updateType, LFGType type)
         data << uint8(size);
 
         for (LFGDungeonSet::const_iterator itr = dungeons->begin(); itr != dungeons->end(); ++itr)
-            data << uint32((*itr)->Entry());
+        {
+            if (!*itr)
+                continue;
+
+            LFGDungeonEntry const* dungeon = *itr;
+            if (!dungeon)
+                data << uint32(0);
+            else
+                data << uint32((*itr)->Entry());
+        }
 
         data << comment.c_str();
     }
@@ -515,6 +526,8 @@ void WorldSession::SendLfgUpdatePlayer(LFGUpdateType updateType, LFGType type)
         case LFG_UPDATETYPE_PROPOSAL_BEGIN:
             extrainfo = true;
             break;
+        default:
+            break;
     }
     LFGDungeonSet const* dungeons = GetPlayer()->GetLFGState()->GetDungeons();
     uint8 size = dungeons->size();
@@ -534,7 +547,17 @@ void WorldSession::SendLfgUpdatePlayer(LFGUpdateType updateType, LFGType type)
         data << uint8(size);
 
         for (LFGDungeonSet::const_iterator itr = dungeons->begin(); itr != dungeons->end(); ++itr)
-            data << uint32((*itr)->Entry());
+        {
+            if (!*itr)
+                continue;
+
+            LFGDungeonEntry const* dungeon = *itr;
+            if (!dungeon)
+                data << uint32(0);
+            else
+                data << uint32((*itr)->Entry());
+        }
+
         data << comment.c_str();
     }
     SendPacket(&data);
@@ -1077,9 +1100,10 @@ void WorldSession::SendLfgUpdateProposal(LFGProposal* pProposal)
         isSameGroup   =  GetPlayer()->GetGroup() == group;
     }
 
-    if (!pProposal->playerGuids.empty())
+    LFGQueueSet const proposalGuids = pProposal->GetMembers();
+    if (!proposalGuids.empty())
     {
-        for (LFGQueueSet::const_iterator itr = pProposal->playerGuids.begin(); itr != pProposal->playerGuids.end(); ++itr)
+        for (LFGQueueSet::const_iterator itr = proposalGuids.begin(); itr != proposalGuids.end(); ++itr)
             if (Player* player = sObjectMgr.GetPlayer(*itr))
                 if (player->IsInWorld())
                     rolesMap.insert(std::make_pair(player->GetObjectGuid(), player->GetLFGState()->GetRoles()));
@@ -1136,7 +1160,7 @@ void WorldSession::SendLfgRoleCheckUpdate()
     if (!dungeons)
         return;
 
-    DEBUG_LOG("SMSG_LFG_ROLE_CHECK_UPDATE %u, dugeons size %u", GetPlayer()->GetObjectGuid().GetCounter(), dungeons->size());
+    DEBUG_LOG("SMSG_LFG_ROLE_CHECK_UPDATE %u, dugeons size " SIZEFMTD, GetPlayer()->GetObjectGuid().GetCounter(), dungeons->size());
 
     WorldPacket data(SMSG_LFG_ROLE_CHECK_UPDATE, 4 + 1 + 1 + dungeons->size() * 4 + 1 + group->GetMembersCount() * (8 + 1 + 4 + 1));
 

@@ -23,6 +23,44 @@
 #include "LFGMgr.h"
 #include "Group.h"
 #include "Player.h"
+#include "World.h"
+
+void LFGStateStructure::SetDungeons(LFGDungeonSet* dungeons)
+{
+    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
+    m_DungeonsList = *dungeons;
+    if (m_DungeonsList.empty())
+        m_type = LFG_TYPE_NONE;
+    else
+    {
+        if (LFGDungeonEntry const* entry = *m_DungeonsList.begin())
+            m_type = LFGType(entry->type);
+        else
+            m_type = LFG_TYPE_NONE;
+    }
+};
+
+void LFGStateStructure::RemoveDungeon(LFGDungeonEntry const* dungeon)
+{
+    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
+    m_DungeonsList.erase(dungeon);
+    if (m_DungeonsList.empty())
+        m_type = LFG_TYPE_NONE;
+    else
+    {
+        if (LFGDungeonEntry const* entry = *m_DungeonsList.begin())
+            m_type = LFGType(entry->type);
+        else
+            m_type = LFG_TYPE_NONE;
+    }
+};
+
+void LFGStateStructure::AddDungeon(LFGDungeonEntry const* dungeon)
+{
+    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
+    m_DungeonsList.insert(dungeon);
+};
+
 
 void LFGPlayerState::Clear()
 {
@@ -39,6 +77,7 @@ void LFGPlayerState::Clear()
               LFG_MEMBER_FLAG_STATUS  |
               LFG_MEMBER_FLAG_BIND);
 
+    m_type = LFG_TYPE_NONE;
     m_DungeonsList.clear();
     m_LockMap.clear();
     m_comment.clear();
@@ -48,7 +87,7 @@ void LFGPlayerState::Clear()
     m_teleported = false;
 }
 
-LFGLockStatusMap* LFGPlayerState::GetLockMap()
+LFGLockStatusMap const* LFGPlayerState::GetLockMap()
 {
     if (update || m_LockMap.empty())
     {
@@ -82,24 +121,6 @@ LFGRoleMask LFGPlayerState::GetRoles()
     return rolesMask;
 };
 
-void LFGPlayerState::SetDungeons(LFGDungeonSet* dungeons)
-{
-    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
-    m_DungeonsList = *dungeons;
-};
-
-void LFGPlayerState::RemoveDungeon(LFGDungeonEntry const* dungeon)
-{
-    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
-    m_DungeonsList.erase(dungeon);
-};
-
-void LFGPlayerState::AddDungeon(LFGDungeonEntry const* dungeon)
-{
-    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
-    m_DungeonsList.insert(dungeon);
-};
-
 void LFGPlayerState::SetJoined()
 {
     m_jointime = time_t(time(NULL));
@@ -126,15 +147,6 @@ void LFGPlayerState::SetComment(std::string comment)
 
 };
 
-LFGType LFGPlayerState::GetType()
-{
-    LFGMgr::ReadGuard Guard(sLFGMgr.GetLock());
-    if (m_DungeonsList.empty())
-        return LFG_TYPE_NONE;
-    else
-        return LFGType((*m_DungeonsList.begin())->type);
-};
-
 void LFGGroupState::Clear()
 {
     LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
@@ -142,8 +154,7 @@ void LFGGroupState::Clear()
     update = true;
     m_status = LFG_STATUS_NOT_SAVED;
     m_votesNeeded = 3;
-    m_kicksLeft = 5;
-    m_DungeonsList.clear();
+    m_kicksLeft = sWorld.getConfig(CONFIG_UINT32_LFG_MAXKICKS);
     m_flags = LFG_MEMBER_FLAG_NONE |
               LFG_MEMBER_FLAG_COMMENT |
               LFG_MEMBER_FLAG_ROLES |
@@ -151,21 +162,15 @@ void LFGGroupState::Clear()
     m_proposal = NULL;
     m_roleCheckCancelTime = 0;
     m_roleCheckState      = LFG_ROLECHECK_NONE;
+    m_type = LFG_TYPE_NONE;
+    m_DungeonsList.clear();
+    m_LockMap.clear();
     SetDungeon(NULL);
     SetState(LFG_STATE_NONE);
     SaveState();
     StopBoot();
     SetRandomPlayersCount(0);
 }
-
-LFGType LFGGroupState::GetType()
-{
-    LFGMgr::ReadGuard Guard(sLFGMgr.GetLock());
-    if (m_DungeonsList.empty())
-        return LFG_TYPE_NONE;
-    else
-        return LFGType((*m_DungeonsList.begin())->type);
-};
 
 uint8 LFGGroupState::GetVotesNeeded() const
 {
@@ -177,7 +182,7 @@ void LFGGroupState::SetVotesNeeded(uint8 votes)
     m_votesNeeded = votes;
 }
 
-uint8 LFGGroupState::GetKicksLeft() const
+uint8 const LFGGroupState::GetKicksLeft() const
 {
     return m_kicksLeft;
 }
@@ -196,24 +201,6 @@ bool LFGGroupState::IsRoleCheckActive()
 
     return false;
 }
-
-void LFGGroupState::SetDungeons(LFGDungeonSet* dungeons)
-{
-    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
-    m_DungeonsList = *dungeons;
-};
-
-void LFGGroupState::RemoveDungeon(LFGDungeonEntry const* dungeon)
-{
-    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
-    m_DungeonsList.erase(dungeon);
-};
-
-void LFGGroupState::AddDungeon(LFGDungeonEntry const* dungeon)
-{
-    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
-    m_DungeonsList.insert(dungeon);
-};
 
 bool LFGGroupState::IsBootActive()
 {
@@ -302,6 +289,13 @@ LFGAnswer LFGGroupState::GetBootResult()
     return LFG_ANSWER_PENDING;
 }
 
+void  LFGGroupState::DecreaseKicksLeft()
+{
+    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
+    if (m_kicksLeft > 0)
+        --m_kicksLeft;
+};
+
 LFGQueueInfo::LFGQueueInfo(ObjectGuid _guid, LFGType type)
 {
     guid = _guid;
@@ -322,6 +316,7 @@ LFGProposal::LFGProposal(LFGDungeonEntry const* _dungeon)
     m_cancelTime = 0;
     declinerGuids.clear();
     playerGuids.clear();
+    m_deleted = false;
 }
 
 void LFGProposal::Start()
@@ -336,6 +331,7 @@ void LFGProposal::RemoveDecliner(ObjectGuid guid)
 
     RemoveMember(guid);
 
+    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
     declinerGuids.insert(guid);
 };
 
@@ -344,6 +340,7 @@ void LFGProposal::RemoveMember(ObjectGuid guid)
     if (guid.IsEmpty())
         return;
 
+    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
     LFGQueueSet::iterator itr = playerGuids.find(guid);
     if (itr != playerGuids.end())
         playerGuids.erase(itr);
@@ -351,17 +348,33 @@ void LFGProposal::RemoveMember(ObjectGuid guid)
 
 void LFGProposal::AddMember(ObjectGuid guid)
 {
+    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
     playerGuids.insert(guid);
+};
+
+bool LFGProposal::IsMember(ObjectGuid guid)
+{
+    LFGMgr::ReadGuard Guard(sLFGMgr.GetLock());
+    LFGQueueSet::const_iterator itr = playerGuids.find(guid);
+    if (itr == playerGuids.end())
+        return false;
+    else
+        return true;
+};
+
+LFGQueueSet const LFGProposal::GetMembers()
+{
+    LFGMgr::ReadGuard Guard(sLFGMgr.GetLock());
+    LFGQueueSet tmpGuids = playerGuids;
+    return tmpGuids;
 };
 
 bool LFGProposal::IsDecliner(ObjectGuid guid)
 {
-    if (guid.IsEmpty())
-        return true;
-
     if (declinerGuids.empty())
         return false;
 
+    LFGMgr::ReadGuard Guard(sLFGMgr.GetLock());
     LFGQueueSet::iterator itr = declinerGuids.find(guid);
     if (itr != declinerGuids.end())
         return true;
