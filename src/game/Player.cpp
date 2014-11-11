@@ -2623,7 +2623,7 @@ void Player::GiveLevel(uint32 level)
 
     GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_REACH_LEVEL);
 
-    GetLFGState()->Update();
+    GetLFGPlayerState()->Update();
 }
 
 void Player::UpdateFreeTalentPoints(bool resetIfNeed)

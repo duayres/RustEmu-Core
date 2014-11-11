@@ -164,7 +164,7 @@ void WorldSession::HandleGroupInviteOpcode(WorldPacket& recv_data)
     // at least one person joins
     if (!group)
     {
-        group = new Group;
+        group = new Group(GROUPTYPE_NORMAL);
         // new group: if can't add then delete
         if (!group->AddLeaderInvite(GetPlayer()))
         {
@@ -371,7 +371,7 @@ void WorldSession::HandleGroupSetLeaderOpcode(WorldPacket& recv_data)
     /********************/
 
     // everything is fine, do it
-    GetPlayer()->GetLFGState()->RemoveRole(ROLE_LEADER);
+    GetPlayer()->GetLFGPlayerState()->RemoveRole(ROLE_LEADER);
     group->ChangeLeader(guid);
 }
 

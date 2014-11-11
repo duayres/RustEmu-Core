@@ -235,7 +235,7 @@ class MANGOS_DLL_SPEC Group
         typedef std::vector<Roll*> Rolls;
 
     public:
-        Group();
+        Group(GroupType type);
         ~Group();
 
         // group manipulation methods
@@ -267,6 +267,8 @@ class MANGOS_DLL_SPEC Group
         LootMethod    GetLootMethod() const { return m_lootMethod; }
         ObjectGuid GetLooterGuid() const { return m_looterGuid; }
         ItemQualities GetLootThreshold() const { return m_lootThreshold; }
+        GroupType GetGroupType() const { return m_groupType; };
+        bool IsNeedSave() const;
 
         // member manipulation methods
         bool IsMember(ObjectGuid guid) const { return _getMemberCSlot(guid) != m_memberSlots.end(); }
@@ -364,11 +366,11 @@ class MANGOS_DLL_SPEC Group
         void DelinkMember(GroupReference* /*pRef*/) { }
 
         // LFG
-        LFGGroupState* GetLFGState() { return m_LFGState; };
+        LFGGroupState* GetLFGGroupState() { return &m_LFGState; };
         bool ConvertToLFG(LFGType type);
         bool isLFDGroup()  const { return m_groupType & GROUPTYPE_LFD; }
-        bool isLFGGroup()  const { return (m_groupType & GROUPTYPE_LFD && !(m_groupType & GROUPTYPE_RAID)); }
-        bool isLFRGroup()  const { return (m_groupType & GROUPTYPE_LFD && m_groupType & GROUPTYPE_RAID); }
+        bool isLFGGroup()  const { return ((m_groupType & GROUPTYPE_LFD) && !(m_groupType & GROUPTYPE_RAID)); }
+        bool isLFRGroup()  const { return ((m_groupType & GROUPTYPE_LFD) && (m_groupType & GROUPTYPE_RAID)); }
         void SetGroupRoles(ObjectGuid guid, LFGRoleMask roles);
         LFGRoleMask GetGroupRoles(ObjectGuid guid);
 
@@ -454,6 +456,6 @@ class MANGOS_DLL_SPEC Group
         Rolls               RollId;
         BoundInstancesMap   m_boundInstances[MAX_DIFFICULTY];
         uint8*              m_subGroupsCounts;
-        LFGGroupState*      m_LFGState;
+        LFGGroupState       m_LFGState;
 };
 #endif

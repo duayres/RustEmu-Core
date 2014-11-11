@@ -620,6 +620,8 @@ enum PvpTeamIndex
 
 #define PVP_TEAM_COUNT    2
 
+static inline PvpTeamIndex GetTeamIndex(Team team) { return team == ALLIANCE ? TEAM_INDEX_ALLIANCE : (team == HORDE ? TEAM_INDEX_HORDE : TEAM_INDEX_NEUTRAL); }
+
 enum SpellEffects
 {
     SPELL_EFFECT_NONE                      = 0,

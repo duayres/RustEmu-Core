@@ -610,8 +610,6 @@ class World
         void LoadDBVersion();
         char const* GetDBVersion() { return m_DBVersion.c_str(); }
         char const* GetCreatureEventAIVersion() { return m_CreatureEventAIVersion.c_str(); }
-
-
         /**
         * \brief: force all client to request player data
         * \param: ObjectGuid guid : guid of the specified player

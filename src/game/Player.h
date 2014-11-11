@@ -1302,6 +1302,7 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         uint32 m_stableSlots;
 
+        uint32 GetEquipGearScore(bool withBags = true, bool withBank = false);
         void ResetCachedGearScore() { m_cachedGS = 0; }
         typedef std::vector < uint32/*item level*/ > GearScoreVec;
 
@@ -2291,8 +2292,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         bool NeedEjectFromThisMap();
 
         // LFG
-        LFGPlayerState* GetLFGState() { return m_LFGState; };
-        uint32 GetEquipGearScore(bool withBags = true, bool withBank = false);
+        LFGPlayerState* GetLFGPlayerState() { return m_LFGState; };
         typedef std::vector<uint32/*item level*/> GearScoreMap;
         uint8 GetTalentsCount(uint8 tab);
 
