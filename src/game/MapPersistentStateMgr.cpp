@@ -326,7 +326,8 @@ void DungeonPersistentState::UpdateEncounterState(EncounterCreditType type, uint
                 {
                     sLFGMgr.DungeonEncounterReached(player->GetGroup());
 
-                    if (IsCompleted())
+                    if ((sWorld.getConfig(CONFIG_BOOL_LFG_ONLYLASTENCOUNTER) && dungeonId)
+                        || IsCompleted())
                         sLFGMgr.SendLFGRewards(player->GetGroup());
                 }
             }

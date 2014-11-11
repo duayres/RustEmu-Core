@@ -603,7 +603,6 @@ LFGJoinResult LFGMgr::GetPlayerJoinResult(Player* player)
 
     LFGDungeonSet* dungeons = player->GetLFGState()->GetDungeons();
     // TODO - Check if all dungeons are valid
-
     // must be last check - ignored in party
     if (!dungeons || !dungeons->size())
         return ERR_LFG_INVALID_SLOT;
@@ -822,7 +821,7 @@ LFGDungeonSet LFGMgr::GetRandomDungeonsForPlayer(Player* player)
     {
         if (LFGDungeonEntry const* dungeon = sLFGDungeonStore.LookupEntry(i))
         {
-            if (dungeon && 
+            if (dungeon &&
                 dungeon->type == LFG_TYPE_RANDOM_DUNGEON &&
                 GetPlayerLockStatus(player, dungeon) == LFG_LOCKSTATUS_OK)
                 list.insert(dungeon);
@@ -851,7 +850,7 @@ LFGDungeonSet LFGMgr::ExpandRandomDungeonsForGroup(LFGDungeonEntry const* random
 
                     if (!dungeonEx || GetPlayerLockStatus(player, dungeonEx) != LFG_LOCKSTATUS_OK)
                        checkPassed = false;
-                } 
+                }
                 if (checkPassed)
                     list.insert(dungeonEx);
             }
@@ -1083,13 +1082,18 @@ void LFGMgr::SendLFGReward(Player* player, LFGDungeonEntry const* dungeon)
     uint8 index = 0;
 
     // if we can take the quest, means that we haven't done this kind of "run", IE: First Heroic Random of Day.
-    if (player->GetQuestRewardStatus(reward->reward[0].questId))
+    Quest const* pQuest = sObjectMgr.GetQuestTemplate(reward->reward[0].questId);
+
+    if (!player->CanTakeQuest(pQuest, false))
         index = 1;
 
     Quest const* qReward = sObjectMgr.GetQuestTemplate(reward->reward[index].questId);
 
     if (!qReward)
+    {
+        sLog.outError("LFGMgr::RewardDungeonDone quest %u is absent in DB.", reward->reward[index].questId);
         return;
+    }
 
     // we give reward without informing client (retail does this)
     player->RewardQuest(qReward,0,NULL,false);
@@ -1745,7 +1749,7 @@ void LFGMgr::Teleport(Player* player, bool out, bool fromOpcode /*= false*/)
     float orientation = 0;
     Difficulty difficulty;
 
-    LFGDungeonEntry const* dungeon = NULL; 
+    LFGDungeonEntry const* dungeon = NULL;
 
     if (error == LFG_TELEPORTERROR_OK)
     {
@@ -1916,7 +1920,7 @@ void LFGMgr::UpdateRoleCheck(Group* group)
 
                 if (uint8(member->GetLFGState()->GetRoles()) < LFG_ROLE_MASK_TANK)
                     newstate = LFG_ROLECHECK_INITIALITING;
-                else 
+                else
                 {
                     newstate = LFG_ROLECHECK_FINISHED;
                     member->GetLFGState()->SetState(LFG_STATE_QUEUED);
@@ -2054,7 +2058,7 @@ bool LFGMgr::CheckRoles(LFGRolesMap* rolesMap)
 //    if (sWorld.getConfig(CONFIG_BOOL_LFG_DEBUG_ENABLE))
 //        return true;
 
-    if ((healers + tanks + dps) > (MAX_GROUP_SIZE - rolesMap->size()))
+    if ((healers + tanks + dps) > int8(MAX_GROUP_SIZE - rolesMap->size()))
         return false;
 
     return true;
@@ -2356,8 +2360,8 @@ bool LFGMgr::TryAddMembersToGroup(Group* group, LFGQueueSet* players)
 
         if (LFGProposal* pProposal = group->GetLFGState()->GetProposal())
         {
-            if (pProposal->IsDecliner(player->GetObjectGuid()))
-               return false;
+//            if (pProposal->IsDecliner(player->GetObjectGuid()))
+//               return false;
         }
 
         if (!CheckRoles(group, player))
@@ -2969,6 +2973,12 @@ void LFGMgr::RemoveMemberFromLFDGroup(Group* group, ObjectGuid guid)
         player->CastSpell(player,LFG_SPELL_DUNGEON_DESERTER,true);
 
     player->RemoveAurasDueToSpell(LFG_SPELL_LUCK_OF_THE_DRAW);
+
+    if (!group || !group->isLFDGroup())
+    {
+        player->GetLFGState()->Clear();
+        return;
+    }
 
     if (player->GetLFGState()->GetState() > LFG_STATE_QUEUED)
         Teleport(player, true);
