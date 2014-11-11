@@ -1677,7 +1677,7 @@ ChatTagFlags Player::GetChatTag() const
     return tag;
 }
 
-bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientation, uint32 options /*=0*/, AreaTrigger const* at /*=NULL*/)
+bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientation, uint32 options /*=0*/)
 {
     if (!MapManager::IsValidMapCoord(mapid, x, y, z, orientation))
     {
@@ -1695,36 +1695,28 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
     if (!InBattleGround() && mEntry->IsBattleGroundOrArena())
         return false;
 
-    // Get MapEntrance trigger if teleport to other -nonBG- map
-    bool assignedAreaTrigger = false;
-    if (GetMapId() != mapid && !mEntry->IsBattleGroundOrArena() && !at)
-    {
-        at = sObjectMgr.GetMapEntranceTrigger(mapid);
-        assignedAreaTrigger = true;
-    }
-
     // Check requirements for teleport
-    if (GetMapId() != at->target_mapId)
+    if (GetMapId() != mapid)
     {
         if (!(options & TELE_TO_CHECKED))
         {
-            if (!CheckTransferPossibility(at->target_mapId))
+            if (!CheckTransferPossibility(mapid))
             {
                 if (IsBoarded())
                     TeleportToHomebind();
 
-                DEBUG_LOG("Player::TeleportTo %s is NOT teleported to map %u (requirements check failed)", GetName(), at->target_mapId);
+                DEBUG_LOG("Player::TeleportTo %s is NOT teleported to map %u (requirements check failed)", GetName(), mapid);
 
                 return false;                                       // normal client can't teleport to this map...
             }
             else
                 options |= TELE_TO_CHECKED;
         }
-        DEBUG_LOG("Player::TeleportTo %s is being far teleported to map %u %s", GetName(), at->target_mapId, IsBeingTeleportedFar() ? "(stage 2)" : "");
+        DEBUG_LOG("Player::TeleportTo %s is being far teleported to map %u %s", GetName(), mapid, IsBeingTeleportedFar() ? "(stage 2)" : "");
     }
     else
     {
-        DEBUG_LOG("Player::TeleportTo %s is being near teleported to map %u %s", GetName(), at->target_mapId, IsBeingTeleportedNear() ? "(stage 2)" : "");
+        DEBUG_LOG("Player::TeleportTo %s is being near teleported to map %u %s", GetName(), mapid, IsBeingTeleportedNear() ? "(stage 2)" : "");
     }
 
     if (Group* grp = GetGroup())                            // TODO: Verify that this is correct place

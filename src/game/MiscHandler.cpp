@@ -809,7 +809,8 @@ void WorldSession::HandleAreaTriggerOpcode(WorldPacket& recv_data)
     }
 
     // teleport player (trigger requirement will be checked on TeleportTo)
-    player->TeleportTo(at->target_mapId, at->target_X, at->target_Y, at->target_Z, at->target_Orientation, TELE_TO_NOT_LEAVE_TRANSPORT, at);
+    if (player->CheckTransferPossibility(at))
+        player->TeleportTo(at->target_mapId, at->target_X, at->target_Y, at->target_Z, at->target_Orientation, TELE_TO_NOT_LEAVE_TRANSPORT | TELE_TO_CHECKED);
 }
 
 void WorldSession::HandleUpdateAccountData(WorldPacket& recv_data)
