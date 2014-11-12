@@ -3675,14 +3675,16 @@ void ObjectMgr::LoadGroups()
     // TODO: maybe delete from the DB before loading in this case
     for (GroupMap::iterator itr = mGroupMap.begin(); itr != mGroupMap.end();)
     {
-        if (itr->second->GetMembersCount() < 2)
+        if (Group* group = itr->second)
         {
-            itr->second->Disband();
-            delete itr->second;
-            mGroupMap.erase(itr++);
+            if (group->GetMembersCount() < 2)
+            {
+                itr = mGroupMap.begin();
+                // group deleted from mGroupMap in Disband() method!
+                group->Disband();
+                delete group;
+            }
         }
-        else
-            ++itr;
     }
 
     // -- loading instances --
