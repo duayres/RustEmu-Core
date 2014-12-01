@@ -277,7 +277,7 @@ class MANGOS_DLL_SPEC TerrainInfo : public Referencable<boost::atomic_long>
 };
 
 // class for managing TerrainData object and all sort of geometry querying operations
-class MANGOS_DLL_DECL TerrainManager : public MaNGOS::Singleton<TerrainManager, MaNGOS::ClassLevelLockable<TerrainManager, boost::mutex> >
+class TerrainManager : public MaNGOS::Singleton<TerrainManager, MaNGOS::ClassLevelLockable<TerrainManager, boost::mutex> >
 {
         typedef UNORDERED_MAP<uint32,  TerrainInfo*> TerrainDataMap;
         friend class MaNGOS::OperatorNew<TerrainManager>;

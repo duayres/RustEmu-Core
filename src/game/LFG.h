@@ -265,7 +265,7 @@ struct LFGProposal
 };
 
 
-struct LFGStateStructure
+struct MANGOS_DLL_SPEC LFGStateStructure
 {
 public:
     virtual ~LFGStateStructure() {};
