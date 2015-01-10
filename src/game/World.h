@@ -574,6 +574,8 @@ class World
         void setConfig(eConfigBoolValues index, bool value) { m_configBoolValues[index] = value; }
         /// Get a server configuration element (see #eConfigBoolValues)
         bool getConfig(eConfigBoolValues index) const { return m_configBoolValues[index]; }
+        /// Get configuration about force-loaded maps
+        std::set<uint32>* getConfigForceLoadMapIds() const { return m_configForceLoadMapIds; }
 
         /// Are we on a "Player versus Player" server?
         bool IsPvPRealm() { return (getConfig(CONFIG_UINT32_GAME_TYPE) == REALM_TYPE_PVP || getConfig(CONFIG_UINT32_GAME_TYPE) == REALM_TYPE_RPPVP || getConfig(CONFIG_UINT32_GAME_TYPE) == REALM_TYPE_FFA_PVP); }
@@ -711,6 +713,9 @@ class World
         // used versions
         std::string m_DBVersion;
         std::string m_CreatureEventAIVersion;
+
+        // List of Maps that should be force-loaded on startup
+        std::set<uint32>* m_configForceLoadMapIds;
 };
 
 extern uint32 realmID;
