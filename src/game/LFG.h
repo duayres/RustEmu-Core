@@ -346,7 +346,7 @@ private:
 
 typedef std::map<ObjectGuid, LFGAnswer> LFGAnswerMap;
 
-struct LFGGroupState : public LFGStateStructure
+struct MANGOS_DLL_SPEC LFGGroupState : public LFGStateStructure
 {
 
 public:
