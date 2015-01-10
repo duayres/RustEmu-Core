@@ -16638,13 +16638,12 @@ void Player::_LoadGroup(QueryResult* result)
     if (result)
     {
         uint32 groupId = (*result)[0].GetUInt32();
-        ObjectGuid groupGuid = ObjectGuid(HIGHGUID_GROUP, groupId);
         delete result;
-        Group* group = sObjectMgr.GetGroup(groupGuid);
-        if (group)
+
+        if (Group* group = sObjectMgr.GetGroupById(groupId))
         {
             uint8 subgroup = group->GetMemberGroup(GetObjectGuid());
-            SetGroup(groupGuid, subgroup);
+            SetGroup(group, subgroup);
             if (getLevel() >= LEVELREQUIREMENT_HEROIC)
             {
                 // the group leader may change the instance difficulty while the player is offline
@@ -19950,42 +19949,17 @@ void Player::ClearComboPoints()
     m_comboTargetGuid.Clear();
 }
 
-void Player::SetGroup(ObjectGuid const& guid, int8 subgroup)
+void Player::SetGroup(Group* group, int8 subgroup)
 {
-    if (guid.IsEmpty())
-    {
-        m_groupGuid.Clear();
+    if (group == NULL)
         m_group.unlink();
-        return;
+    else
+    {
+        // never use SetGroup without a subgroup unless you specify NULL for group
+        MANGOS_ASSERT(subgroup >= 0);
+        m_group.link(group, this);
+        m_group.setSubGroup((uint8)subgroup);
     }
-
-    Group* group = sObjectMgr.GetGroup(guid);
-
-    if (!group)
-        return;
-
-    m_groupGuid = guid;
-
-    // never use SetGroup without a subgroup unless you specify NULL for group
-    MANGOS_ASSERT(subgroup >= 0);
-    m_group.unlink();
-    m_group.link(group, this);
-    m_group.setSubGroup((uint8)subgroup);
-}
-
-Group* Player::GetGroup()
-{
-    return sObjectMgr.GetGroup(GetGroupGuid());
-}
-
-Group const* Player::GetGroup() const
-{
-    return (Group const*)sObjectMgr.GetGroup(GetGroupGuid());
-}
-
-Group* Player::GetOriginalGroup()
-{
-    return sObjectMgr.GetGroup(GetOriginalGroupGuid());
 }
 
 void Player::SendInitialPacketsBeforeAddToMap()
@@ -21192,7 +21166,7 @@ Player* Player::GetNextRandomRaidMember(float radius)
 
 PartyResult Player::CanUninviteFromGroup() const
 {
-    Group const* grp = GetGroup();
+    const Group* grp = GetGroup();
     if (!grp)
         return ERR_NOT_IN_GROUP;
 
@@ -21205,44 +21179,39 @@ PartyResult Player::CanUninviteFromGroup() const
     return ERR_PARTY_RESULT_OK;
 }
 
-void Player::SetBattleGroundRaid(ObjectGuid const& guid, int8 subgroup)
+void Player::SetBattleGroundRaid(Group* group, int8 subgroup)
 {
-    if (!guid || !guid.IsGroup())
-        return;
+    // we must move references from m_group to m_originalGroup
+    SetOriginalGroup(GetGroup(), GetSubGroup());
 
-    //we must move references from m_group to m_originalGroup
-    SetOriginalGroup(GetGroupGuid(), GetSubGroup());
-    SetGroup(guid, subgroup);
+    m_group.unlink();
+    m_group.link(group, this);
+    m_group.setSubGroup((uint8)subgroup);
 }
 
 void Player::RemoveFromBattleGroundRaid()
 {
-    //remove existing reference
-    SetGroup(GetOriginalGroupGuid(), GetOriginalSubGroup());
-    SetOriginalGroup(ObjectGuid());
+    // remove existing reference
+    m_group.unlink();
+    if (Group* group = GetOriginalGroup())
+    {
+        m_group.link(group, this);
+        m_group.setSubGroup(GetOriginalSubGroup());
+    }
+    SetOriginalGroup(NULL);
 }
 
-void Player::SetOriginalGroup(ObjectGuid const& guid, int8 subgroup)
+void Player::SetOriginalGroup(Group* group, int8 subgroup)
 {
-    if (guid.IsEmpty())
-    {
-        m_originalGroupGuid.Clear();
+    if (group == NULL)
         m_originalGroup.unlink();
-        return;
+    else
+    {
+        // never use SetOriginalGroup without a subgroup unless you specify NULL for group
+        MANGOS_ASSERT(subgroup >= 0);
+        m_originalGroup.link(group, this);
+        m_originalGroup.setSubGroup((uint8)subgroup);
     }
-
-    Group* group = sObjectMgr.GetGroup(guid);
-
-    if (!group)
-        return;
-
-    m_originalGroupGuid = guid;
-
-    // never use SetOriginalGroup without a subgroup unless you specify NULL for group
-    MANGOS_ASSERT(subgroup >= 0);
-    m_originalGroup.unlink();
-    m_originalGroup.link(group, this);
-    m_originalGroup.setSubGroup((uint8)subgroup);
 }
 
 void Player::UpdateUnderwaterState(Map* m, float x, float y, float z)

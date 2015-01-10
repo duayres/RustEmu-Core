@@ -2302,12 +2302,10 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         Group* GetGroupInvite() { return m_groupInvite; }
         void SetGroupInvite(Group* group) { m_groupInvite = group; }
-        ObjectGuid const& GetGroupGuid() const { return m_groupGuid; };
-        ObjectGuid const& GetOriginalGroupGuid() const { return m_originalGroupGuid; };
-        Group* GetGroup();
-        Group const* GetGroup() const;
+        Group* GetGroup() { return m_group.getTarget(); }
+        const Group* GetGroup() const { return (const Group*)m_group.getTarget(); }
         GroupReference& GetGroupRef() { return m_group; }
-        void SetGroup(ObjectGuid const& groupGuid, int8 subgroup = -1);
+        void SetGroup(Group* group, int8 subgroup = -1);
         uint8 GetSubGroup() const { return m_group.getSubGroup(); }
         uint32 GetGroupUpdateFlag() const { return m_groupUpdateMask; }
         void SetGroupUpdateFlag(uint32 flag) { m_groupUpdateMask |= flag; }
@@ -2316,13 +2314,12 @@ class MANGOS_DLL_SPEC Player : public Unit
         Player* GetNextRandomRaidMember(float radius);
         PartyResult CanUninviteFromGroup() const;
         // BattleGround Group System
-        void SetBattleGroundRaid(ObjectGuid const& guid, int8 subgroup = -1);
+        void SetBattleGroundRaid(Group* group, int8 subgroup = -1);
         void RemoveFromBattleGroundRaid();
-        // Original group mechanic
-        Group* GetOriginalGroup();
+        Group* GetOriginalGroup() { return m_originalGroup.getTarget(); }
         GroupReference& GetOriginalGroupRef() { return m_originalGroup; }
         uint8 GetOriginalSubGroup() const { return m_originalGroup.getSubGroup(); }
-        void SetOriginalGroup(ObjectGuid const& guid, int8 subgroup = -1);
+        void SetOriginalGroup(Group* group, int8 subgroup = -1);
 
         GridReference<Player>& GetGridRef() { return m_gridRef; }
         MapReference& GetMapRef() { return m_mapRef; }
@@ -2586,16 +2583,12 @@ class MANGOS_DLL_SPEC Player : public Unit
         PlayerSocial* m_social;
 
         // Groups
-        ObjectGuid m_groupGuid;
         GroupReference m_group;
-
+        GroupReference m_originalGroup;
         Group* m_groupInvite;
-
         uint32 m_groupUpdateMask;
         uint64 m_auraUpdateMask;
 
-        ObjectGuid m_originalGroupGuid;
-        GroupReference m_originalGroup;
         // Player summoning
         time_t m_summon_expire;
         uint32 m_summon_mapid;
