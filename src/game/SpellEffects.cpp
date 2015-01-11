@@ -8343,23 +8343,31 @@ void Spell::EffectHealMaxHealth(SpellEffectIndex /*eff_idx*/)
 
 void Spell::EffectInterruptCast(SpellEffectIndex eff_idx)
 {
-    if (!unitTarget)
-        return;
-
-    if (!unitTarget->isAlive())
+    if (!unitTarget || !unitTarget->isAlive())
         return;
 
     // TODO: not all spells that used this effect apply cooldown at school spells
     // also exist case: apply cooldown to interrupted cast only and to all spells
-    for (uint32 i = CURRENT_FIRST_NON_MELEE_SPELL; i < CURRENT_MAX_SPELL; ++i)
+    // there is no CURRENT_AUTOREPEAT_SPELL spells that can be interrupted
+    for (uint32 i = CURRENT_FIRST_NON_MELEE_SPELL; i < CURRENT_AUTOREPEAT_SPELL; ++i)
     {
         if (Spell* spell = unitTarget->GetCurrentSpell(CurrentSpellTypes(i)))
         {
             SpellEntry const* curSpellInfo = spell->m_spellInfo;
+
+            // hack for Moorabi - Transformation must be interruptable
+            if (curSpellInfo->Id == 55098)
+                const_cast<SpellEntry*>(curSpellInfo)->InterruptFlags |= SPELL_INTERRUPT_FLAG_INTERRUPT;
+
             // check if we can interrupt spell
-            if ((curSpellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_INTERRUPT) && curSpellInfo->PreventionType == SPELL_PREVENTION_TYPE_SILENCE)
+            if ((spell->getState() == SPELL_STATE_CASTING || (spell->getState() == SPELL_STATE_PREPARING && spell->GetCastTime() > 0)) &&
+                curSpellInfo->PreventionType == SPELL_PREVENTION_TYPE_SILENCE &&
+                ((i == CURRENT_GENERIC_SPELL && curSpellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_INTERRUPT) ||
+                (i == CURRENT_CHANNELED_SPELL && curSpellInfo->ChannelInterruptFlags & CHANNEL_FLAG_MOVEMENT)))
             {
-                unitTarget->ProhibitSpellSchool(GetSpellSchoolMask(curSpellInfo), GetSpellDuration(m_spellInfo));
+                if (m_originalCaster)
+                    unitTarget->ProhibitSpellSchool(GetSpellSchoolMask(curSpellInfo), unitTarget->CalculateAuraDuration(m_spellInfo, (1 << eff_idx), GetSpellDuration(m_spellInfo), m_caster));
+                
                 unitTarget->InterruptSpell(CurrentSpellTypes(i), false);
                 SendEffectLogExecute(eff_idx, unitTarget->GetObjectGuid(), curSpellInfo->Id);
             }
