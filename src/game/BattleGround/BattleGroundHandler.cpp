@@ -159,6 +159,7 @@ void WorldSession::HandleBattlemasterJoinOpcode(WorldPacket& recv_data)
         if (_player->GetBattleGroundQueueIndex(bgQueueTypeId) < PLAYER_MAX_BATTLEGROUND_QUEUES)
             // player is already in this queue
             return;
+
         // check if has free queue slots
         if (!_player->HasFreeBattleGroundQueueId())
         {
