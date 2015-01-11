@@ -5568,7 +5568,7 @@ void Spell::EffectTeleportUnits(SpellEffectIndex eff_idx)   // TODO - Use target
             if (st->target_mapId == unitTarget->GetMapId())
                 unitTarget->NearTeleportTo(st->target_X, st->target_Y, st->target_Z, st->target_Orientation, unitTarget == m_caster);
             else if (unitTarget->GetTypeId() == TYPEID_PLAYER)
-                ((Player*)unitTarget)->TeleportTo(st->target_mapId, st->target_X, st->target_Y, st->target_Z, st->target_Orientation, unitTarget == m_caster ? TELE_TO_SPELL : 0);
+                ((Player*)unitTarget)->TeleportTo(st->target_mapId, st->target_X, st->target_Y, st->target_Z, st->target_Orientation, unitTarget == m_caster ? TELE_TO_SPELL | TELE_TO_NOT_LEAVE_COMBAT : 0);
             break;
         }
         case TARGET_EFFECT_SELECT:
@@ -7390,10 +7390,24 @@ void Spell::EffectDualWield(SpellEffectIndex /*eff_idx*/)
         ((Player*)unitTarget)->SetCanDualWield(true);
 }
 
-void Spell::EffectPull(SpellEffectIndex /*eff_idx*/)
+void Spell::EffectPull(SpellEffectIndex eff_idx)
 {
     // TODO: create a proper pull towards distract spell center for distract
-    DEBUG_LOG("WORLD: Spell Effect DUMMY");
+    //DEBUG_LOG("WORLD: Spell Effect DUMMY");
+
+    // this needs proper handling
+    // only pulling to caster supported
+    if (!unitTarget || unitTarget->IsTaxiFlying() || !unitTarget->isAlive() || !m_caster->isAlive())
+        return;    
+ 
+    int32 speed_z = m_spellInfo->EffectMiscValue[eff_idx];
+    if (!speed_z)
+        speed_z = 100;
+    int32 speed_xy = m_spellInfo->EffectMiscValueB[eff_idx];
+    if (!speed_xy)
+        speed_xy = 150;
+    
+    m_caster->MonsterMoveJump(m_caster->GetPositionX(), m_caster->GetPositionY(), m_caster->GetPositionZ(), float(speed_xy) / 2, float(speed_z) / 10);
 }
 
 void Spell::EffectDistract(SpellEffectIndex /*eff_idx*/)

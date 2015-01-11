@@ -12313,16 +12313,21 @@ void Unit::KnockBackWithAngle(float angle, float horizontalSpeed, float vertical
     }
     else
     {
-        float vsin = sin(angle);
-        float vcos = cos(angle);
+        if (((Creature*)this)->GetCreatureInfo()->MechanicImmuneMask & MECHANIC_KNOCKOUT)
+            return;
+
+        if (horizontalSpeed <= 0.1f)
+            return;
+
         float moveTimeHalf = verticalSpeed / Movement::gravity;
         float max_height = -Movement::computeFallElevation(moveTimeHalf, false, -verticalSpeed);
-
         float dis = 2 * moveTimeHalf * horizontalSpeed;
+
         float ox, oy, oz;
         GetPosition(ox, oy, oz);
-        float fx = ox + dis * vcos;
-        float fy = oy + dis * vsin;
+
+        float fx = ox + (dis * cos(angle));
+        float fy = oy + (dis * sin(angle));
         float fz = oz + 0.5f;
         GetMap()->GetHitPosition(ox, oy, oz + 0.5f, fx, fy, fz, GetPhaseMask(), -0.5f);
         UpdateAllowedPositionZ(fx, fy, fz);
