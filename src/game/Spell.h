@@ -392,6 +392,7 @@ class Spell
 
         SpellCastResult CheckItems();
         SpellCastResult CheckRange(bool strict);
+        SpellCastResult CheckRangeForChanneledSpells();
         SpellCastResult CheckPower();
         SpellCastResult CheckOrTakeRunePower(bool take);
         SpellCastResult CheckCasterAuras() const;
