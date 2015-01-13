@@ -111,8 +111,19 @@ Group::~Group()
         for (BoundInstancesMap::iterator itr2 = m_boundInstances[i].begin(); itr2 != m_boundInstances[i].end(); ++itr2)
             itr2->second.state->RemoveGroup(this);
 
-    if (isLFDGroup())
-        sLFGMgr.RemoveLFGState(GetObjectGuid());
+    if (GetObjectGuid())
+    {
+        DEBUG_LOG("Group::~Group: %s type %u has been deleted.", GetObjectGuid().GetString().c_str(), m_groupType);
+        // it is undefined whether objectmgr (which stores the groups) or instancesavemgr
+        // will be unloaded first so we must be prepared for both cases
+        // this may unload some dungeon persistent state
+        if (isLFDGroup())
+            sLFGMgr.RemoveLFGState(GetObjectGuid());
+
+        // recheck deletion in ObjectMgr (must be deleted while disband, but additional check not be bad)
+        sObjectMgr.RemoveGroup(this);
+    }
+    else sLog.outError("Group::~Group: not fully created group type %u has ben deleted.", m_groupType);
 
     // Sub group counters clean up
     if (m_subGroupsCounts)

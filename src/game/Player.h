@@ -38,6 +38,7 @@
 #include "BattleGround/BattleGround.h"
 #include "SharedDefines.h"
 #include "Chat.h"
+#include "LFG.h"
 
 #include<string>
 #include<vector>
@@ -2304,8 +2305,6 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         bool NeedEjectFromThisMap();
 
-        // LFG
-        LFGPlayerState* GetLFGPlayerState() { return m_LFGState; };
         typedef std::vector<uint32/*item level*/> GearScoreMap;
         uint8 GetTalentsCount(uint8 tab);
 
@@ -2707,9 +2706,6 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         DungeonPersistentState* _pendingBind;
         uint32 _pendingBindTimer;
-
-        // LFG
-        LFGPlayerState* m_LFGState;
 };
 
 void AddItemsSetItem(Player* player, Item* item);
