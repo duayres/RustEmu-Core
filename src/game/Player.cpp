@@ -563,8 +563,6 @@ Player::Player(WorldSession* session): Unit(), m_mover(this), m_camera(this), m_
     m_lastFallZ = 0;
 
     m_cachedGS = 0;
-
-    m_LFGState = new LFGPlayerState(this);
 }
 
 Player::~Player()
@@ -2627,7 +2625,7 @@ void Player::GiveLevel(uint32 level)
 
     GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_REACH_LEVEL);
 
-    GetLFGPlayerState()->Update();
+    sLFGMgr.GetLFGPlayerState(GetObjectGuid())->Update();
 }
 
 void Player::UpdateFreeTalentPoints(bool resetIfNeed)
@@ -15947,6 +15945,7 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
 
     _LoadEquipmentSets(holder->GetResult(PLAYER_LOGIN_QUERY_LOADEQUIPMENTSETS));
 
+    sLFGMgr.CreateLFGState(GetObjectGuid());
     if (!GetGroup() || !GetGroup()->isLFDGroup())
     {
         sLFGMgr.RemoveMemberFromLFDGroup(GetGroup(), GetObjectGuid());
@@ -16815,8 +16814,9 @@ void Player::_LoadGroup(QueryResult* result)
                 sLFGMgr.LoadLFDGroupPropertiesForPlayer(this);
         }
     }
-    if (!GetGroup())
-        sLFGMgr.RemoveMemberFromLFDGroup(NULL, GetObjectGuid());
+
+    if (!GetGroup() || !GetGroup()->IsLeader(GetObjectGuid()))
+        RemoveFlag(PLAYER_FLAGS, PLAYER_FLAGS_GROUP_LEADER);
 }
 
 void Player::_LoadBoundInstances(QueryResult* result)

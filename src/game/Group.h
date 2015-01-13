@@ -27,6 +27,7 @@
 #include "LootMgr.h"
 #include "DBCEnums.h"
 #include "SharedDefines.h"
+#include "LFG.h"
 
 #include <map>
 #include <vector>
@@ -258,7 +259,7 @@ class MANGOS_DLL_SPEC Group
         // properties accessories
         uint32 GetId() const { return m_Id; }
         ObjectGuid GetObjectGuid() const { return ObjectGuid(HIGHGUID_GROUP, GetId()); }
-        bool IsFull() const { return (m_groupType == GROUPTYPE_NORMAL) ? (m_memberSlots.size() >= MAX_GROUP_SIZE) : (m_memberSlots.size() >= MAX_RAID_SIZE); }
+        bool IsFull() const { return (m_groupType == GROUPTYPE_NORMAL || isLFGGroup()) ? (m_memberSlots.size() >= MAX_GROUP_SIZE) : (m_memberSlots.size() >= MAX_RAID_SIZE); }
         bool isRaidGroup() const { return m_groupType & GROUPTYPE_RAID; }
         bool isBGGroup()   const { return m_bgGroup != NULL; }
         bool IsCreated()   const { return GetMembersCount() > 0; }
@@ -366,7 +367,6 @@ class MANGOS_DLL_SPEC Group
         void DelinkMember(GroupReference* /*pRef*/) { }
 
         // LFG
-        LFGGroupState* GetLFGGroupState() { return &m_LFGState; };
         bool ConvertToLFG(LFGType type);
         bool isLFDGroup()  const { return m_groupType & GROUPTYPE_LFD; }
         bool isLFGGroup()  const { return ((m_groupType & GROUPTYPE_LFD) && !(m_groupType & GROUPTYPE_RAID)); }
@@ -456,6 +456,5 @@ class MANGOS_DLL_SPEC Group
         Rolls               RollId;
         BoundInstancesMap   m_boundInstances[MAX_DIFFICULTY];
         uint8*              m_subGroupsCounts;
-        LFGGroupState       m_LFGState;
 };
 #endif

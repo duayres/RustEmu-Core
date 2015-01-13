@@ -27,7 +27,6 @@
 
 void LFGStateStructure::SetDungeons(LFGDungeonSet dungeons)
 {
-    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
     m_DungeonsList = dungeons;
     if (m_DungeonsList.empty())
         SetType(LFG_TYPE_NONE);
@@ -42,7 +41,6 @@ void LFGStateStructure::SetDungeons(LFGDungeonSet dungeons)
 
 void LFGStateStructure::RemoveDungeon(LFGDungeonEntry const* dungeon)
 {
-    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
     m_DungeonsList.erase(dungeon);
     if (m_DungeonsList.empty())
         SetType(LFG_TYPE_NONE);
@@ -57,14 +55,12 @@ void LFGStateStructure::RemoveDungeon(LFGDungeonEntry const* dungeon)
 
 void LFGStateStructure::AddDungeon(LFGDungeonEntry const* dungeon)
 {
-    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
     m_DungeonsList.insert(dungeon);
 }
 
 
 void LFGPlayerState::Clear()
 {
-    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
     m_rolesMask = LFG_ROLE_MASK_NONE;
     m_bUpdate = true;
     m_state = LFG_STATE_NONE;
@@ -92,7 +88,7 @@ LFGLockStatusMap const* LFGPlayerState::GetLockMap()
     if (m_bUpdate || m_LockMap.empty())
     {
         m_LockMap.clear();
-        m_LockMap = sLFGMgr.GetPlayerLockMap(m_pPlayer);
+        m_LockMap = sLFGMgr.GetPlayerLockMap(GetOwnerGuid());
         m_bUpdate = false;
     }
     return &m_LockMap;
@@ -102,9 +98,10 @@ void LFGPlayerState::SetRoles(LFGRoleMask roles)
 {
     m_rolesMask = roles;
 
-    if (Group* group = m_pPlayer->GetGroup())
+    Player* pPlayer = sObjectMgr.GetPlayer(GetOwnerGuid());
+    if (Group* group = pPlayer->GetGroup())
     {
-        if (group->GetLeaderGuid() == m_pPlayer->GetObjectGuid())
+        if (group->GetLeaderGuid() == GetOwnerGuid())
             AddRole(ROLE_LEADER);
         else
             RemoveRole(ROLE_LEADER);
@@ -138,7 +135,6 @@ bool LFGPlayerState::IsSingleRole()
 
 void LFGPlayerState::SetComment(std::string comment)
 {
-    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
     m_comment.clear();
     if (!comment.empty())
     {
@@ -150,7 +146,6 @@ void LFGPlayerState::SetComment(std::string comment)
 
 void LFGGroupState::Clear()
 {
-    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
     m_bQueued = false;
     m_bUpdate = true;
     m_status = LFG_STATUS_NOT_SAVED;
@@ -214,20 +209,21 @@ void LFGGroupState::StartBoot(ObjectGuid kicker, ObjectGuid victim, std::string 
     m_bootReason = reason;
     m_bootVictim = victim;
     m_bootCancelTime = time_t(time(NULL) + LFG_TIME_BOOT);
-    for (GroupReference* itr = m_pGroup->GetFirstMember(); itr != NULL; itr = itr->next())
+    if (Group* pGroup = sObjectMgr.GetGroup(GetOwnerGuid()))
     {
-        if (Player* pGroupMember = itr->getSource())
+        for (GroupReference* itr = pGroup->GetFirstMember(); itr != NULL; itr = itr->next())
         {
-            ObjectGuid guid = pGroupMember->GetObjectGuid();
+            if (Player* pGroupMember = itr->getSource())
+            {
+                ObjectGuid guid = pGroupMember->GetObjectGuid();
+                LFGAnswer vote = LFG_ANSWER_PENDING;
 
-            LFGAnswer vote = LFG_ANSWER_PENDING;
-
-            if (guid == victim)
-                vote = LFG_ANSWER_DENY;
-            else if (guid == kicker)
-                vote = LFG_ANSWER_AGREE;
-
-            m_bootVotes.insert(std::make_pair(guid, vote));
+                if (guid == victim)
+                    vote = LFG_ANSWER_DENY;
+                else if (guid == kicker)
+                    vote = LFG_ANSWER_AGREE;
+                m_bootVotes.insert(std::make_pair(guid, vote));
+            }
         }
     }
     SetState(LFG_STATE_BOOT);
@@ -286,29 +282,28 @@ LFGAnswer LFGGroupState::GetBootResult()
 
 void  LFGGroupState::DecreaseKicksLeft()
 {
-    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
     if (m_uiKicksLeft > 0)
         --m_uiKicksLeft;
 }
 
-LFGQueueInfo::LFGQueueInfo(ObjectGuid _guid, LFGType type)
+uint32 LFGGroupState::GetDungeonId()
 {
-    guid = _guid;
-    m_type = type;
-    MANGOS_ASSERT(!guid.IsEmpty());
+    return GetDungeon() ? GetDungeon()->ID : 0;
+};
 
+LFGQueueInfo::LFGQueueInfo(ObjectGuid _guid, LFGType type, uint32 _queueID)
+    : guid(_guid), m_type(type), queueID(_queueID)
+{
+    MANGOS_ASSERT(!guid.IsEmpty());
     tanks = LFG_TANKS_NEEDED;
     healers = LFG_HEALERS_NEEDED;
     dps = LFG_DPS_NEEDED;
     joinTime = time_t(time(NULL));
-
 }
 
 LFGProposal::LFGProposal(LFGDungeonEntry const* _dungeon)
+    : m_dungeon(_dungeon), m_state(LFG_PROPOSAL_INITIATING), m_cancelTime(0)
 {
-    m_dungeon = _dungeon;
-    m_state = LFG_PROPOSAL_INITIATING;
-    m_cancelTime = 0;
     declinerGuids.clear();
     playerGuids.clear();
     m_bDeleted = false;
@@ -326,7 +321,6 @@ void LFGProposal::RemoveDecliner(ObjectGuid guid)
 
     RemoveMember(guid);
 
-    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
     declinerGuids.insert(guid);
 }
 
@@ -335,7 +329,6 @@ void LFGProposal::RemoveMember(ObjectGuid guid)
     if (guid.IsEmpty())
         return;
 
-    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
     GuidSet::iterator itr = playerGuids.find(guid);
     if (itr != playerGuids.end())
         playerGuids.erase(itr);
@@ -343,13 +336,11 @@ void LFGProposal::RemoveMember(ObjectGuid guid)
 
 void LFGProposal::AddMember(ObjectGuid guid)
 {
-    LFGMgr::WriteGuard Guard(sLFGMgr.GetLock());
     playerGuids.insert(guid);
 }
 
 bool LFGProposal::IsMember(ObjectGuid guid)
 {
-    LFGMgr::ReadGuard Guard(sLFGMgr.GetLock());
     GuidSet::const_iterator itr = playerGuids.find(guid);
     if (itr == playerGuids.end())
         return false;
@@ -359,7 +350,6 @@ bool LFGProposal::IsMember(ObjectGuid guid)
 
 GuidSet const LFGProposal::GetMembers()
 {
-    LFGMgr::ReadGuard Guard(sLFGMgr.GetLock());
     GuidSet tmpGuids = playerGuids;
     return tmpGuids;
 }
@@ -369,7 +359,6 @@ bool LFGProposal::IsDecliner(ObjectGuid guid)
     if (declinerGuids.empty())
         return false;
 
-    LFGMgr::ReadGuard Guard(sLFGMgr.GetLock());
     GuidSet::iterator itr = declinerGuids.find(guid);
     if (itr != declinerGuids.end())
         return true;
@@ -399,3 +388,8 @@ void LFGProposal::SetGroup(Group* group)
     }
     m_groupGuid = group->GetObjectGuid();
 }
+
+uint32 LFGProposal::GetDungeonId()
+{
+    return GetDungeon() ? GetDungeon()->ID : 0;
+};
