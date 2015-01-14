@@ -1269,7 +1269,7 @@ void BattleGround::AddOrSetPlayerToCorrectBgGroup(Player* plr, ObjectGuid plr_gu
         if (group->IsMember(plr_guid))
         {
             uint8 subgroup = group->GetMemberGroup(plr_guid);
-            plr->SetBattleGroundRaid(group, subgroup);
+            plr->SetBattleGroundRaid(group->GetObjectGuid(), subgroup);
         }
         else
         {

@@ -5277,6 +5277,21 @@ void Unit::RemoveAurasByCasterSpell(uint32 spellId, ObjectGuid casterGuid, AuraR
     }
 }
 
+void Unit::RemoveAllGroupBuffsFromCaster(ObjectGuid guidCaster)
+{
+    SpellAuraHolderMap &holdersMap = GetSpellAuraHolderMap();
+    for (SpellAuraHolderMap::iterator itr = holdersMap.begin(); itr != holdersMap.end();)
+    {
+        if (itr->second && !itr->second->IsDeleted() && itr->second->GetCasterGuid() == guidCaster && SpellMgr::IsGroupBuff(itr->second->GetSpellProto()))
+        {
+            RemoveSpellAuraHolder(itr->second);
+            itr = holdersMap.begin();
+        }
+        else
+            ++itr;
+    }
+}
+
 void Unit::RemoveSingleAuraFromSpellAuraHolder(uint32 spellId, SpellEffectIndex effindex, ObjectGuid casterGuid, AuraRemoveMode mode)
 {
     SpellAuraHolderBounds spair = GetSpellAuraHolderBounds(spellId);

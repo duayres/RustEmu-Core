@@ -1231,6 +1231,8 @@ class SpellMgr
 
         bool IsSkillBonusSpell(uint32 spellId) const;
 
+        static bool IsGroupBuff(SpellEntry const *spellInfo);
+        static bool IsStackableSpellAuraHolder(SpellEntry const *spellInfo);
         static bool IsTargetMatchedWithCreatureType(SpellEntry const* spellInfo, Unit* pTarget);
         static bool IsReflectableSpell(SpellEntry const* spellInfo);
         // Spell correctness for client using

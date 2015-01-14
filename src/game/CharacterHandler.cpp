@@ -1212,6 +1212,21 @@ void WorldSession::HandleCharCustomizeOpcode(WorldPacket& recv_data)
         return;
     }
 
+    // The player was uninvited already on logout so just remove from group
+    // immediately remove from group before start change process
+    QueryResult* resultGroup = CharacterDatabase.PQuery("SELECT groupId FROM group_member WHERE memberGuid='%u'", guid.GetCounter());
+    if (resultGroup)
+    {
+        uint32 groupId = (*resultGroup)[0].GetUInt32();
+        delete resultGroup;
+
+        ObjectGuid groupGuid = ObjectGuid(HIGHGUID_GROUP, groupId);
+        Group* group = sObjectMgr.GetGroup(groupGuid);
+
+        if (group)
+            group->RemoveMember(guid, 0);
+    }
+
     CharacterDatabase.escape_string(newname);
     Player::Customize(guid, gender, skin, face, hairStyle, hairColor, facialHair);
     CharacterDatabase.PExecute("UPDATE characters set name = '%s', at_login = at_login & ~ %u WHERE guid ='%u'", newname.c_str(), uint32(AT_LOGIN_CUSTOMIZE), guid.GetCounter());

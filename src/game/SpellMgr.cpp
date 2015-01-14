@@ -2960,6 +2960,45 @@ bool SpellMgr::IsSkillBonusSpell(uint32 spellId) const
     return false;
 }
 
+bool SpellMgr::IsGroupBuff(SpellEntry const *spellInfo)
+{
+    for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
+    {
+        switch (spellInfo->EffectImplicitTargetA[i])
+        {
+        case TARGET_SINGLE_PARTY:
+        case TARGET_ALL_PARTY_AROUND_CASTER:
+        case TARGET_ALL_PARTY:
+        case TARGET_ALL_PARTY_AROUND_CASTER_2:
+        case TARGET_AREAEFFECT_PARTY:
+        case TARGET_ALL_RAID_AROUND_CASTER:
+        case TARGET_AREAEFFECT_PARTY_AND_CLASS:
+            if (IsPositiveEffect(spellInfo, SpellEffectIndex(i)) &&
+                (spellInfo->Effect[i] == SPELL_EFFECT_APPLY_AURA ||
+                spellInfo->Effect[i] == SPELL_EFFECT_APPLY_AREA_AURA_PARTY ||
+                spellInfo->Effect[i] == SPELL_EFFECT_APPLY_AREA_AURA_RAID)
+                )
+            {
+                return true;
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
+    // some custom cases
+    switch (spellInfo->Id)
+    {
+    case 72590:                             // Fortitude (triggered by AoE spell with ScriptEffect)
+        return true;
+    default:
+        break;
+    }
+
+    return false;
+}
+
 bool SpellMgr::IsTargetMatchedWithCreatureType(SpellEntry const* pSpellInfo, Unit* pTarget)
 {
     if (!pSpellInfo || !pTarget || !pTarget->IsInitialized())
@@ -3024,6 +3063,51 @@ bool SpellMgr::IsReflectableSpell(SpellEntry const* spellInfo)
                 return true;
         }
     }
+    return false;
+}
+
+// is holder stackable from different casters
+bool SpellMgr::IsStackableSpellAuraHolder(SpellEntry const* spellInfo)
+{
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX3_STACK_FOR_DIFF_CASTERS))
+        return true;
+
+    if (GetSpellSpecific(spellInfo->Id) == SPELL_JUDGEMENT)
+        return false;
+
+    // some more (custom) checks. e.g. Insect Swarm doesn't have the attribute, we depend on aura types in holder
+    for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
+    {
+        switch (spellInfo->EffectApplyAuraName[i])
+        {
+            // DoT/HoT and some more
+        case SPELL_AURA_PERIODIC_DAMAGE:
+        case SPELL_AURA_DUMMY:
+        case SPELL_AURA_PERIODIC_HEAL:
+        case SPELL_AURA_OBS_MOD_HEALTH:
+        case SPELL_AURA_OBS_MOD_MANA:
+        case SPELL_AURA_PERIODIC_TRIGGER_SPELL:
+        case SPELL_AURA_PERIODIC_LEECH:
+        case SPELL_AURA_PERIODIC_MANA_LEECH:
+        case SPELL_AURA_PERIODIC_DAMAGE_PERCENT:
+        case SPELL_AURA_POWER_BURN_MANA:
+        case SPELL_AURA_CONTROL_VEHICLE:
+        case SPELL_AURA_MOD_STUN:
+        case SPELL_AURA_PERIODIC_DUMMY:
+            return true;
+        default:
+            continue;
+        }
+    }
+
+    // some direct ID checks (hacks!)
+    switch (spellInfo->Id)
+    {
+    case 70602: // Corruption (Valithria Dreamwalker)
+    case 70588: // Suppression (Valithria Dreamwalker)
+        return true;
+    }
+
     return false;
 }
 
