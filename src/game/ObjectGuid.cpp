@@ -23,24 +23,29 @@
 
 #include <sstream>
 
+ObjectGuid const ObjectGuid::Null = ObjectGuid();
+
 char const* ObjectGuid::GetTypeName(HighGuid high)
 {
     switch (high)
     {
-        case HIGHGUID_ITEM:         return "Item";
-        case HIGHGUID_PLAYER:       return "Player";
-        case HIGHGUID_GAMEOBJECT:   return "Gameobject";
-        case HIGHGUID_TRANSPORT:    return "Transport";
-        case HIGHGUID_UNIT:         return "Creature";
-        case HIGHGUID_PET:          return "Pet";
-        case HIGHGUID_VEHICLE:      return "Vehicle";
-        case HIGHGUID_DYNAMICOBJECT: return "DynObject";
-        case HIGHGUID_CORPSE:       return "Corpse";
-        case HIGHGUID_MO_TRANSPORT: return "MoTransport";
-        case HIGHGUID_INSTANCE:     return "InstanceID";
-        case HIGHGUID_GROUP:        return "Group";
-        default:
-            return "<unknown>";
+    case HIGHGUID_ITEM:         return "Item";
+    case HIGHGUID_PLAYER:       return "Player";
+    case HIGHGUID_GAMEOBJECT:   return "Gameobject";
+    case HIGHGUID_TRANSPORT:    return "Transport";
+    case HIGHGUID_UNIT:         return "Creature";
+    case HIGHGUID_PET:          return "Pet";
+    case HIGHGUID_VEHICLE:      return "Vehicle";
+    case HIGHGUID_DYNAMICOBJECT:return "DynObject";
+    case HIGHGUID_CORPSE:       return "Corpse";
+    case HIGHGUID_MO_TRANSPORT: return "MoTransport";
+    case HIGHGUID_INSTANCE:     return "InstanceID";
+    case HIGHGUID_GROUP:        return "Group";
+
+    case HIGHGUID_CALENDAR_EVENT: return "Calendar event";
+    case HIGHGUID_INVITE:       return "Calendar invite";
+    default:
+        return "<unknown>";
     }
 }
 
@@ -109,3 +114,5 @@ template uint32 ObjectGuidGenerator<HIGHGUID_DYNAMICOBJECT>::Generate();
 template uint32 ObjectGuidGenerator<HIGHGUID_CORPSE>::Generate();
 template uint32 ObjectGuidGenerator<HIGHGUID_INSTANCE>::Generate();
 template uint32 ObjectGuidGenerator<HIGHGUID_GROUP>::Generate();
+template uint32 ObjectGuidGenerator<HIGHGUID_CALENDAR_EVENT>::Generate();
+template uint32 ObjectGuidGenerator<HIGHGUID_INVITE>::Generate();

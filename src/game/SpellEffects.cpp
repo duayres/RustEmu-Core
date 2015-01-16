@@ -4818,7 +4818,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
             }
 
             // non-standard cast requirement check
-            if (!friendTarget || !friendTarget->isInCombat())
+            if (!friendTarget || !friendTarget->IsInCombat())
             {
                 ((Player*)m_caster)->RemoveSpellCooldown(m_spellInfo->Id, true);
                 SendCastResult(SPELL_FAILED_TARGET_AFFECTING_COMBAT);
@@ -4831,15 +4831,18 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 ihit->effectMask &= ~(1 << 1);
 
             // not empty (checked), copy
-            Unit::AttackerSet attackers = friendTarget->getAttackers();
-
-            // selected from list 3
-            for (uint32 i = 0; i < std::min(size_t(3), attackers.size()); ++i)
+            GuidSet& attackers = friendTarget->GetMap()->GetAttackersFor(friendTarget->GetObjectGuid());
+            if (!attackers.empty())
             {
-                Unit::AttackerSet::iterator aItr = attackers.begin();
-                std::advance(aItr, rand() % attackers.size());
-                AddUnitTarget((*aItr), EFFECT_INDEX_1);
-                attackers.erase(aItr);
+                // selected from list 3
+                for (uint32 i = 0; i < std::min(size_t(3), attackers.size()); ++i)
+                {
+                    GuidSet::iterator aItr = attackers.begin();
+                    std::advance(aItr, rand() % attackers.size());
+                    if (Unit* nTarget = friendTarget->GetMap()->GetUnit(*aItr))
+                        AddUnitTarget(nTarget, EFFECT_INDEX_1);
+                    attackers.erase(aItr);
+                }
             }
 
             // now let next effect cast spell at each target.

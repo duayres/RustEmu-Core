@@ -338,79 +338,92 @@ void WorldSession::LogoutPlayer(bool Save)
 
         ///- If the player just died before logging out, make him appear as a ghost
         // FIXME: logout must be delayed in case lost connection with client in time of combat
-        if (_player->GetDeathTimer())
+        if (GetPlayer()->GetDeathTimer())
         {
-            _player->getHostileRefManager().deleteReferences();
-            _player->BuildPlayerRepop();
-            _player->RepopAtGraveyard();
+            GetPlayer()->getHostileRefManager().deleteReferences();
+            GetPlayer()->BuildPlayerRepop();
+            GetPlayer()->RepopAtGraveyard();
         }
-        else if (!_player->getAttackers().empty())
+        else if (GetPlayer()->GetMap() && GetPlayer()->IsInCombat())
         {
-            _player->CombatStop();
-            _player->getHostileRefManager().setOnlineOfflineState(false);
-            _player->RemoveAllAurasOnDeath();
+            GetPlayer()->CombatStop();
+            GetPlayer()->getHostileRefManager().setOnlineOfflineState(false);
+            GetPlayer()->RemoveAllAurasOnDeath();
 
             // build set of player who attack _player or who have pet attacking of _player
             std::set<Player*> aset;
-            for (Unit::AttackerSet::const_iterator itr = _player->getAttackers().begin(); itr != _player->getAttackers().end(); ++itr)
+            GuidSet& attackers = GetPlayer()->GetMap()->GetAttackersFor(GetPlayer()->GetObjectGuid());
+
+            for (GuidSet::const_iterator itr = attackers.begin(); itr != attackers.end();)
             {
-                Unit* owner = (*itr)->GetOwner();           // including player controlled case
+                Unit* attacker = GetPlayer()->GetMap()->GetUnit(*itr++);
+                if (!attacker)
+                    continue;
+
+                Unit* owner = attacker->GetOwner();           // including player controlled case
                 if (owner)
                 {
                     if (owner->GetTypeId() == TYPEID_PLAYER)
                         aset.insert((Player*)owner);
                 }
-                else if ((*itr)->GetTypeId() == TYPEID_PLAYER)
-                    aset.insert((Player*)(*itr));
+                else
+                    if (attacker->GetTypeId() == TYPEID_PLAYER)
+                        aset.insert((Player*)(attacker));
             }
 
-            _player->SetPvPDeath(!aset.empty());
-            _player->KillPlayer();
-            _player->BuildPlayerRepop();
-            _player->RepopAtGraveyard();
+            GetPlayer()->SetPvPDeath(!aset.empty());
+            GetPlayer()->KillPlayer();
+            GetPlayer()->BuildPlayerRepop();
+            GetPlayer()->RepopAtGraveyard();
 
             // give honor to all attackers from set like group case
             for (std::set<Player*>::const_iterator itr = aset.begin(); itr != aset.end(); ++itr)
-                (*itr)->RewardHonor(_player, aset.size());
+                (*itr)->RewardHonor(GetPlayer(), aset.size());
 
             // give bg rewards and update counters like kill by first from attackers
             // this can't be called for all attackers.
             if (!aset.empty())
-                if (BattleGround* bg = _player->GetBattleGround())
-                    bg->HandleKillPlayer(_player, *aset.begin());
+                if (BattleGround *bg = GetPlayer()->GetBattleGround())
+                    bg->HandleKillPlayer(GetPlayer(), *aset.begin());
         }
-        else if (_player->HasAuraType(SPELL_AURA_SPIRIT_OF_REDEMPTION))
+        else if (GetPlayer()->HasAuraType(SPELL_AURA_SPIRIT_OF_REDEMPTION))
         {
             // this will kill character by SPELL_AURA_SPIRIT_OF_REDEMPTION
-            _player->RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT);
-            //_player->SetDeathPvP(*); set at SPELL_AURA_SPIRIT_OF_REDEMPTION apply time
-            _player->KillPlayer();
-            _player->BuildPlayerRepop();
-            _player->RepopAtGraveyard();
+            GetPlayer()->RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT);
+            //GetPlayer()->SetDeathPvP(*); set at SPELL_AURA_SPIRIT_OF_REDEMPTION apply time
+            GetPlayer()->KillPlayer();
+            GetPlayer()->BuildPlayerRepop();
+            GetPlayer()->RepopAtGraveyard();
         }
-        // drop a flag if player is carrying it
-        if (BattleGround* bg = _player->GetBattleGround())
-            bg->EventPlayerLoggedOut(_player);
+        else if (GetPlayer()->HasPendingBind())
+        {
+            GetPlayer()->RepopAtGraveyard();
+            GetPlayer()->SetPendingBind(NULL, 0);
+        }
+
+        //drop a flag if player is carrying it
+        if (BattleGround *bg = GetPlayer()->GetBattleGround())
+            bg->EventPlayerLoggedOut(GetPlayer());
 
         ///- Teleport to home if the player is in an invalid instance
-        if (!_player->m_InstanceValid && !_player->isGameMaster())
+        if (!GetPlayer()->m_InstanceValid && !GetPlayer()->isGameMaster())
         {
-            _player->TeleportToHomebind();
-            // this is a bad place to call for far teleport because we need player to be in world for successful logout
-            // maybe we should implement delayed far teleport logout?
+            GetPlayer()->TeleportToHomebind();
+            //this is a bad place to call for far teleport because we need player to be in world for successful logout
+            //maybe we should implement delayed far teleport logout?
         }
 
         // FG: finish pending transfers after starting the logout
         // this should fix players beeing able to logout and login back with full hp at death position
-        while (_player->IsBeingTeleportedFar())
+        while (GetPlayer()->IsBeingTeleportedFar())
             HandleMoveWorldportAckOpcode();
 
         for (int i = 0; i < PLAYER_MAX_BATTLEGROUND_QUEUES; ++i)
         {
-            if (BattleGroundQueueTypeId bgQueueTypeId = _player->GetBattleGroundQueueTypeId(i))
+            if (BattleGroundQueueTypeId bgQueueTypeId = GetPlayer()->GetBattleGroundQueueTypeId(i))
             {
-                _player->RemoveBattleGroundQueueId(bgQueueTypeId);
-                sBattleGroundMgr.m_BattleGroundQueues[ bgQueueTypeId ].RemovePlayer(_player->GetObjectGuid(), true);
+                GetPlayer()->RemoveBattleGroundQueueId(bgQueueTypeId);
+                sBattleGroundMgr.m_BattleGroundQueues[bgQueueTypeId].RemovePlayer(GetPlayer()->GetObjectGuid(), true);
             }
         }
 

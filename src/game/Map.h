@@ -27,6 +27,7 @@
 #include "GridDefines.h"
 #include "Cell.h"
 #include "Object.h"
+#include "ObjectGuid.h"
 #include "Timer.h"
 #include "SharedDefines.h"
 #include "GridMap.h"
@@ -36,6 +37,9 @@
 #include "ScriptMgr.h"
 #include "CreatureLinkingMgr.h"
 #include "vmap/DynamicTree.h"
+
+#include <boost/thread/lock_guard.hpp>
+#include <boost/thread/recursive_mutex.hpp>
 
 #include <bitset>
 #include <list>
@@ -91,6 +95,8 @@ enum LevelRequirementVsMode
 #endif
 
 #define MIN_UNLOAD_DELAY      1                             // immediate unload
+
+typedef std::map<ObjectGuid, GuidSet>  AttackersMap;
 
 class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>
 {
@@ -273,6 +279,21 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>
         void MonsterYellToMap(CreatureInfo const* cinfo, int32 textId, Language language, Unit const* target, uint32 senderLowGuid = 0) const;
         void PlayDirectSoundToMap(uint32 soundId, uint32 zoneId = 0) const;
 
+        // Attacker per-map storage operations
+        void AddAttackerFor(ObjectGuid targetGuid, ObjectGuid attackerGuid);
+        void RemoveAttackerFor(ObjectGuid targetGuid, ObjectGuid attackerGuid);
+        void RemoveAllAttackersFor(ObjectGuid targetGuid);
+        GuidSet& GetAttackersFor(ObjectGuid targetGuid);
+        void CreateAttackersStorageFor(ObjectGuid targetGuid);
+        void RemoveAttackersStorageFor(ObjectGuid targetGuid);
+        bool IsInCombat(ObjectGuid const& targetGuid) const;
+
+        // multithread locking
+        typedef boost::shared_mutex LockType;
+        typedef boost::shared_lock<LockType> ReadGuard;
+        typedef boost::unique_lock<LockType> WriteGuard;
+        LockType& GetLock() { return i_lock; }
+
         // Dynamic VMaps
         float GetHeight(uint32 phasemask, float x, float y, float z) const;
         bool GetHeightInRange(uint32 phasemask, float x, float y, float &z, float maxSearchDist = 4.0f) const;
@@ -393,6 +414,10 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>
 
         template<class T>
         void RemoveFromGrid(T*, NGridType*, Cell const&);
+
+        LockType            i_lock;
+        AttackersMap        m_attackersMap;
+
         // Holder for information about linked mobs
         CreatureLinkingHolder m_creatureLinkingHolder;
 

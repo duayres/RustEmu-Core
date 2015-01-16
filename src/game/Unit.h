@@ -38,6 +38,7 @@
 #include "FollowerRefManager.h"
 #include "Utilities/EventProcessor.h"
 #include "MotionMaster.h"
+#include "MapManager.h"
 #include "DBCStructure.h"
 #include "Path.h"
 #include "WorldPacket.h"
@@ -1250,7 +1251,6 @@ struct SpellProcEventEntry;                                 // used only private
 class MANGOS_DLL_SPEC Unit : public WorldObject
 {
     public:
-        typedef std::set<Unit*> AttackerSet;
         typedef std::multimap<uint32 /*spellId*/, SpellAuraHolder*> SpellAuraHolderMap;
         typedef std::pair<SpellAuraHolderMap::iterator, SpellAuraHolderMap::iterator> SpellAuraHolderBounds;
         typedef std::pair<SpellAuraHolderMap::const_iterator, SpellAuraHolderMap::const_iterator> SpellAuraHolderConstBounds;
@@ -1400,26 +1400,9 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         bool CanReachWithMeleeAttack(Unit* pVictim, float flat_mod = 0.0f) const;
         uint32 m_extraAttacks;
 
-        void _addAttacker(Unit* pAttacker)                  //< (Internal Use) must be called only from Unit::Attack(Unit*)
-        {
-            AttackerSet::const_iterator itr = m_attackers.find(pAttacker);
-            if (itr == m_attackers.end())
-                m_attackers.insert(pAttacker);
-        }
-        void _removeAttacker(Unit* pAttacker)               //< (Internal Use) must be called only from Unit::AttackStop()
-        {
-            m_attackers.erase(pAttacker);
-        }
-        Unit* getAttackerForHelper()                        //< Return a possible enemy from this unit to help in combat
-        {
-            if (getVictim() != NULL)
-                return getVictim();
+        bool IsInCombat() const { return GetMap() ? GetMap()->IsInCombat(GetObjectGuid()) : false; }
+        Unit* getAttackerForHelper();                       // If someone wants to help, who to give them
 
-            if (!m_attackers.empty())
-                return *(m_attackers.begin());
-
-            return NULL;
-        }
         /**
          * Tries to attack a Unit/Player, also makes sure to stop attacking the current target
          * if we're already attacking someone.
@@ -1456,13 +1439,10 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
          */
         void RemoveAllAttackers();
 
-        /// Returns the Unit::m_attackers, that stores the units that are attacking you
-        AttackerSet const& getAttackers() const { return m_attackers; }
-
         bool isAttackingPlayer() const;                     //< Returns if this unit is attacking a player (or this unit's minions/pets are attacking a player)
         bool CanAttackByItself() const;                     //< Used to check if a vehicle is allowed attack other units by itself
 
-        Unit* getVictim() const { return m_attacking; }     //< Returns the victim that this unit is currently attacking
+        Unit* getVictim() const { return GetMap() ? GetMap()->GetUnit(m_attackingGuid) : NULL; }
         void CombatStop(bool includingCast = false);        //< Stop this unit from combat, if includingCast==true, also interrupt casting
         void CombatStopWithPets(bool includingCast = false);
         void StopAttackFaction(uint32 faction_id);
@@ -2289,8 +2269,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         float m_createStats[MAX_STATS];
 
-        AttackerSet m_attackers;
-        Unit* m_attacking;
+        ObjectGuid m_attackingGuid;
 
         DeathState m_deathState;
 
