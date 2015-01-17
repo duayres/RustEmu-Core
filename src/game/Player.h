@@ -1207,7 +1207,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         bool HasItemTotemCategory(uint32 TotemCategory) const;
         InventoryResult CanUseItem(ItemPrototype const* pItem) const;
         InventoryResult CanUseAmmo(uint32 item) const;
-        Item* StoreNewItem(ItemPosCountVec const& pos, uint32 item, bool update, int32 randomPropertyId = 0);
+        Item* StoreNewItem(ItemPosCountVec const& pos, uint32 item, bool update, int32 randomPropertyId = 0, AllowedLooterSet* allowedLooters = NULL);
         Item* StoreItem(ItemPosCountVec const& pos, Item* pItem, bool update);
         Item* EquipNewItem(uint16 pos, uint32 item, bool update);
         Item* EquipItem(uint16 pos, Item* pItem, bool update);
@@ -1288,6 +1288,11 @@ class MANGOS_DLL_SPEC Player : public Unit
         void TradeCancel(bool sendback);
 
         void UpdateEnchantTime(uint32 time);
+
+        void AddItemWithTimeCheck(uint32 lowGuid);
+        void RemoveItemWithTimeCheck(uint32 lowGuid);
+        void UpdateItemsWithTimeCheck();
+
         void UpdateItemDuration(uint32 time, bool realtimeonly = false);
         void AddEnchantmentDurations(Item* item);
         void RemoveEnchantmentDurations(Item* item);
@@ -2203,6 +2208,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         void SetMover(Unit* target) { m_mover = target ? target : this; }
         Unit* GetMover() const { return m_mover; }
         bool IsSelfMover() const { return m_mover == this; }// normal case for player not controlling other unit
+        void InterruptTaxiFlying();
 
         ObjectGuid const& GetFarSightGuid() const { return GetGuidValue(PLAYER_FARSIGHT); }
 
@@ -2655,6 +2661,11 @@ class MANGOS_DLL_SPEC Player : public Unit
         }
 
         void _fillGearScoreData(Item* item, GearScoreVec* gearScore, uint32& twoHandScore);
+
+        std::set<uint32> m_itemsWithTimeCheck;
+
+        void SendRefundInfo(Item* item);
+        void RefundItem(Item* item);
 
         Unit* m_mover;
         Camera m_camera;

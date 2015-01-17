@@ -185,15 +185,15 @@ void PlayerTaxi::InitTaxiNodesForLevel(uint32 race, uint32 chrClass, uint32 leve
 
 void PlayerTaxi::LoadTaxiMask(const char* data)
 {
-    Tokens tokens = StrSplit(data, " ");
+    Tokens tokens(data, ' ');
 
     int index;
     Tokens::iterator iter;
     for (iter = tokens.begin(), index = 0;
-            (index < TaxiMaskSize) && (iter != tokens.end()); ++iter, ++index)
+        (index < TaxiMaskSize) && (iter != tokens.end()); ++iter, ++index)
     {
         // load and set bits only for existing taxi nodes
-        m_taximask[index] = sTaxiNodesMask[index] & uint32(atol((*iter).c_str()));
+        m_taximask[index] = sTaxiNodesMask[index] & uint32(atol(*iter));
     }
 }
 
@@ -215,11 +215,11 @@ bool PlayerTaxi::LoadTaxiDestinationsFromString(const std::string& values, Team 
 {
     ClearTaxiDestinations();
 
-    Tokens tokens = StrSplit(values, " ");
+    Tokens tokens(values, ' ');
 
     for (Tokens::iterator iter = tokens.begin(); iter != tokens.end(); ++iter)
     {
-        uint32 node = uint32(atol(iter->c_str()));
+        uint32 node = uint32(atol(*iter));
         AddTaxiDestination(node);
     }
 
@@ -571,7 +571,8 @@ Player::~Player()
 
     // it must be unloaded already in PlayerLogout and accessed only for loggined player
     // m_social = NULL;
-    sLFGMgr.RemoveLFGState(GetObjectGuid());
+    if (GetObjectGuid())
+        sLFGMgr.RemoveLFGState(GetObjectGuid());
 
     // Note: buy back item already deleted from DB when player was saved
     for (int i = 0; i < PLAYER_SLOTS_COUNT; ++i)
@@ -1596,11 +1597,11 @@ bool Player::BuildEnumData(QueryResult* result, WorldPacket* p_data)
         *p_data << uint32(petFamily);
     }
 
-    Tokens data = StrSplit(fields[19].GetCppString(), " ");
-    for (uint8 slot = 0; slot < EQUIPMENT_SLOT_END; ++slot)
+    Tokens data(fields[19].GetCppString(), ' ');
+    for (uint8 slot = 0; slot < EQUIPMENT_SLOT_END; slot++)
     {
         uint32 visualbase = slot * 2;
-        uint32 item_id = GetUInt32ValueFromArray(data, visualbase);
+        uint32 item_id = atoi(data[visualbase]);
         const ItemPrototype* proto = ObjectMgr::GetItemPrototype(item_id);
         if (!proto)
         {
@@ -1612,7 +1613,7 @@ bool Player::BuildEnumData(QueryResult* result, WorldPacket* p_data)
 
         SpellItemEnchantmentEntry const* enchant = NULL;
 
-        uint32 enchants = GetUInt32ValueFromArray(data, visualbase + 1);
+        uint32 enchants = atoi(data[visualbase + 1]);
         for (uint8 enchantSlot = PERM_ENCHANTMENT_SLOT; enchantSlot <= TEMP_ENCHANTMENT_SLOT; ++enchantSlot)
         {
             // values stored in 2 uint16
@@ -10962,7 +10963,7 @@ void Player::RemoveAmmo()
 }
 
 // Return stored item (if stored to stack, it can diff. from pItem). And pItem ca be deleted in this case.
-Item* Player::StoreNewItem(ItemPosCountVec const& dest, uint32 item, bool update, int32 randomPropertyId)
+Item* Player::StoreNewItem(ItemPosCountVec const& dest, uint32 item, bool update, int32 randomPropertyId, AllowedLooterSet* allowedLooters)
 {
     uint32 count = 0;
     for (ItemPosCountVec::const_iterator itr = dest.begin(); itr != dest.end(); ++itr)
@@ -10971,9 +10972,15 @@ Item* Player::StoreNewItem(ItemPosCountVec const& dest, uint32 item, bool update
     Item* pItem = Item::CreateItem(item, count, this, randomPropertyId);
     if (pItem)
     {
+        ResetCachedGearScore();
         ItemAddedQuestCheck(item, count);
         GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_RECEIVE_EPIC_ITEM, item, count);
+        GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_OWN_ITEM, item, count);
         pItem = StoreItem(dest, pItem, update);
+
+        if (pItem->IsEligibleForSoulboundTrade(allowedLooters))
+            pItem->SetSoulboundTradeable(this, allowedLooters);
+
     }
     return pItem;
 }
@@ -15325,17 +15332,13 @@ void Player::_LoadIntoDataField(const char* data, uint32 startOffset, uint32 cou
     if (!data)
         return;
 
-    Tokens tokens = StrSplit(data, " ");
+    Tokens tokens(data, ' ', count);
 
     if (tokens.size() != count)
         return;
 
-    Tokens::iterator iter;
-    uint32 index;
-    for (iter = tokens.begin(), index = 0; index < count; ++iter, ++index)
-    {
-        m_uint32Values[startOffset + index] = atol((*iter).c_str());
-    }
+    for (uint32 index = 0; index < count; ++index)
+        m_uint32Values[startOffset + index] = atol(tokens[index]);
 }
 
 bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
@@ -23796,4 +23799,219 @@ void Player::_LoadRandomBGStatus(QueryResult *result)
         m_IsBGRandomWinner = true;
         delete result;
     }
+}
+
+void Player::InterruptTaxiFlying()
+{
+    // stop flight if need
+    if (IsTaxiFlying())
+    {
+        GetMotionMaster()->MovementExpired();
+        m_taxi.ClearTaxiDestinations();
+    }
+    // save only in non-flight case
+    else
+        SaveRecallPosition();
+}
+
+void Player::AddItemWithTimeCheck(uint32 lowGuid)
+{
+    m_itemsWithTimeCheck.insert(lowGuid);
+}
+
+void Player::RemoveItemWithTimeCheck(uint32 lowGuid)
+{
+    std::set<uint32>::iterator itr = m_itemsWithTimeCheck.find(lowGuid);
+    if (itr != m_itemsWithTimeCheck.end())
+        m_itemsWithTimeCheck.erase(lowGuid);
+}
+
+void Player::UpdateItemsWithTimeCheck()
+{
+    if (m_itemsWithTimeCheck.empty())
+        return;
+
+    std::set<uint32>::iterator i_next;
+    for (std::set<uint32>::iterator itr = m_itemsWithTimeCheck.begin(); itr != m_itemsWithTimeCheck.end(); itr = i_next)
+    {
+        i_next = itr;
+        ++i_next;
+
+        bool erase = false;
+
+        if (Item* item = GetItemByGuid(ObjectGuid(HIGHGUID_ITEM, *itr)))
+        {
+            erase = item->GetOwnerGuid() != GetObjectGuid();
+            if (!erase)
+            {
+                if (item->HasFlag(ITEM_FIELD_FLAGS, ITEM_FLAG_REFUNDABLE))
+                    item->CheckRefundExpired(this);
+                else if (item->HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_BOP_TRADEABLE))
+                    item->CheckSoulboundTradeExpire(this);
+                else
+                    erase = true;
+            }
+        }
+        else
+        {
+            sLog.outError("Player::UpdateItemsWithTimeCheck: Can't find item (Guid: %u) but is in update storage for %s. Removing.", *itr, GetGuidStr().c_str());
+            erase = true;
+        }
+
+        if (erase)
+            m_itemsWithTimeCheck.erase(itr);
+    }
+}
+
+void Player::SendRefundInfo(Item* item)
+{
+    item->CheckRefundExpired(this);
+
+    if (!item->HasFlag(ITEM_FIELD_FLAGS, ITEM_FLAG_REFUNDABLE))
+    {
+        DEBUG_LOG("Player::SendRefundInfo: Item not refundable!");
+        return;
+    }
+
+    if (GetObjectGuid() != item->GetOwnerGuid())    // Formerly refundable item got traded
+    {
+        DEBUG_LOG("Player::SendRefundInfo: Item was traded!");
+        item->SetNotRefundable(this);
+        return;
+    }
+
+    ItemExtendedCostEntry const* iece = sItemExtendedCostStore.LookupEntry(item->GetPaidExtendedCost());
+    if (!iece)
+    {
+        DEBUG_LOG("Player::SendRefundInfo: Cannot find extendedcost data.");
+        return;
+    }
+
+    WorldPacket data(SMSG_ITEM_REFUND_INFO_RESPONSE, 8 + 4 + 4 + 4 + 4 * 4 + 4 * 4 + 4 + 4);
+    data << item->GetObjectGuid();                  // item guid
+    data << uint32(item->GetPaidMoney());           // money cost
+    data << uint32(iece->reqhonorpoints);           // honor point cost
+    data << uint32(iece->reqarenapoints);           // arena point cost
+    for (uint32 i = 0; i < MAX_EXTENDED_COST_ITEMS; ++i)   // item cost data
+    {
+        data << uint32(iece->reqitem[i]);
+        data << uint32(iece->reqitemcount[i]);
+    }
+    data << uint32(0);
+    data << uint32(item->GetUInt32Value(ITEM_FIELD_CREATE_PLAYED_TIME));
+    GetSession()->SendPacket(&data);
+}
+
+void Player::RefundItem(Item* item)
+{
+    if (!item->HasFlag(ITEM_FIELD_FLAGS, ITEM_FLAG_REFUNDABLE))
+    {
+        DEBUG_LOG("Player::RefundItem: Item not refundable!");
+        return;
+    }
+
+    if (item->CheckRefundExpired(this))             // item refund has expired
+    {
+        WorldPacket data(SMSG_ITEM_REFUND_RESULT, 8 + 4);
+        data << item->GetObjectGuid();              // Guid
+        data << uint32(10);                         // Error!
+        GetSession()->SendPacket(&data);
+        return;
+    }
+
+    if (GetObjectGuid() != item->GetOwnerGuid())    // Formerly refundable item got traded
+    {
+        DEBUG_LOG("Player::RefundItem: Item was traded!");
+        item->SetNotRefundable(this);
+        return;
+    }
+
+    ItemExtendedCostEntry const* iece = sItemExtendedCostStore.LookupEntry(item->GetPaidExtendedCost());
+    if (!iece)
+    {
+        DEBUG_LOG("Player::RefundItem: Cannot find extendedcost data.");
+        return;
+    }
+
+    bool storeError = false;
+    for (uint32 i = 0; i < MAX_EXTENDED_COST_ITEMS; ++i)
+    {
+        uint32 count = iece->reqitemcount[i];
+        uint32 itemid = iece->reqitem[i];
+
+        if (count && itemid)
+        {
+            ItemPosCountVec dest;
+            InventoryResult msg = CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itemid, count);
+            if (msg != EQUIP_ERR_OK)
+            {
+                storeError = true;
+                break;
+            }
+        }
+    }
+
+    if (storeError)
+    {
+        WorldPacket data(SMSG_ITEM_REFUND_RESULT, 8 + 4);
+        data << item->GetObjectGuid();                   // Guid
+        data << uint32(10);                              // Error!
+        GetSession()->SendPacket(&data);
+        return;
+    }
+
+    WorldPacket data(SMSG_ITEM_REFUND_RESULT, 8 + 4 + 4 + 4 + 4 + 4 * 4 + 4 * 4);
+    data << item->GetObjectGuid();                      // item guid
+    data << uint32(0);                                  // 0, or error code
+    data << uint32(item->GetPaidMoney());               // money cost
+    data << uint32(iece->reqhonorpoints);               // honor point cost
+    data << uint32(iece->reqarenapoints);               // arena point cost
+    for (uint32 i = 0; i < MAX_EXTENDED_COST_ITEMS; ++i) // item cost data
+    {
+        data << uint32(iece->reqitem[i]);
+        data << uint32(iece->reqitemcount[i]);
+    }
+    GetSession()->SendPacket(&data);
+
+    uint32 moneyRefund = item->GetPaidMoney();  // item-> will be invalidated in DestroyItem
+
+    // Save all relevant data to DB to prevent desynchronisation exploits
+    CharacterDatabase.BeginTransaction();
+
+    // Delete any references to the refund data
+    item->SetNotRefundable(this);
+
+    // Destroy item
+    DestroyItem(item->GetBagSlot(), item->GetSlot(), true);
+
+    // Grant back extendedcost items
+    for (uint8 i = 0; i < MAX_EXTENDED_COST_ITEMS; ++i)
+    {
+        uint32 count = iece->reqitemcount[i];
+        uint32 itemid = iece->reqitem[i];
+        if (count && itemid)
+        {
+            ItemPosCountVec dest;
+            InventoryResult msg = CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itemid, count);
+            MANGOS_ASSERT(msg == EQUIP_ERR_OK); // Already checked before
+            Item* it = StoreNewItem(dest, itemid, true);
+            SendNewItem(it, count, true, false, true);
+        }
+    }
+
+    // Grant back money
+    if (moneyRefund)
+        ModifyMoney(int32(moneyRefund)); // Saved in SaveInventoryAndGoldToDB
+
+    // Grant back Honor points
+    if (uint32 honorRefund = iece->reqhonorpoints)
+        ModifyHonorPoints(int32(honorRefund));
+
+    // Grant back Arena points
+    if (uint32 arenaRefund = iece->reqarenapoints)
+        ModifyArenaPoints(int32(arenaRefund));
+
+    SaveInventoryAndGoldToDB();
+
+    CharacterDatabase.CommitTransaction();
 }

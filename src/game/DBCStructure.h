@@ -1250,48 +1250,6 @@ struct LFGDungeonExpansionEntry
     bool IsRandom() const { return randomEntry == 0; }
 };
 
-/*struct LfgDungeonsEntry
-{
-    m_ID
-    m_name_lang
-    m_minLevel
-    m_maxLevel
-    m_target_level
-    m_target_level_min
-    m_target_level_max
-    m_mapID
-    m_difficulty
-    m_flags
-    m_typeID
-    m_faction
-    m_textureFilename
-    m_expansionLevel
-    m_order_index
-    m_group_id
-    m_description_lang
-};*/
-
-/*struct LfgDungeonGroupEntry
-{
-    m_ID
-    m_name_lang
-    m_order_index
-    m_parent_group_id
-    m_typeid
-};*/
-
-/*struct LfgDungeonExpansionEntry
-{
-    m_ID
-    m_lfg_id
-    m_expansion_level
-    m_random_id
-    m_hard_level_min
-    m_hard_level_max
-    m_target_level_min
-    m_target_level_max
-};*/
-
 struct LiquidTypeEntry
 {
     uint32 Id;                                              // 0

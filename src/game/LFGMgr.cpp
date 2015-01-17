@@ -694,6 +694,9 @@ LFGLockStatusType LFGMgr::GetPlayerLockStatus(Player* pPlayer, LFGDungeonEntry c
         }
     }
 
+    if (isRandom && sWorld.IsDungeonMapIdDisable(dungeon->map))
+        return LFG_LOCKSTATUS_NOT_IN_SEASON;
+
     if (dungeon->expansion > pPlayer->GetSession()->Expansion())
         return LFG_LOCKSTATUS_INSUFFICIENT_EXPANSION;
 
@@ -1776,7 +1779,7 @@ void LFGMgr::Teleport(Group* pGroup, bool out)
 
 void LFGMgr::Teleport(Player* pPlayer, bool out, bool fromOpcode /*= false*/)
 {
-    if (!pPlayer || pPlayer->isInCombat())
+    if (!pPlayer || pPlayer->IsInCombat())
         return;
 
     DEBUG_LOG("LFGMgr::TeleportPlayer: %u is being teleported %s", pPlayer->GetObjectGuid().GetCounter(), out ? "from dungeon." : "in dungeon.");
@@ -1868,10 +1871,7 @@ void LFGMgr::Teleport(Player* pPlayer, bool out, bool fromOpcode /*= false*/)
 
         // stop taxi flight at port
         if (pPlayer->IsTaxiFlying())
-        {
-            pPlayer->GetMotionMaster()->MovementExpired();
-            pPlayer->m_taxi.ClearTaxiDestinations();
-        }
+            pPlayer->InterruptTaxiFlying();
 
         pPlayer->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
         pPlayer->RemoveSpellsCausingAura(SPELL_AURA_FLY);

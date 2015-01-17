@@ -195,6 +195,7 @@ enum eConfigUInt32Values
     CONFIG_UINT32_CREATURE_RESPAWN_AGGRO_DELAY,
     CONFIG_UINT32_RANDOM_BG_RESET_HOUR,
     CONFIG_UINT32_RESIST_CALC_METHOD,
+    CONFIG_UINT32_GROUPLEADER_RECONNECT_PERIOD,
     CONFIG_UINT32_LFG_MAXKICKS,
     CONFIG_UINT32_VALUE_COUNT
 };
@@ -359,6 +360,7 @@ enum eConfigBoolValues
     CONFIG_BOOL_LFG_DEBUG_ENABLE,
     CONFIG_BOOL_LFR_EXTEND,
     CONFIG_BOOL_LFG_ONLYLASTENCOUNTER,
+    CONFIG_BOOL_INSTANCES_RESET_GROUP_ANNOUNCE,
     CONFIG_BOOL_VALUE_COUNT
 };
 
@@ -607,6 +609,11 @@ class World
         void LoadDBVersion();
         char const* GetDBVersion() { return m_DBVersion.c_str(); }
         char const* GetCreatureEventAIVersion() { return m_CreatureEventAIVersion.c_str(); }
+
+        // Disable dungeons for LFG system
+        void setDisabledMapIdForDungeonFinder(const char* areas);
+        bool IsDungeonMapIdDisable(uint32 mapId);
+
         /**
         * \brief: force all client to request player data
         * \param: ObjectGuid guid : guid of the specified player
@@ -709,6 +716,9 @@ class World
         // used versions
         std::string m_DBVersion;
         std::string m_CreatureEventAIVersion;
+
+        // Disable dungeons for LFG system
+        std::set<uint32> disabledMapIdForDungeonFinder; // set of MapIds which are disabled for DungeonFinder
 
         // List of Maps that should be force-loaded on startup
         std::set<uint32>* m_configForceLoadMapIds;

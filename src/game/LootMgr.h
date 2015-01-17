@@ -1,20 +1,20 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- */
+* This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
 
 #ifndef MANGOS_LOOTMGR_H
 #define MANGOS_LOOTMGR_H
@@ -26,10 +26,6 @@
 
 #include <map>
 #include <vector>
-
-class Player;
-class LootStore;
-class WorldObject;
 
 #define MAX_NR_LOOT_ITEMS 16
 // note: the client cannot show more than 16 items total
@@ -71,6 +67,10 @@ enum LootSlotType
     MAX_LOOT_SLOT_TYPE                                      // custom, use for mark skipped from show items
 };
 
+class Player;
+class LootStore;
+class WorldObject;
+
 struct LootStoreItem
 {
     uint32  itemid;                                         // id of the item
@@ -93,11 +93,14 @@ struct LootStoreItem
     // Checks correctness of values
 };
 
+typedef std::set<uint32> AllowedLooterSet;
+
 struct LootItem
 {
     uint32  itemid;
     uint32  randomSuffix;
     int32   randomPropertyId;
+    AllowedLooterSet allowedGuids;
     uint16  conditionId       : 16;                         // allow compiler pack structure
     uint8   count             : 8;
     bool    is_looted         : 1;
@@ -114,6 +117,10 @@ struct LootItem
     LootItem(uint32 itemid_, uint32 count_, uint32 randomSuffix_ = 0, int32 randomPropertyId_ = 0);
 
     // Basic checks for player/item compatibility - if false no chance to see the item in the loot
+
+    void AddAllowedLooter(Player const* player);
+    AllowedLooterSet* GetAllowedLooters() { return &allowedGuids; }
+
     bool AllowedForPlayer(Player const* player, WorldObject const* lootTarget) const;
     LootSlotType GetSlotTypeForSharedLoot(PermissionTypes permission, Player* viewer, WorldObject const* lootTarget, bool condition_ok = false) const;
 };
@@ -136,7 +143,7 @@ struct Loot;
 class LootTemplate;
 
 typedef std::vector<QuestItem> QuestItemList;
-typedef std::map<uint32, QuestItemList*> QuestItemMap;
+typedef std::map<uint32, QuestItemList> QuestItemMap;
 typedef std::vector<LootStoreItem> LootStoreItemList;
 typedef UNORDERED_MAP<uint32, LootTemplate*> LootTemplateMap;
 
@@ -205,8 +212,8 @@ class LootValidatorRef :  public Reference<Loot, LootValidatorRef>
 {
     public:
         LootValidatorRef() {}
-        void targetObjectDestroyLink() override {}
-        void sourceObjectDestroyLink() override {}
+        void targetObjectDestroyLink() {}
+        void sourceObjectDestroyLink() {}
 };
 
 //=====================================================
@@ -256,18 +263,9 @@ struct Loot
         // void clear();
         void clear()
         {
-            for (QuestItemMap::const_iterator itr = m_playerQuestItems.begin(); itr != m_playerQuestItems.end(); ++itr)
-                delete itr->second;
             m_playerQuestItems.clear();
-
-            for (QuestItemMap::const_iterator itr = m_playerFFAItems.begin(); itr != m_playerFFAItems.end(); ++itr)
-                delete itr->second;
             m_playerFFAItems.clear();
-
-            for (QuestItemMap::const_iterator itr = m_playerNonQuestNonFFAConditionalItems.begin(); itr != m_playerNonQuestNonFFAConditionalItems.end(); ++itr)
-                delete itr->second;
             m_playerNonQuestNonFFAConditionalItems.clear();
-
             m_playersLooting.clear();
             items.clear();
             m_questItems.clear();

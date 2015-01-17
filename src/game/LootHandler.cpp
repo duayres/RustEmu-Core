@@ -1,20 +1,20 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- */
+* This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
 
 #include "Common.h"
 #include "WorldPacket.h"
@@ -132,7 +132,7 @@ void WorldSession::HandleAutostoreLootItemOpcode(WorldPacket& recv_data)
     InventoryResult msg = player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, item->itemid, item->count);
     if (msg == EQUIP_ERR_OK)
     {
-        Item* newitem = player->StoreNewItem(dest, item->itemid, true, item->randomPropertyId);
+        Item* newitem = player->StoreNewItem(dest, item->itemid, true, item->randomPropertyId, item->GetAllowedLooters());
 
         if (qitem)
         {
@@ -251,6 +251,12 @@ void WorldSession::HandleLootMoneyOpcode(WorldPacket& /*recv_data*/)
                     playersNear.push_back(playerGroup);
             }
 
+            if (playersNear.size() == 0)
+            {
+                sLog.outError("WorldSession::HandleLootMoneyOpcode %s try aquire group loot without any group member! Cheat attempt assumed.", player->GetObjectGuid().GetString().c_str());
+                return;
+            }
+
             uint32 money_per_player = uint32((pLoot->gold) / (playersNear.size()));
 
             for (std::vector<Player*>::const_iterator i = playersNear.begin(); i != playersNear.end(); ++i)
@@ -291,7 +297,7 @@ void WorldSession::HandleLootOpcode(WorldPacket& recv_data)
     recv_data >> guid;
 
     // Check possible cheat
-    if (!_player->isAlive())
+    if (!GetPlayer()->isAlive() || !guid.IsCreatureOrVehicle())
         return;
 
     GetPlayer()->SendLoot(guid, LOOT_CORPSE);
@@ -429,7 +435,7 @@ void WorldSession::DoLootRelease(ObjectGuid lguid)
 
             switch (pItem->loot.loot_type)
             {
-                    // temporary loot in stacking items, clear loot state, no auto loot move
+                // temporary loot in stacking items, clear loot state, no auto loot move
                 case LOOT_MILLING:
                 case LOOT_PROSPECTING:
                 {
@@ -523,10 +529,16 @@ void WorldSession::HandleLootMasterGiveOpcode(WorldPacket& recv_data)
     if (!target)
         return;
 
-    DEBUG_LOG("WorldSession::HandleLootMasterGiveOpcode (CMSG_LOOT_MASTER_GIVE, 0x02A3) Target = %s [%s].", target_playerguid.GetString().c_str(), target->GetName());
+    DEBUG_LOG("WorldSession::HandleLootMasterGiveOpcode (CMSG_LOOT_MASTER_GIVE, 0x02A3) Target = %s.", target->GetGuidStr().c_str());
 
     if (_player->GetLootGuid() != lootguid)
         return;
+
+    if (!_player->IsInSameRaidWith(target) || !_player->IsInMap(target))
+    {
+        sLog.outString("WorldSession::HandleLootMasterGiveOpcode: %s tried to give an item to ineligible %s!", _player->GetGuidStr().c_str(), target->GetGuidStr().c_str());
+        return;
+    }
 
     Loot* pLoot = NULL;
 
@@ -551,7 +563,7 @@ void WorldSession::HandleLootMasterGiveOpcode(WorldPacket& recv_data)
 
     if (slotid > pLoot->items.size())
     {
-        DEBUG_LOG("AutoLootItem: Player %s might be using a hack! (slot %d, size " SIZEFMTD ")", GetPlayer()->GetName(), slotid, pLoot->items.size());
+        DEBUG_LOG("AutoLootItem: %s might be using a hack! (slot %d, size " SIZEFMTD ")", GetPlayer()->GetGuidStr().c_str(), slotid, pLoot->items.size());
         return;
     }
 
@@ -569,7 +581,7 @@ void WorldSession::HandleLootMasterGiveOpcode(WorldPacket& recv_data)
     }
 
     // now move item from loot to target inventory
-    Item* newitem = target->StoreNewItem(dest, item.itemid, true, item.randomPropertyId);
+    Item* newitem = target->StoreNewItem(dest, item.itemid, true, item.randomPropertyId, item.GetAllowedLooters());
     target->SendNewItem(newitem, uint32(item.count), false, false, true);
     target->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LOOT_ITEM, item.itemid, item.count);
     target->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_LOOT_TYPE, pLoot->loot_type, item.count);

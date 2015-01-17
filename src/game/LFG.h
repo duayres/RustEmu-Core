@@ -267,7 +267,7 @@ struct LFGProposal
 };
 
 
-struct MANGOS_DLL_SPEC LFGStateStructure
+struct LFGStateStructure
 {
 public:
     virtual ~LFGStateStructure() {};
@@ -308,8 +308,7 @@ protected:
 
 };
 
-
-struct MANGOS_DLL_SPEC LFGPlayerState : public LFGStateStructure
+struct LFGPlayerState : public LFGStateStructure
 {
 public:
     explicit LFGPlayerState(ObjectGuid const& playerGuid) : LFGStateStructure(playerGuid)
@@ -350,7 +349,7 @@ private:
 
 typedef UNORDERED_MAP<ObjectGuid, LFGAnswer> LFGAnswerMap;
 
-struct MANGOS_DLL_SPEC LFGGroupState : public LFGStateStructure
+struct LFGGroupState : public LFGStateStructure
 {
 
 public:

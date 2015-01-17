@@ -64,7 +64,7 @@ bool Map2ZoneCoordinates(float& x, float& y, uint32 zone);
 typedef std::map<uint32/*pair32(map,diff)*/, MapDifficultyEntry const*> MapDifficultyMap;
 MapDifficultyEntry const* GetMapDifficultyData(uint32 mapId, Difficulty difficulty);
 
-typedef std::map<uint32/* pair32(dungeonId,expansion) */, LFGDungeonExpansionEntry const*> LFGDungeonExpansionMap;
+typedef UNORDERED_MAP<uint32/* pair32(dungeonId,expansion) */, LFGDungeonExpansionEntry const*> LFGDungeonExpansionMap;
 LFGDungeonExpansionEntry const* GetLFGExpansionEntry(uint32 dungeonId, uint32 expansion);
 
 // natural order for difficulties up-down iteration

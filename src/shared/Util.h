@@ -24,13 +24,15 @@
 #include <string>
 #include <vector>
 
-typedef std::vector<std::string> Tokens;
+struct Tokens : public std::vector<char*>
+{
+    Tokens(const std::string &src, const char sep, uint32 vectorReserve = 0);
+    ~Tokens() { delete[] m_str; }
 
-Tokens StrSplit(const std::string& src, const std::string& sep);
-uint32 GetUInt32ValueFromArray(Tokens const& data, uint16 index);
-float GetFloatValueFromArray(Tokens const& data, uint16 index);
+    char* m_str;
+};
 
-void stripLineInvisibleChars(std::string& src);
+void stripLineInvisibleChars(std::string &src);
 
 std::string secsToTimeString(time_t timeInSecs, bool shortText = false, bool hoursOnly = false);
 uint32 TimeStringToSecs(const std::string& timestring);

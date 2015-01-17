@@ -96,12 +96,12 @@ void RealmList::UpdateRealm(uint32 ID, const std::string& name, const std::strin
     realm.allowedSecurityLevel = allowed_security_level;
     realm.populationLevel = population;
 
-    Tokens tokens = StrSplit(builds, " ");
+    Tokens tokens(builds, ' ');
     Tokens::iterator iter;
 
     for (iter = tokens.begin(); iter != tokens.end(); ++iter)
     {
-        uint32 build = atol((*iter).c_str());
+        uint32 build = atol(*iter);
         realm.realmbuilds.insert(build);
     }
 

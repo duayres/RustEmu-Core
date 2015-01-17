@@ -1124,6 +1124,12 @@ bool Item::IsBindedNotWith(Player const* player) const
     if (GetOwnerGuid() == player->GetObjectGuid())
         return false;
 
+    if (HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_BOP_TRADEABLE))
+    {
+        if (m_allowedLooterGuids.find(player->GetObjectGuid().GetCounter()) != m_allowedLooterGuids.end())
+            return false;
+    }
+
     // has loot with diff owner
     if (HasGeneratedLoot())
         return true;
@@ -1271,4 +1277,244 @@ void Item::SetLootState(ItemLootUpdateState state)
 
     if (m_lootState != ITEM_LOOT_NONE && m_lootState != ITEM_LOOT_UNCHANGED && m_lootState != ITEM_LOOT_TEMPORARY)
         SetState(ITEM_CHANGED);
+}
+
+bool Item::IsRefundOrSoulboundTradeExpired(Player* owner) const
+{
+    return GetUInt32Value(ITEM_FIELD_CREATE_PLAYED_TIME) + (2 * HOUR) < owner->GetTotalPlayedTime();
+}
+
+// Item Refund
+
+bool Item::IsEligibleForRefund() const
+{
+    ItemPrototype const* proto = GetProto();
+    if (!proto || !(proto->Flags & ITEM_FLAG_REFUNDABLE) || (proto->GetMaxStackSize() != 1))
+        return false;
+
+    for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
+    {
+        _Spell const& spellData = proto->Spells[i];
+
+        if (spellData.SpellCharges > 0)
+            return false;
+    }
+
+    return true;
+}
+
+void Item::SetRefundable(Player* owner, uint32 paidCost, uint16 paidExtendedCost, bool load/*=false*/)
+{
+    SetFlag(ITEM_FIELD_FLAGS, ITEM_FLAG_REFUNDABLE);
+
+    m_paidCost = paidCost;
+    m_paidExtCost = paidExtendedCost;
+
+    if (!load)
+    {
+        SetUInt32Value(ITEM_FIELD_CREATE_PLAYED_TIME, owner->GetTotalPlayedTime());
+        SaveRefundDataToDB();
+    }
+
+    owner->AddItemWithTimeCheck(GetGUIDLow());
+}
+
+void Item::SetNotRefundable(Player* owner, bool changeState/*=true*/)
+{
+    if (!HasFlag(ITEM_FIELD_FLAGS, ITEM_FLAG_REFUNDABLE))
+        return;
+
+    RemoveFlag(ITEM_FIELD_FLAGS, ITEM_FLAG_REFUNDABLE);
+    SetUInt32Value(ITEM_FIELD_CREATE_PLAYED_TIME, 0);
+
+    if (changeState)
+        SetState(ITEM_CHANGED, owner);
+
+    m_paidCost = 0;
+    m_paidExtCost = 0;
+
+    DeleteRefundDataFromDB();
+    owner->RemoveItemWithTimeCheck(GetGUIDLow());
+}
+
+void Item::DeleteRefundDataFromDB()
+{
+    static SqlStatementID delRefund;
+    CharacterDatabase.CreateStatement(delRefund, "DELETE FROM item_refund_instance WHERE itemGuid = ?")
+        .PExecute(GetGUIDLow());
+}
+
+void Item::SaveRefundDataToDB()
+{
+    Player* owner = GetOwner();
+    if (!owner)
+        return;
+
+    static SqlStatementID saveRefund;
+    CharacterDatabase.CreateStatement(saveRefund, "REPLACE INTO item_refund_instance (itemGuid, playerGuid, paidMoney, paidExtendedCost) VALUES (?, ?, ?, ?)")
+        .PExecute(GetGUIDLow(), owner->GetGUIDLow(), m_paidCost, m_paidExtCost);
+}
+
+bool Item::LoadRefundDataFromDB(Player* owner)
+{
+    bool failed = true;
+
+    if (!IsRefundOrSoulboundTradeExpired(owner))
+    {
+        QueryResult* result = CharacterDatabase.PQuery("SELECT paidMoney, paidExtendedCost FROM item_refund_instance WHERE itemGuid = %u AND playerGuid = %u", GetGUIDLow(), owner->GetGUIDLow());
+        if (result)
+        {
+            Field* fields = result->Fetch();
+            SetRefundable(owner, fields[0].GetUInt32(), fields[1].GetUInt16(), true);
+            delete result;
+            failed = false;
+        }
+    }
+    else
+        DeleteRefundDataFromDB();
+
+    if (failed)
+    {
+        RemoveFlag(ITEM_FIELD_FLAGS, ITEM_FLAG_REFUNDABLE);
+        SetUInt32Value(ITEM_FIELD_CREATE_PLAYED_TIME, 0);
+        return false;
+    }
+
+    return true;
+}
+
+bool Item::CheckRefundExpired(Player* owner)
+{
+    if (!HasFlag(ITEM_FIELD_FLAGS, ITEM_FLAG_REFUNDABLE))
+        return true;
+
+    if (IsRefundOrSoulboundTradeExpired(owner))
+    {
+        SetNotRefundable(owner);
+        return true;
+    }
+
+    return false;
+}
+
+// SoulboundTrade
+
+bool Item::IsEligibleForSoulboundTrade(AllowedLooterSet* allowedLooters) const
+{
+    if (!allowedLooters || allowedLooters->size() < 2)
+        return false;
+
+    ItemPrototype const* proto = GetProto();
+    if (!proto || (proto->Flags & ITEM_FLAG_LOOTABLE) || (proto->GetMaxStackSize() != 1) || !IsSoulBound())
+        return false;
+
+    uint32 ownerGuid = GetOwnerGuid().GetCounter();
+    for (AllowedLooterSet::const_iterator itr = allowedLooters->begin(); itr != allowedLooters->end(); ++itr)
+    {
+        if (*itr != ownerGuid) // own
+            return true;
+    }
+
+    return false;
+}
+
+void Item::SetSoulboundTradeable(Player* owner, AllowedLooterSet* allowedLooters, bool load/*=false*/)
+{
+    if (!allowedLooters || allowedLooters->empty())
+        return;
+
+    m_allowedLooterGuids = *allowedLooters;
+    SetFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_BOP_TRADEABLE);
+
+    if (!load)
+    {
+        SetUInt32Value(ITEM_FIELD_CREATE_PLAYED_TIME, owner->GetTotalPlayedTime());
+        SaveSoulboundTradeableToDB();
+    }
+
+    owner->AddItemWithTimeCheck(GetGUIDLow());
+}
+
+void Item::SetNotSoulboundTradeable(Player* owner, bool load/*=false*/)
+{
+    if (!HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_BOP_TRADEABLE))
+        return;
+
+    m_allowedLooterGuids.clear();
+    DeleteSoulboundTradeableFromDB();
+
+    RemoveFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_BOP_TRADEABLE);
+    SetUInt32Value(ITEM_FIELD_CREATE_PLAYED_TIME, 0);
+
+    if (!load)
+    {
+        SetState(ITEM_CHANGED, owner);
+        owner->RemoveItemWithTimeCheck(GetGUIDLow());
+    }
+}
+
+void Item::DeleteSoulboundTradeableFromDB()
+{
+    static SqlStatementID delData;
+    CharacterDatabase.CreateStatement(delData, "DELETE FROM item_soulbound_trade_data WHERE itemGuid = ?")
+        .PExecute(GetGUIDLow());
+}
+
+void Item::SaveSoulboundTradeableToDB()
+{
+    std::ostringstream ss;
+    if (!m_allowedLooterGuids.empty())
+    {
+        AllowedLooterSet::const_iterator itr = m_allowedLooterGuids.begin();
+        ss << *itr;
+        for (++itr; itr != m_allowedLooterGuids.end(); ++itr)
+            ss << ' ' << *itr;
+    }
+
+    static SqlStatementID saveData;
+    CharacterDatabase.CreateStatement(saveData, "REPLACE INTO item_soulbound_trade_data (itemGuid, allowedPlayers) VALUES (?, ?)")
+        .PExecute(GetGUIDLow(), ss.str().c_str());
+}
+
+bool Item::LoadSoulboundTradeableDataFromDB(Player* owner)
+{
+    QueryResult* result = CharacterDatabase.PQuery("SELECT allowedPlayers FROM item_soulbound_trade_data WHERE itemGuid = %u", GetGUIDLow());
+    if (result)
+    {
+        Field* fields = result->Fetch();
+        AllowedLooterSet looters;
+        {
+            std::string guidsStr = fields[0].GetCppString();
+            delete result;
+
+            Tokens guidList(guidsStr, ' ');
+            for (Tokens::iterator itr = guidList.begin(); itr != guidList.end(); ++itr)
+                looters.insert(atol(*itr));
+        }
+        if (!looters.empty())
+            SetSoulboundTradeable(owner, &looters, true);
+        else
+            SetNotSoulboundTradeable(owner, true);
+
+        return !looters.empty();
+    }
+    else
+    {
+        SetNotSoulboundTradeable(owner, true);
+        return false;
+    }
+}
+
+bool Item::CheckSoulboundTradeExpire(Player* owner)
+{
+    if (!HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_BOP_TRADEABLE))
+        return true;
+
+    if (IsRefundOrSoulboundTradeExpired(owner))
+    {
+        SetNotSoulboundTradeable(owner);
+        return true;
+    }
+
+    return false;
 }

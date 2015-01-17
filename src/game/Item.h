@@ -224,7 +224,7 @@ enum ItemDynFlags
     ITEM_DYNFLAG_UNK5                         = 0x00000020,
     ITEM_DYNFLAG_UNK6                         = 0x00000040, // ? old note: usable
     ITEM_DYNFLAG_UNK7                         = 0x00000080,
-    ITEM_DYNFLAG_UNK8                         = 0x00000100,
+    ITEM_DYNFLAG_BOP_TRADEABLE                = 0x00000100, // Allows trading soulbound items
     ITEM_DYNFLAG_READABLE                     = 0x00000200, // can be open for read, it or item proto pagetText make show "Right click to read"
     ITEM_DYNFLAG_UNK10                        = 0x00000400,
     ITEM_DYNFLAG_UNK11                        = 0x00000800,
@@ -382,7 +382,37 @@ class MANGOS_DLL_SPEC Item : public Object
         void AddToClientUpdateList() override;
         void RemoveFromClientUpdateList() override;
         void BuildUpdateData(UpdateDataMapType& update_players) override;
+
+        // Item Refunding system
+        bool IsEligibleForRefund() const;
+        void SetRefundable(Player* owner, uint32 paidCost, uint16 paidExtendedCost, bool load = false);
+        void SetNotRefundable(Player* owner, bool changeState = true);
+
+        bool LoadRefundDataFromDB(Player* owner);
+        bool CheckRefundExpired(Player* owner);
+
+        uint32 GetPaidMoney() const { return m_paidCost; }
+        uint32 GetPaidExtendedCost() const { return m_paidExtCost; }
+        // Soulbound trade system
+        bool IsEligibleForSoulboundTrade(AllowedLooterSet* allowedLooters) const;
+        void SetSoulboundTradeable(Player* owner, AllowedLooterSet* allowedLooters, bool load = false);
+        void SetNotSoulboundTradeable(Player* owner, bool load = false);
+
+        bool LoadSoulboundTradeableDataFromDB(Player* owner);
+        bool CheckSoulboundTradeExpire(Player* owner);
+
     private:
+
+        bool IsRefundOrSoulboundTradeExpired(Player* owner) const;
+
+        void DeleteLootFromDB();
+
+        void DeleteRefundDataFromDB();
+        void SaveRefundDataToDB();
+
+        void DeleteSoulboundTradeableFromDB();
+        void SaveSoulboundTradeableToDB();
+
         std::string m_text;
         uint8 m_slot;
         Bag* m_container;
@@ -390,6 +420,11 @@ class MANGOS_DLL_SPEC Item : public Object
         int16 uQueuePos;
         bool mb_in_trade;                                   // true if item is currently in trade-window
         ItemLootUpdateState m_lootState;
+
+        uint32              m_paidCost;
+        uint16              m_paidExtCost;
+
+        AllowedLooterSet    m_allowedLooterGuids;
 };
 
 #endif

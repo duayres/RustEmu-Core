@@ -4741,23 +4741,9 @@ void ObjectMgr::LoadInstanceEncounters()
 
             uint32 lastEncounterDungeon = fields[3].GetUInt32();
 
-            std::map<uint32, DungeonEncounterEntry const*>::const_iterator itr = dungeonLastBosses.find(lastEncounterDungeon);
-
-            if (lastEncounterDungeon)
-            {
-                if (itr != dungeonLastBosses.end())
-                {
-                    sLog.outErrorDb("Table `instance_encounters` specified encounter %u (%s) as last encounter but %u (%s) is already marked as one, skipped!", entry, dungeonEncounter->encounterName[0], itr->second->Id, itr->second->encounterName[0]);
-                    continue;
-                }
-
-                dungeonLastBosses[lastEncounterDungeon] = dungeonEncounter;
-            }
-
-            DungeonEncounterList& encounters = mDungeonEncounters[MAKE_PAIR32(dungeonEncounter->mapId, dungeonEncounter->Difficulty)];
-            encounters.push_back(new DungeonEncounter(dungeonEncounter, EncounterCreditType(creditType), creditEntry, lastEncounterDungeon));
-            ++count;
-        } while (result->NextRow());
+            m_DungeonEncounters.insert(DungeonEncounterMap::value_type(creditEntry, new DungeonEncounter(dungeonEncounter, EncounterCreditType(creditType), creditEntry, lastEncounterDungeon)));
+        }
+        while (result->NextRow());
     }
 
     sLog.outString(">> Loaded %u instance encounters", count);

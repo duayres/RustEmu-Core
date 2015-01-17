@@ -23,8 +23,6 @@
 #include "ObjectGuid.h"
 #include "Policies/Singleton.h"
 #include <boost/thread/mutex.hpp>
-#include <boost/thread/shared_mutex.hpp>
-#include <boost/thread/shared_lock_guard.hpp>
 #include "LFG.h"
 #include "Timer.h"
 
@@ -131,7 +129,7 @@ struct LFGEvent
     bool          IsActive() { return ((executeTime > 0) && (time_t(time(NULL)) >= executeTime)); };
 };
 
-typedef std::multimap<uint32 /*dungeonId*/, LFGReward /*reward*/> LFGRewardMap;
+typedef UNORDERED_MULTIMAP<uint32 /*dungeonId*/, LFGReward /*reward*/> LFGRewardMap;
 typedef std::pair<LFGRewardMap::const_iterator, LFGRewardMap::const_iterator> LFGRewardMapBounds;
 typedef UNORDERED_MAP<ObjectGuid /*group or player guid*/, LFGQueueInfo> LFGQueueInfoMap;
 typedef UNORDERED_MAP<uint32/*dungeonID*/, LFGDungeonEntry const*> LFGDungeonMap;
