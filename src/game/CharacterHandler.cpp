@@ -732,7 +732,10 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
 
     // announce group about member online (must be after add to player list to receive announce to self)
     if (Group* group = pCurrChar->GetGroup())
+    {
+        group->CheckLeader(pCurrChar->GetObjectGuid(), false); // check leader login
         group->SendUpdate();
+    }
 
     // friend status
     sSocialMgr.SendFriendStatus(pCurrChar, FRIEND_ONLINE, pCurrChar->GetObjectGuid(), true);
@@ -1210,21 +1213,6 @@ void WorldSession::HandleCharCustomizeOpcode(WorldPacket& recv_data)
         data << uint8(CHAR_CREATE_NAME_IN_USE);
         SendPacket(&data);
         return;
-    }
-
-    // The player was uninvited already on logout so just remove from group
-    // immediately remove from group before start change process
-    QueryResult* resultGroup = CharacterDatabase.PQuery("SELECT groupId FROM group_member WHERE memberGuid='%u'", guid.GetCounter());
-    if (resultGroup)
-    {
-        uint32 groupId = (*resultGroup)[0].GetUInt32();
-        delete resultGroup;
-
-        ObjectGuid groupGuid = ObjectGuid(HIGHGUID_GROUP, groupId);
-        Group* group = sObjectMgr.GetGroup(groupGuid);
-
-        if (group)
-            group->RemoveMember(guid, 0);
     }
 
     CharacterDatabase.escape_string(newname);

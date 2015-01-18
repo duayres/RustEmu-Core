@@ -194,7 +194,9 @@ void WorldSession::HandleGroupInviteOpcode(WorldPacket& recv_data)
 
 void WorldSession::HandleGroupAcceptOpcode(WorldPacket& recv_data)
 {
-    Group* group = sObjectMgr.GetGroup(GetPlayer()->GetGroupInvite());
+    recv_data.read_skip<uint32>();                          // roles mask?
+
+    Group* group = GetPlayer()->GetGroupInvite();
     if (!group)
         return;
 
@@ -241,12 +243,9 @@ void WorldSession::HandleGroupAcceptOpcode(WorldPacket& recv_data)
 
 void WorldSession::HandleGroupDeclineOpcode(WorldPacket& /*recv_data*/ )
 {
-    Group* group  = sObjectMgr.GetGroup(GetPlayer()->GetGroupInvite());
+    Group*  group = GetPlayer()->GetGroupInvite();
     if (!group)
-    {
-        GetPlayer()->SetGroupInvite(ObjectGuid());
         return;
-    }
 
     // remember leader if online
     Player* leader = sObjectMgr.GetPlayer(group->GetLeaderGuid());
@@ -301,7 +300,7 @@ void WorldSession::HandleGroupUninviteGuidOpcode(WorldPacket & recv_data)
 
     if (grp->IsMember(guid))
     {
-        grp->RemoveMember(guid, 0);
+        Player::RemoveFromGroup(grp, guid);
         return;
     }
 
@@ -354,7 +353,7 @@ void WorldSession::HandleGroupUninviteOpcode(WorldPacket & recv_data)
 
     if (!guid.IsEmpty())
     {
-        grp->RemoveMember(guid, 0);
+        Player::RemoveFromGroup(grp, guid);
         return;
     }
 
@@ -392,7 +391,7 @@ void WorldSession::HandleGroupSetLeaderOpcode(WorldPacket& recv_data)
 
 void WorldSession::HandleGroupDisbandOpcode(WorldPacket& /*recv_data*/)
 {
-    if (!GetPlayer()->GetGroupGuid())
+    if (!GetPlayer()->GetGroup())
         return;
 
     if (_player->InBattleGround())

@@ -1729,9 +1729,10 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         bool IsGroupVisibleFor(Player* p) const;
         bool IsInSameGroupWith(Player const* p) const;
-        bool IsInSameRaidWith(Player const* p) const { return p == this || (GetGroupGuid() && GetGroupGuid() == p->GetGroupGuid()); }
+        bool IsInSameRaidWith(Player const* p) const { return p == this || (GetGroup() != NULL && GetGroup() == p->GetGroup()); }
         void UninviteFromGroup();
-        void RemoveFromGroup(bool logout = false);
+        static void RemoveFromGroup(Group* group, ObjectGuid guid);
+        void RemoveFromGroup() { RemoveFromGroup(GetGroup(), GetObjectGuid()); }
         void SendUpdateToOutOfRangeGroupMembers();
         void SetAllowLowLevelRaid(bool allow) { ApplyModFlag(PLAYER_FLAGS, PLAYER_FLAGS_ENABLE_LOW_LEVEL_RAID, allow); }
         bool GetAllowLowLevelRaid() const { return HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_ENABLE_LOW_LEVEL_RAID); }
@@ -2317,29 +2318,26 @@ class MANGOS_DLL_SPEC Player : public Unit
         /***                   GROUP SYSTEM                    ***/
         /*********************************************************/
 
-        ObjectGuid const& GetGroupInvite() { return m_groupInviteGuid; }
-        void SetGroupInvite(ObjectGuid const& groupGuid) { m_groupInviteGuid = groupGuid; }
-        ObjectGuid const& GetGroupGuid() const { return m_groupGuid; };
-        ObjectGuid const& GetOriginalGroupGuid() const { return m_originalGroupGuid; };
-        Group* GetGroup();
-        Group const* GetGroup() const;
+        Group* GetGroupInvite() { return m_groupInvite; }
+        void SetGroupInvite(Group* group) { m_groupInvite = group; }
+        Group* GetGroup() { return m_group.getTarget(); }
+        const Group* GetGroup() const { return (const Group*)m_group.getTarget(); }
         GroupReference& GetGroupRef() { return m_group; }
-        void SetGroup(ObjectGuid const& groupGuid, int8 subgroup = -1);
+        void SetGroup(Group* group, int8 subgroup = -1);
         uint8 GetSubGroup() const { return m_group.getSubGroup(); }
         uint32 GetGroupUpdateFlag() const { return m_groupUpdateMask; }
         void SetGroupUpdateFlag(uint32 flag) { m_groupUpdateMask |= flag; }
         const uint64& GetAuraUpdateMask() const { return m_auraUpdateMask; }
         void SetAuraUpdateMask(uint8 slot) { m_auraUpdateMask |= (uint64(1) << slot); }
-        Player* GetNextRandomRaidMember(float radius, bool onlyAlive);
+        Player* GetNextRandomRaidMember(float radius);
         PartyResult CanUninviteFromGroup() const;
         // BattleGround Group System
-        void SetBattleGroundRaid(ObjectGuid const& guid, int8 subgroup = -1);
+        void SetBattleGroundRaid(Group* group, int8 subgroup = -1);
         void RemoveFromBattleGroundRaid();
-        // Original group mechanic
-        Group* GetOriginalGroup();
+        Group* GetOriginalGroup() { return m_originalGroup.getTarget(); }
         GroupReference& GetOriginalGroupRef() { return m_originalGroup; }
         uint8 GetOriginalSubGroup() const { return m_originalGroup.getSubGroup(); }
-        void SetOriginalGroup(ObjectGuid const& guid, int8 subgroup = -1);
+        void SetOriginalGroup(Group* group, int8 subgroup = -1);
 
         GridReference<Player>& GetGridRef() { return m_gridRef; }
         MapReference& GetMapRef() { return m_mapRef; }
@@ -2605,14 +2603,11 @@ class MANGOS_DLL_SPEC Player : public Unit
         PlayerSocial* m_social;
 
         // Groups
-        ObjectGuid m_groupInviteGuid;
-        ObjectGuid m_groupGuid;
         GroupReference m_group;
+        GroupReference m_originalGroup;
+        Group* m_groupInvite;
         uint32 m_groupUpdateMask;
         uint64 m_auraUpdateMask;
-
-        ObjectGuid m_originalGroupGuid;
-        GroupReference m_originalGroup;
 
         // Player summoning
         time_t m_summon_expire;
