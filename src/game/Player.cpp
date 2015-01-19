@@ -21804,6 +21804,21 @@ void Player::ResetRuneGraceData()
     }
 }
 
+uint32 Player::GetRuneBaseCooldown(uint8 index) const
+{
+    uint8 rune = GetBaseRune(index);
+    uint32 cooldown = RUNE_COOLDOWN;
+
+    AuraList const& modRegens = GetAurasByType(SPELL_AURA_MOD_POWER_REGEN_PERCENT);
+    for (AuraList::const_iterator itr = modRegens.begin(); itr != modRegens.end(); ++itr)
+    {
+        if ((*itr)->GetModifier()->m_miscvalue == POWER_RUNE && (*itr)->GetMiscBValue() == rune)
+            cooldown = cooldown * (100 - (*itr)->GetModifier()->m_amount) / 100;
+    }
+
+    return cooldown;
+}
+
 bool Player::IsBaseRuneSlotsOnCooldown(RuneType runeType) const
 {
     for (uint32 i = 0; i < MAX_RUNES; ++i)

@@ -6154,9 +6154,16 @@ void Aura::HandleModPowerRegenPCT(bool /*apply*/, bool Real)
     if (GetTarget()->GetTypeId() != TYPEID_PLAYER)
         return;
 
-    // Update manaregen value
-    if (m_modifier.m_miscvalue == POWER_MANA)
+    // Update regen value
+    switch (m_modifier.m_miscvalue)
+    {
+    case POWER_MANA:
         ((Player*)GetTarget())->UpdateManaRegen();
+        break;
+    case POWER_RUNE:
+        ((Player*)GetTarget())->UpdateRuneRegen(RuneType(GetMiscBValue()));
+        break;
+    }
 }
 
 void Aura::HandleModManaRegen(bool /*apply*/, bool Real)

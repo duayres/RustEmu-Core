@@ -1829,6 +1829,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         void UpdateArmorPenetration();
         void ApplyManaRegenBonus(int32 amount, bool apply);
         void UpdateManaRegen();
+        void UpdateRuneRegen(uint8 index);
 
         ObjectGuid const& GetLootGuid() const { return m_lootGuid; }
         void SetLootGuid(ObjectGuid const& guid) { m_lootGuid = guid; }
@@ -2351,6 +2352,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         RuneType GetBaseRune(uint8 index) const { return RuneType(m_runes->runes[index].BaseRune); }
         RuneType GetCurrentRune(uint8 index) const { return RuneType(m_runes->runes[index].CurrentRune); }
         uint16 GetRuneCooldown(uint8 index) const { return m_runes->runes[index].Cooldown; }
+        uint32 GetRuneBaseCooldown(uint8 index) const;
         bool IsBaseRuneSlotsOnCooldown(RuneType runeType) const;
         void SetBaseRune(uint8 index, RuneType baseRune) { m_runes->runes[index].BaseRune = baseRune; }
         void SetCurrentRune(uint8 index, RuneType currentRune) { m_runes->runes[index].CurrentRune = currentRune; }
