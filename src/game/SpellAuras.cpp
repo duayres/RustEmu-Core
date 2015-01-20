@@ -85,7 +85,7 @@ pAuraHandler AuraHandler[TOTAL_AURAS] =
     &Aura::HandleAuraModPacify,                             // 25 SPELL_AURA_MOD_PACIFY
     &Aura::HandleAuraModRoot,                               // 26 SPELL_AURA_MOD_ROOT
     &Aura::HandleAuraModSilence,                            // 27 SPELL_AURA_MOD_SILENCE
-    &Aura::HandleNoImmediateEffect,                         // 28 SPELL_AURA_REFLECT_SPELLS        implement in Unit::SpellHitResult
+    &Aura::HandleAuraModReflectSpells,                      // 28 SPELL_AURA_REFLECT_SPELLS        implement in Unit::SpellHitResult
     &Aura::HandleAuraModStat,                               // 29 SPELL_AURA_MOD_STAT
     &Aura::HandleAuraModSkill,                              // 30 SPELL_AURA_MOD_SKILL
     &Aura::HandleAuraModIncreaseSpeed,                      // 31 SPELL_AURA_MOD_INCREASE_SPEED
@@ -234,7 +234,7 @@ pAuraHandler AuraHandler[TOTAL_AURAS] =
     &Aura::HandleModSpellDamagePercentFromStat,             //174 SPELL_AURA_MOD_SPELL_DAMAGE_OF_STAT_PERCENT  implemented in Unit::SpellBaseDamageBonusDone
     &Aura::HandleModSpellHealingPercentFromStat,            //175 SPELL_AURA_MOD_SPELL_HEALING_OF_STAT_PERCENT implemented in Unit::SpellBaseHealingBonusDone
     &Aura::HandleSpiritOfRedemption,                        //176 SPELL_AURA_SPIRIT_OF_REDEMPTION   only for Spirit of Redemption spell, die at aura end
-    &Aura::HandleNULL,                                      //177 SPELL_AURA_AOE_CHARM (22 spells)
+    &Aura::HandleAuraAoECharm,                              //177 SPELL_AURA_AOE_CHARM (22 spells)
     &Aura::HandleNoImmediateEffect,                         //178 SPELL_AURA_MOD_DEBUFF_RESISTANCE          implemented in Unit::MagicSpellHitResult
     &Aura::HandleNoImmediateEffect,                         //179 SPELL_AURA_MOD_ATTACKER_SPELL_CRIT_CHANCE implemented in Unit::SpellCriticalBonus
     &Aura::HandleNoImmediateEffect,                         //180 SPELL_AURA_MOD_FLAT_SPELL_DAMAGE_VERSUS   implemented in Unit::SpellDamageBonusDone
@@ -4931,6 +4931,41 @@ void Aura::HandleAuraModSilence(bool apply, bool Real)
     }
 }
 
+void Aura::HandleAuraModReflectSpells(bool Apply, bool Real)
+{
+    if (!Real)
+        return;
+
+    //Unit* target = GetTarget();
+    Unit* caster = GetCaster();
+
+    if (Apply)
+    {
+        switch (GetId())
+        {
+            // Improved Spell Reflection
+            case 23920:
+            {
+                if (!caster)
+                    return;
+
+                Unit::AuraList const& lDummyAuras = caster->GetAurasByType(SPELL_AURA_DUMMY);
+                for (Unit::AuraList::const_iterator i = lDummyAuras.begin(); i != lDummyAuras.end(); ++i)
+                {
+                    if ((*i)->GetSpellProto()->GetSpellIconID() == 1935)
+                    {
+                        caster->CastSpell(caster, 59725, true);
+                        break;
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+}
+
 void Aura::HandleModThreat(bool apply, bool Real)
 {
     // only at real add/remove aura
@@ -6457,7 +6492,49 @@ void Aura::HandleModSpellCritChanceShool(bool /*apply*/, bool Real)
 
 void Aura::HandleModCastingSpeed(bool apply, bool /*Real*/)
 {
-    GetTarget()->ApplyCastTimePercentMod(float(m_modifier.m_amount), apply);
+    Unit *target = GetTarget();
+
+    if (IsStacking())
+        target->ApplyCastTimePercentMod(float(m_modifier.m_amount), apply);
+    else
+    {
+        float amount = float(m_modifier.m_amount);
+        bool bIsPositive = amount > 0;
+
+        // don't apply weaker aura
+        if ((bIsPositive && amount < target->m_modSpellSpeedPctPos) ||
+            (!bIsPositive && amount > target->m_modSpellSpeedPctNeg))
+        {
+            return;
+        }
+
+        // unapply old (weaker) aura
+        if (bIsPositive)
+        {
+            if (target->m_modSpellSpeedPctPos)
+                target->ApplyCastTimePercentMod(target->m_modSpellSpeedPctPos, false);
+        }
+        else
+        {
+            if (target->m_modSpellSpeedPctNeg)
+                target->ApplyCastTimePercentMod(target->m_modSpellSpeedPctNeg, false);
+        }
+
+        if (!apply)
+        {
+            if (bIsPositive)
+                amount = target->GetMaxPositiveAuraModifier(m_modifier.m_auraname, true);
+            else
+                amount = target->GetMaxNegativeAuraModifier(m_modifier.m_auraname, true);
+        }
+
+        target->ApplyCastTimePercentMod(amount, true);
+
+        if (bIsPositive)
+            target->m_modSpellSpeedPctPos = amount;
+        else
+            target->m_modSpellSpeedPctNeg = amount;
+    }
 }
 
 void Aura::HandleModMeleeRangedSpeedPct(bool apply, bool /*Real*/)
@@ -6484,9 +6561,43 @@ void Aura::HandleModAttackSpeed(bool apply, bool /*Real*/)
 
 void Aura::HandleModMeleeSpeedPct(bool apply, bool /*Real*/)
 {
-    Unit* target = GetTarget();
-    target->ApplyAttackTimePercentMod(BASE_ATTACK, float(m_modifier.m_amount), apply);
-    target->ApplyAttackTimePercentMod(OFF_ATTACK, float(m_modifier.m_amount), apply);
+    Unit *target = GetTarget();
+
+    if (IsStacking())
+    {
+        target->ApplyAttackTimePercentMod(BASE_ATTACK, m_modifier.m_amount, apply);
+        target->ApplyAttackTimePercentMod(OFF_ATTACK, m_modifier.m_amount, apply);
+    }
+    else
+    {
+        bool bIsPositive = m_modifier.m_amount > 0;
+
+        if ((bIsPositive && m_modifier.m_amount < target->m_modAttackSpeedPct[NONSTACKING_POS_MOD_MELEE]) ||
+            (!bIsPositive && m_modifier.m_amount > target->m_modAttackSpeedPct[NONSTACKING_NEG_MOD_MELEE]))
+            return;
+
+        float amount = float(m_modifier.m_amount);
+
+        // unapply old aura
+        if (target->m_modAttackSpeedPct[bIsPositive ? NONSTACKING_POS_MOD_MELEE : NONSTACKING_NEG_MOD_MELEE])
+        {
+            target->ApplyAttackTimePercentMod(BASE_ATTACK, target->m_modAttackSpeedPct[bIsPositive ? NONSTACKING_POS_MOD_MELEE : NONSTACKING_NEG_MOD_MELEE], false);
+            target->ApplyAttackTimePercentMod(OFF_ATTACK, target->m_modAttackSpeedPct[bIsPositive ? NONSTACKING_POS_MOD_MELEE : NONSTACKING_NEG_MOD_MELEE], false);
+        }
+
+        if (!apply)
+        {
+            if (bIsPositive)
+                amount = target->GetMaxPositiveAuraModifier(SPELL_AURA_MOD_MELEE_HASTE, true);
+            else
+                amount = target->GetMaxNegativeAuraModifier(SPELL_AURA_MOD_MELEE_HASTE, true);
+        }
+
+        target->ApplyAttackTimePercentMod(BASE_ATTACK, amount, true);
+        target->ApplyAttackTimePercentMod(OFF_ATTACK, amount, true);
+
+        target->m_modAttackSpeedPct[bIsPositive ? NONSTACKING_POS_MOD_MELEE : NONSTACKING_NEG_MOD_MELEE] = amount;
+    }
 }
 
 void Aura::HandleAuraModRangedHaste(bool apply, bool /*Real*/)
@@ -7216,6 +7327,49 @@ void Aura::HandleSpiritOfRedemption(bool apply, bool Real)
     // die at aura end
     else
         target->DealDamage(target, target->GetHealth(), NULL, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, GetSpellProto(), false);
+}
+
+// FIXME: this is only temp. fix for not allowing charmed player to deal damage/heal
+void Aura::HandleAuraAoECharm(bool apply, bool real)
+{
+    if (!real)
+        return;
+
+    Unit *pTarget = GetTarget();
+
+    if (!pTarget || !pTarget->IsInWorld() || pTarget->GetTypeId() != TYPEID_PLAYER)
+        return;
+
+    Player *pPlayerTarget = (Player*)pTarget;
+
+    switch (GetId())
+    {
+        case 70923:                                     // Uncontrollable Frenzy (Queen Lana'thel)
+        {
+            if (apply)
+                pPlayerTarget->setFaction(16);
+            else
+                pPlayerTarget->setFactionForRace(pPlayerTarget->getRace());
+
+            break;
+        }
+        default:
+        {
+            if (apply)
+            {
+                Unit *pCaster = GetCaster();
+
+                if (pCaster && pCaster != pTarget)
+                    pPlayerTarget->setFaction(pCaster->getFaction());
+                else
+                    pPlayerTarget->setFaction(16);
+            }
+            else
+                pPlayerTarget->setFactionForRace(pPlayerTarget->getRace());
+
+            break;
+        }
+    }
 }
 
 void Aura::HandleSchoolAbsorb(bool apply, bool Real)

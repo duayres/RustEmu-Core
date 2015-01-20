@@ -1231,12 +1231,18 @@ enum SpellImmunity
 
 enum WeaponAttackType                                       //< The different weapon attack-types
 {
-    BASE_ATTACK   = 0,                                      //< Main-hand weapon
-    OFF_ATTACK    = 1,                                      //< Off-hand weapon
-    RANGED_ATTACK = 2                                       //< Ranged weapon, bow/wand etc.
+    BASE_ATTACK   = 0,
+    OFF_ATTACK    = 1,
+    RANGED_ATTACK = 2,
+
+    // leave these greater than or equal to MAX_ATTACK
+    NONSTACKING_POS_MOD_MELEE = 3,
+    NONSTACKING_NEG_MOD_MELEE = 4,
+    NONSTACKING_MOD_ALL       = 5
 };
 
 #define MAX_ATTACK  3
+#define MAX_ATTACK_MOD  (MAX_ATTACK + 3)
 
 enum Targets
 {
