@@ -6481,9 +6481,6 @@ FactionTemplateEntry const* Unit::getFactionTemplateEntry() const
 
 bool Unit::IsHostileTo(Unit const* unit) const
 {
-    if (!unit || !unit->IsInWorld())
-        return false;
-
     // always non-hostile to self
     if (unit == this)
         return false;
@@ -6492,37 +6489,24 @@ bool Unit::IsHostileTo(Unit const* unit) const
     if (unit->GetTypeId() == TYPEID_PLAYER && ((Player const*)unit)->isGameMaster())
         return false;
 
-    Unit const* selfVictim = getVictim();
-    Unit const* unitVictim = unit->getVictim();
-
     // always hostile to enemy
-    if (selfVictim == unit || unitVictim == this)
+    if (getVictim() == unit || unit->getVictim() == this)
         return true;
 
     // test pet/charm masters instead pers/charmeds
     Unit const* testerOwner = GetCharmerOrOwner();
     Unit const* targetOwner = unit->GetCharmerOrOwner();
-    Unit* testerVictim;
-    Unit* targetVictim;
 
     // always hostile to owner's enemy
-    if (testerOwner)
-    {
-        testerVictim = testerOwner->getVictim();
-        if (testerVictim == unit || unitVictim == testerOwner)
-            return true;
-    }
+    if (testerOwner && (testerOwner->getVictim() == unit || unit->getVictim() == testerOwner))
+        return true;
 
     // always hostile to enemy owner
-    if (targetOwner)
-    {
-        targetVictim = targetOwner->getVictim();
-        if (selfVictim == targetOwner || targetVictim == this)
-            return true;
-    }
+    if (targetOwner && (getVictim() == targetOwner || targetOwner->getVictim() == this))
+        return true;
 
     // always hostile to owner of owner's enemy
-    if (testerOwner && targetOwner && (testerVictim == targetOwner || targetVictim == testerOwner))
+    if (testerOwner && targetOwner && (testerOwner->getVictim() == targetOwner || targetOwner->getVictim() == testerOwner))
         return true;
 
     Unit const* tester = testerOwner ? testerOwner : this;
@@ -6609,9 +6593,6 @@ bool Unit::IsHostileTo(Unit const* unit) const
 
 bool Unit::IsFriendlyTo(Unit const* unit) const
 {
-    if (!unit || !unit->IsInWorld())
-        return true;
-
     // always friendly to self
     if (unit == this)
         return true;
@@ -6620,37 +6601,24 @@ bool Unit::IsFriendlyTo(Unit const* unit) const
     if (unit->GetTypeId() == TYPEID_PLAYER && ((Player const*)unit)->isGameMaster())
         return true;
 
-    Unit const* selfVictim = getVictim();
-    Unit const* unitVictim = unit->getVictim();
-
     // always non-friendly to enemy
-    if (selfVictim == unit || unitVictim == this)
+    if (getVictim() == unit || unit->getVictim() == this)
         return false;
 
     // test pet/charm masters instead pers/charmeds
     Unit const* testerOwner = GetCharmerOrOwner();
     Unit const* targetOwner = unit->GetCharmerOrOwner();
-    Unit* testerVictim;
-    Unit* targetVictim;
 
     // always non-friendly to owner's enemy
-    if (testerOwner)
-    {
-        testerVictim = testerOwner->getVictim();
-        if (testerVictim == unit || unitVictim == testerOwner)
-            return false;
-    }
+    if (testerOwner && (testerOwner->getVictim() == unit || unit->getVictim() == testerOwner))
+        return false;
 
     // always non-friendly to enemy owner
-    if (targetOwner)
-    {
-        targetVictim = targetOwner->getVictim();
-        if (selfVictim == targetOwner || targetVictim == this)
-            return false;
-    }
+    if (targetOwner && (getVictim() == targetOwner || targetOwner->getVictim() == this))
+        return false;
 
     // always non-friendly to owner of owner's enemy
-    if (testerOwner && targetOwner && (testerVictim == targetOwner || targetVictim == testerOwner))
+    if (testerOwner && targetOwner && (testerOwner->getVictim() == targetOwner || targetOwner->getVictim() == testerOwner))
         return false;
 
     Unit const* tester = testerOwner ? testerOwner : this;

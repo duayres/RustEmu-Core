@@ -95,26 +95,11 @@ bool PetAI::IsVisible(Unit* pl) const
 
 bool PetAI::_needToStop() const
 {
-    Unit* pVictim = m_creature->getVictim();
-    if (!pVictim)
-        return true;
-
     // This is needed for charmed creatures, as once their target was reset other effects can trigger threat
-    if (m_creature->isCharmed() && m_creature->GetCharmer() == pVictim)
+    if (m_creature->isCharmed() && m_creature->getVictim() == m_creature->GetCharmer())
         return true;
 
-    Unit* owner = m_creature->GetCharmerOrOwner();
-
-    if (owner == pVictim)
-        return true;
-
-    if (!pVictim->isVisibleForOrDetect(m_creature, m_creature, false))
-        return true;
-
-    if (owner && !pVictim->isVisibleForOrDetect(owner, owner, true))
-        return true;
-
-    return !pVictim->isTargetableForAttack();
+    return !m_creature->getVictim()->isTargetableForAttack();
 }
 
 void PetAI::_stopAttack()
@@ -148,13 +133,11 @@ void PetAI::UpdateAI(const uint32 diff)
     else
         m_updateAlliesTimer -= diff;
 
-    Unit* pVictim = m_creature->getVictim();
-
-    if (inCombat && (!pVictim || (m_creature->IsPet() && ((Pet*)m_creature)->GetModeFlags() & PET_MODE_DISABLE_ACTIONS)))
+    if (inCombat && (!m_creature->getVictim() || (m_creature->IsPet() && ((Pet*)m_creature)->GetModeFlags() & PET_MODE_DISABLE_ACTIONS)))
         _stopAttack();
 
     // i_pet.getVictim() can't be used for check in case stop fighting, i_pet.getVictim() clear at Unit death etc.
-    if (pVictim)
+    if (m_creature->getVictim())
     {
         if (_needToStop())
         {
@@ -163,7 +146,7 @@ void PetAI::UpdateAI(const uint32 diff)
             return;
         }
 
-        bool meleeReach = m_creature->CanReachWithMeleeAttack(pVictim);
+        bool meleeReach = m_creature->CanReachWithMeleeAttack(m_creature->getVictim());
 
         if (m_creature->IsStopped() || meleeReach)
         {
@@ -178,11 +161,11 @@ void PetAI::UpdateAI(const uint32 diff)
             // not required to be stopped case
             else if (DoMeleeAttackIfReady())
             {
-                if (!pVictim)
+                if (!m_creature->getVictim())
                     return;
 
                 // if pet misses its target, it will also be the first in threat list
-                pVictim->AddThreat(m_creature);
+                m_creature->getVictim()->AddThreat(m_creature);
 
                 if (_needToStop())
                     _stopAttack();
@@ -255,9 +238,9 @@ void PetAI::UpdateAI(const uint32 diff)
 
             Spell* spell = new Spell(m_creature, spellInfo, false);
 
-            if (inCombat && !m_creature->hasUnitState(UNIT_STAT_FOLLOW) && spell->CanAutoCast(pVictim))
+            if (inCombat && !m_creature->hasUnitState(UNIT_STAT_FOLLOW) && spell->CanAutoCast(m_creature->getVictim()))
             {
-                targetSpellStore.push_back(TargetSpellList::value_type(pVictim, spell));
+                targetSpellStore.push_back(TargetSpellList::value_type(m_creature->getVictim(), spell));
                 continue;
             }
             else
@@ -288,7 +271,7 @@ void PetAI::UpdateAI(const uint32 diff)
         {
             uint32 index = urand(0, targetSpellStore.size() - 1);
 
-            Spell* spell  = targetSpellStore[index].second;
+            Spell* spell = targetSpellStore[index].second;
             Unit*  target = targetSpellStore[index].first;
 
             targetSpellStore.erase(targetSpellStore.begin() + index);
