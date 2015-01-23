@@ -188,6 +188,12 @@ ObjectMgr::~ObjectMgr()
 
     for (CacheTrainerSpellMap::iterator itr = m_mCacheTrainerSpellMap.begin(); itr != m_mCacheTrainerSpellMap.end(); ++itr)
         itr->second.Clear();
+
+    for (PetScalingDataMap::iterator itr = m_PetScalingData.begin(); itr != m_PetScalingData.end(); ++itr)
+        delete itr->second;
+
+    for (DungeonEncounterMap::iterator itr = m_DungeonEncounters.begin(); itr != m_DungeonEncounters.end(); ++itr)
+        delete itr->second;
 }
 
 Group* ObjectMgr::GetGroupById(uint32 id) const
@@ -2738,85 +2744,105 @@ void ObjectMgr::LoadItemRequiredTarget()
 void ObjectMgr::LoadPetLevelInfo()
 {
     // Loading levels data
-    //                                                 0               1      2   3     4    5    6    7     8    9
-    QueryResult* result  = WorldDatabase.Query("SELECT creature_entry, level, hp, mana, str, agi, sta, inte, spi, armor FROM pet_levelstats");
-
-    uint32 count = 0;
-
-    if (!result)
     {
-        BarGoLink bar(1);
-        bar.step();
-        sLog.outString(">> Loaded %u level pet stats definitions", count);
-        sLog.outErrorDb("Error loading `pet_levelstats` table or empty table.");
-        sLog.outString();
-        return;
-    }
+        //                                                 0               1      2   3     4    5    6    7     8    9      10      11      12
+        QueryResult *result = WorldDatabase.Query("SELECT creature_entry, level, hp, mana, str, agi, sta, inte, spi, armor, mindmg, maxdmg, attackpower FROM pet_levelstats");
 
-    BarGoLink bar(result->GetRowCount());
+        uint32 count = 0;
 
-    do
-    {
-        Field* fields = result->Fetch();
-
-        uint32 creature_id = fields[0].GetUInt32();
-        if (!sCreatureStorage.LookupEntry<CreatureInfo>(creature_id))
+        if (!result)
         {
-            sLog.outErrorDb("Wrong creature id %u in `pet_levelstats` table, ignoring.", creature_id);
-            continue;
+            BarGoLink bar(1);
+            bar.step();
+                        
+            sLog.outString(">> Loaded %u level pet stats definitions", count);
+            sLog.outErrorDb("Error loading `pet_levelstats` table or empty table.");
+            sLog.outString();
+            return;
         }
 
-        uint32 current_level = fields[1].GetUInt32();
-        if (current_level > sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+        BarGoLink bar(result->GetRowCount());
+
+        do
         {
-            if (current_level > STRONG_MAX_LEVEL)       // hardcoded level maximum
-                sLog.outErrorDb("Wrong (> %u) level %u in `pet_levelstats` table, ignoring.", STRONG_MAX_LEVEL, current_level);
-            else
+            Field* fields = result->Fetch();
+
+            uint32 creature_id = fields[0].GetUInt32();
+            if (!sCreatureStorage.LookupEntry<CreatureInfo>(creature_id))
             {
-                DETAIL_LOG("Unused (> MaxPlayerLevel in mangosd.conf) level %u in `pet_levelstats` table, ignoring.", current_level);
-                ++count;                                // make result loading percent "expected" correct in case disabled detail mode for example.
+                sLog.outErrorDb("Wrong creature id %u in `pet_levelstats` table, ignoring.", creature_id);
+                continue;
             }
-            continue;
-        }
-        else if (current_level < 1)
-        {
-            sLog.outErrorDb("Wrong (<1) level %u in `pet_levelstats` table, ignoring.", current_level);
-            continue;
-        }
 
-        PetLevelInfo*& pInfoMapEntry = petInfo[creature_id];
+            uint32 current_level = fields[1].GetUInt32();
+            if (current_level > sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+            {
+                if (current_level > STRONG_MAX_LEVEL)        // hardcoded level maximum
+                    sLog.outErrorDb("Wrong (> %u) level %u in `pet_levelstats` table, ignoring.", STRONG_MAX_LEVEL, current_level);
+                else
+                {
+                    DETAIL_LOG("Unused (> MaxPlayerLevel in mangosd.conf) level %u in `pet_levelstats` table, ignoring.", current_level);
+                    ++count;                                // make result loading percent "expected" correct in case disabled detail mode for example.
+                }
+                continue;
+            }
+            else if (current_level < 1)
+            {
+                sLog.outErrorDb("Wrong (<1) level %u in `pet_levelstats` table, ignoring.", current_level);
+                continue;
+            }
 
-        if (pInfoMapEntry == NULL)
-            pInfoMapEntry =  new PetLevelInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL)];
+            PetLevelInfo*& pInfoMapEntry = petInfo[creature_id];
 
-        // data for level 1 stored in [0] array element, ...
-        PetLevelInfo* pLevelInfo = &pInfoMapEntry[current_level - 1];
+            if (pInfoMapEntry == NULL)
+                pInfoMapEntry = new PetLevelInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL)];
 
-        pLevelInfo->health = fields[2].GetUInt16();
-        pLevelInfo->mana   = fields[3].GetUInt16();
-        pLevelInfo->armor  = fields[9].GetUInt16();
+            // data for level 1 stored in [0] array element, ...
+            PetLevelInfo* pLevelInfo = &pInfoMapEntry[current_level - 1];
 
-        for (int i = 0; i < MAX_STATS; ++i)
-        {
-            pLevelInfo->stats[i] = fields[i + 4].GetUInt16();
-        }
+            pLevelInfo->health = fields[2].GetUInt16();
+            pLevelInfo->mana = fields[3].GetUInt16();
+            pLevelInfo->armor = fields[9].GetUInt16();
+            pLevelInfo->mindmg = fields[10].GetUInt32();
+            pLevelInfo->maxdmg = fields[11].GetUInt32();
+            pLevelInfo->attackpower = fields[12].GetUInt32();
 
-        bar.step();
-        ++count;
+            for (int i = 0; i < MAX_STATS; i++)
+            {
+                pLevelInfo->stats[i] = fields[i + 4].GetUInt16();
+            }
+
+            bar.step();
+            ++count;
+        } while (result->NextRow());
+
+        delete result;
+
+        sLog.outString(">> Loaded %u level pet stats definitions", count);
+        sLog.outString();
     }
-    while (result->NextRow());
 
-    delete result;
+    PetLevelInfo* petBaseInfo = petInfo[1];
+
+    // fatal error if no base pet with id 1
+    if (!petBaseInfo)
+    {
+        sLog.outErrorDb("Table `pet_levelstats` does not have requered base pet with id 1! Must be exist!");
+        Log::WaitBeforeContinueIfNeed();
+        exit(1);
+    }
 
     // Fill gaps and check integrity
     for (PetLevelInfoMap::iterator itr = petInfo.begin(); itr != petInfo.end(); ++itr)
     {
+        if (itr->first == 1) continue; // No fill data for default pet! _Must_ be exist!
+
         PetLevelInfo* pInfo = itr->second;
 
-        // fatal error if no level 1 data
-        if (!pInfo || pInfo[0].health == 0)
+        // fatal error if no level 1 and max health data
+        if (!pInfo || pInfo[0].health == 0 || pInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) - 1].health == 0)
         {
-            sLog.outErrorDb("Creature %u does not have pet stats data for Level 1!", itr->first);
+            sLog.outErrorDb("Creature %u does not have pet stats data for Levels 1 or %u! Must be exist!", itr->first, sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL));
             Log::WaitBeforeContinueIfNeed();
             exit(1);
         }
@@ -2824,16 +2850,47 @@ void ObjectMgr::LoadPetLevelInfo()
         // fill level gaps
         for (uint32 level = 1; level < sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL); ++level)
         {
-            if (pInfo[level].health == 0)
+            if (pInfo[level].health == 0
+                || pInfo[level].mana == 0
+                || pInfo[level].armor == 0
+                || pInfo[level].mindmg == 0
+                || pInfo[level].maxdmg == 0
+                || pInfo[level].stats[STAT_STRENGTH] == 0
+                || pInfo[level].stats[STAT_STAMINA] == 0
+                || pInfo[level].stats[STAT_AGILITY] == 0
+                || pInfo[level].stats[STAT_INTELLECT] == 0
+                || pInfo[level].stats[STAT_SPIRIT] == 0
+                )
             {
-                sLog.outErrorDb("Creature %u has no data for Level %i pet stats data, using data of Level %i.", itr->first, level + 1, level);
-                pInfo[level] = pInfo[level - 1];
+                DEBUG_LOG("Creature %u has no full data set for Level %i pet stats data, using approximated (from default pet progression) data", itr->first, level + 1);
+
+                if (pInfo[level].health == 0)
+                    pInfo[level].health = uint16(pInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) - 1].health * (petBaseInfo[level].health / petBaseInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) - 1].health));
+
+                if (pInfo[level].mana == 0)
+                    pInfo[level].mana = uint16(pInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) - 1].mana * (petBaseInfo[level].mana / petBaseInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) - 1].mana));
+
+                if (pInfo[level].armor == 0)
+                    pInfo[level].armor = uint16(pInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) - 1].armor * (petBaseInfo[level].armor / petBaseInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) - 1].armor));
+
+                if (pInfo[level].mindmg == 0)
+                    pInfo[level].mindmg = uint16(pInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) - 1].mindmg * (petBaseInfo[level].mindmg / petBaseInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) - 1].mindmg));
+
+                if (pInfo[level].maxdmg == 0)
+                    pInfo[level].maxdmg = uint16(pInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) - 1].maxdmg * (petBaseInfo[level].maxdmg / petBaseInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) - 1].maxdmg));
+
+                if (pInfo[level].attackpower == 0)
+                    pInfo[level].attackpower = uint16(pInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) - 1].attackpower * (petBaseInfo[level].attackpower / petBaseInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) - 1].attackpower));
+
+                for (int i = 0; i < MAX_STATS; i++)
+                {
+                    if (pInfo[level].stats[i] == 0)
+                        pInfo[level].stats[i] = uint16(pInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) - 1].stats[i] * (petBaseInfo[level].stats[i] / petBaseInfo[sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) - 1].stats[i]));
+                }
+
             }
         }
     }
-
-    sLog.outString(">> Loaded %u level pet stats definitions", count);
-    sLog.outString();
 }
 
 PetLevelInfo const* ObjectMgr::GetPetLevelInfo(uint32 creature_id, uint32 level) const
@@ -2845,7 +2902,101 @@ PetLevelInfo const* ObjectMgr::GetPetLevelInfo(uint32 creature_id, uint32 level)
     if (itr == petInfo.end())
         return NULL;
 
-    return &itr->second[level - 1];                         // data for level 1 stored in [0] array element, ...
+    return &itr->second[level - 1];                           // data for level 1 stored in [0] array element, ...
+}
+
+void ObjectMgr::LoadPetScalingData()
+{
+    // Loading scaling data
+    //                                                 0               1     2           3       4          5       6    7    8    9     10
+    QueryResult *result = WorldDatabase.Query("SELECT creature_entry, aura, healthbase, health, powerbase, power,  str, agi, sta, inte, spi,"
+        //                                          11     12           13           14           15           16           17
+        "armor, resistance1, resistance2, resistance3, resistance4, resistance5, resistance6,"
+        //                                          18      19           20           21      22           23        24   25         26           27    28
+        "apbase, apbasescale, attackpower, damage, spelldamage, spellhit, hit, expertize, attackspeed, crit, regen"
+        " FROM pet_scaling_data");
+
+    uint32 count = 0;
+
+    if (!result)
+    {
+        BarGoLink bar(1);
+        bar.step();
+
+        sLog.outString(">> Loaded %u pet scaling data definitions", count);
+        sLog.outErrorDb("Error loading `pet_scaling_data` table or table is empty.");
+        sLog.outString();
+        return;
+    }
+
+    BarGoLink bar((int)result->GetRowCount());
+
+    m_PetScalingData.clear();
+
+    do
+    {
+        Field* fields = result->Fetch();
+
+        uint32 creature_id = fields[0].GetUInt32();
+
+        if (creature_id && !sCreatureStorage.LookupEntry<CreatureInfo>(creature_id)) // in 0 creature_id storing default values. _must_ be exist.
+        {
+            sLog.outErrorDb("Wrong creature id %u in `pet_scaling_data` table, ignoring.", creature_id);
+            continue;
+        }
+
+        PetScalingDataList*& pScalingDataList = m_PetScalingData[creature_id];
+
+        if (pScalingDataList == NULL)
+            pScalingDataList = new PetScalingDataList;
+
+        PetScalingData pScalingDataEntry;
+
+        pScalingDataEntry.creatureID = fields[0].GetUInt32();
+        pScalingDataEntry.requiredAura = fields[1].GetUInt32();
+        pScalingDataEntry.healthBasepoint = fields[2].GetInt32();
+        pScalingDataEntry.healthScale = fields[3].GetInt32();
+        pScalingDataEntry.powerBasepoint = fields[4].GetInt32();
+        pScalingDataEntry.powerScale = fields[5].GetInt32();
+        for (int i = 0; i < MAX_STATS; i++)
+        {
+            pScalingDataEntry.statScale[i] = fields[i + 6].GetInt32();
+        }
+        for (int i = 0; i < MAX_SPELL_SCHOOL; i++)
+        {
+            pScalingDataEntry.resistanceScale[i] = fields[i + 11].GetInt32();
+        }
+        pScalingDataEntry.APBasepoint = fields[18].GetInt32();
+        pScalingDataEntry.APBaseScale = fields[19].GetInt32();
+        pScalingDataEntry.attackpowerScale = fields[20].GetInt32();
+        pScalingDataEntry.damageScale = fields[21].GetInt32();
+        pScalingDataEntry.spelldamageScale = fields[22].GetInt32();
+        pScalingDataEntry.spellHitScale = fields[23].GetInt32();
+        pScalingDataEntry.meleeHitScale = fields[24].GetInt32();
+        pScalingDataEntry.expertizeScale = fields[25].GetInt32();
+        pScalingDataEntry.attackspeedScale = fields[26].GetInt32();
+        pScalingDataEntry.critScale = fields[27].GetInt32();
+        pScalingDataEntry.powerregenScale = fields[28].GetInt32();
+
+        pScalingDataList->push_back(pScalingDataEntry);
+
+        ++count;
+    } while (result->NextRow());
+
+    delete result;
+
+    sLog.outString(">> Loaded %u level pet scaling data definitions", count);
+    sLog.outString();
+}
+
+PetScalingDataList const* ObjectMgr::GetPetScalingData(uint32 creature_id) const
+{
+    PetScalingDataMap::const_iterator itr = m_PetScalingData.find(creature_id);
+
+    if (itr == m_PetScalingData.end())
+        return NULL;
+    else
+        return itr->second;
 }
 
 void ObjectMgr::LoadPlayerInfo()

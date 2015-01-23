@@ -1949,9 +1949,11 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         virtual bool UpdateStats(Stats stat) = 0;
         virtual bool UpdateAllStats() = 0;
         virtual void UpdateResistances(uint32 school) = 0;
+        virtual void UpdateAllResistances();
         virtual void UpdateArmor() = 0;
         virtual void UpdateMaxHealth() = 0;
         virtual void UpdateMaxPower(Powers power) = 0;
+        virtual void UpdateAllMaxPower();
         virtual void UpdateAttackPowerAndDamage(bool ranged = false) = 0;
         virtual void UpdateDamagePhysical(WeaponAttackType attType) = 0;
         float GetTotalAttackPowerValue(WeaponAttackType attType) const;
@@ -2028,6 +2030,8 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         }
 
         Aura* GetTriggeredByClientAura(uint32 spellId) const;
+        Aura* GetScalingAura(AuraType type, uint32 stat = 0);
+
         SpellAuraHolder* GetSpellAuraHolder(uint32 spellid) const;
         SpellAuraHolder* GetSpellAuraHolder(uint32 spellid, ObjectGuid casterGUID) const;
 

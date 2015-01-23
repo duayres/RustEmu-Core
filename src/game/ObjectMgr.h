@@ -230,13 +230,53 @@ typedef std::pair<QuestRelationsMap::const_iterator, QuestRelationsMap::const_it
 
 struct PetLevelInfo
 {
-    PetLevelInfo() : health(0), mana(0) { for (int i = 0; i < MAX_STATS; ++i) stats[i] = 0; }
+    PetLevelInfo() : health(0), mana(0), armor(0), mindmg(0), maxdmg(0), attackpower(0)
+    {
+        for (int i = 0; i < MAX_STATS; ++i) stats[i] = 0;
+    }
 
     uint16 stats[MAX_STATS];
     uint16 health;
     uint16 mana;
     uint16 armor;
+    uint32 mindmg;
+    uint32 maxdmg;
+    uint32 attackpower;
 };
+
+struct PetScalingData
+{
+    PetScalingData() : creatureID(0), requiredAura(0),
+        healthBasepoint(0), healthScale(0), powerBasepoint(0), powerScale(0),
+        APBasepoint(0), APBaseScale(0), attackpowerScale(0), damageScale(0), spelldamageScale(0), spellHitScale(0),
+        meleeHitScale(0), expertizeScale(0), attackspeedScale(0), critScale(0), powerregenScale(0)
+    {
+        for (int i = 0; i < MAX_STATS; ++i) statScale[i] = 0;
+        for (int i = 0; i < MAX_SPELL_SCHOOL; ++i) resistanceScale[i] = 0;
+    }
+
+    uint32 creatureID;
+    uint32 requiredAura;
+    int32  healthBasepoint;
+    int32  healthScale;
+    int32  powerBasepoint;
+    int32  powerScale;
+    int32  APBasepoint;
+    int32  APBaseScale;
+    int32  statScale[MAX_STATS];
+    int32  resistanceScale[MAX_SPELL_SCHOOL];
+    int32  attackpowerScale;
+    int32  damageScale;
+    int32  spelldamageScale;
+    int32  spellHitScale;
+    int32  meleeHitScale;
+    int32  expertizeScale;
+    int32  attackspeedScale;
+    int32  critScale;
+    int32  powerregenScale;
+};
+
+typedef std::vector<PetScalingData> PetScalingDataList;
 
 struct MailLevelReward
 {
@@ -562,6 +602,8 @@ class ObjectMgr
 
         PetLevelInfo const* GetPetLevelInfo(uint32 creature_id, uint32 level) const;
 
+        PetScalingDataList const* GetPetScalingData(uint32 creature_id) const;
+
         PlayerClassInfo const* GetPlayerClassInfo(uint32 class_) const
         {
             if (class_ >= MAX_CLASSES) return NULL;
@@ -743,6 +785,7 @@ class ObjectMgr
 
         void LoadPlayerInfo();
         void LoadPetLevelInfo();
+        void LoadPetScalingData();
         void LoadExplorationBaseXP();
         void LoadPetNames();
         void LoadPetNumber();
@@ -1236,6 +1279,9 @@ class ObjectMgr
         typedef std::map<uint32, PetLevelInfo*> PetLevelInfoMap;
         // PetLevelInfoMap[creature_id][level]
         PetLevelInfoMap petInfo;                            // [creature_id][level]
+
+        typedef std::map<uint32, PetScalingDataList*> PetScalingDataMap;
+        PetScalingDataMap m_PetScalingData;                 // [creature_id]
 
         PlayerClassInfo playerClassInfo[MAX_CLASSES];
 

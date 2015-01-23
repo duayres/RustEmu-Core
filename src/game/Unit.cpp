@@ -2422,14 +2422,19 @@ void Unit::CalculateDamageAbsorbAndResist(Unit* pCaster, DamageInfo* damageInfo,
             }
             case SPELLFAMILY_ROGUE:
             {
-                // Cheat Death
-                if (preventDeathSpell->SpellIconID == 2109)
+                // Cheat Death (make less prio with Guardian Spirit case)
+                if (spellProto->GetSpellIconID() == 2109)
                 {
-                    CastSpell(this, 31231, true);
-                    ((Player*)this)->AddSpellCooldown(31231, 0, time(NULL) + 60);
-                    // with health > 10% lost health until health==10%, in other case no losses
-                    uint32 health10 = GetMaxHealth() / 10;
-                    RemainingDamage = GetHealth() > health10 ? GetHealth() - health10 : 0;
+                    if (!preventDeathSpell &&
+                        !((Player*)this)->HasSpellCooldown(31231) && GetTypeId() == TYPEID_PLAYER &&
+                        // Only if no cooldown
+                        roll_chance_i((*i)->GetModifier()->m_amount))
+                        // Only if roll
+                    {
+                        preventDeathSpell = (*i)->GetSpellProto();
+                    }
+                    // always skip this spell in charge dropping, absorb amount calculation since it has chance as m_amount and doesn't need to absorb any damage
+                    continue;
                 }
                 break;
             }
@@ -6004,6 +6009,52 @@ Aura* Unit::GetTriggeredByClientAura(uint32 spellId) const
             return *itr;
     }
 
+    return NULL;
+}
+
+Aura* Unit::GetScalingAura(AuraType type, uint32 stat)
+{
+    AuraList& auras = GetAurasByType(type);
+    if (!auras.empty())
+    {
+        for (AuraList::iterator i = auras.begin(); i != auras.end(); ++i)
+        {
+            if ((*i)->IsEmpty())
+                continue;
+
+            if ((*i)->GetHolder()->GetCasterGuid() != GetObjectGuid())
+                continue;
+
+            if ((*i)->GetHolder()->GetSpellProto()->HasAttribute(SPELL_ATTR_EX4_PET_SCALING_AURA))
+            {
+                switch (type)
+                {
+                case SPELL_AURA_MOD_ATTACK_POWER:
+                case SPELL_AURA_MOD_POWER_REGEN:
+                case SPELL_AURA_MOD_HIT_CHANCE:
+                case SPELL_AURA_MOD_SPELL_HIT_CHANCE:
+                case SPELL_AURA_MOD_EXPERTISE:
+                    return (*i);
+                case SPELL_AURA_MOD_DAMAGE_DONE:
+                    if ((*i)->GetModifier()->m_miscvalue == SpellSchoolMask(stat))
+                        return (*i);
+                    break;
+                case SPELL_AURA_MOD_RESISTANCE:
+                    if ((*i)->GetModifier()->m_miscvalue & (1 << SpellSchools(stat)))
+                        return (*i);
+                    break;
+                case SPELL_AURA_MOD_STAT:
+                    if ((*i)->GetModifier()->m_miscvalue == Stats(stat))
+                        return (*i);
+                    break;
+                case SPELL_AURA_HASTE_ALL:
+                    return (*i);
+                default:
+                    break;
+                }
+            }
+        }
+    }
     return NULL;
 }
 
@@ -11945,6 +11996,9 @@ void Unit::ApplyAttackTimePercentMod(WeaponAttackType att, float val, bool apply
         ApplyPercentModFloatVar(m_modAttackSpeedPct[att], -val, apply);
         ApplyPercentModFloatValue(UNIT_FIELD_BASEATTACKTIME + att, -val, apply);
     }
+
+    if (GetTypeId() == TYPEID_PLAYER && IsInWorld())
+        ((Player*)this)->CallForAllControlledUnits(ApplyScalingBonusWithHelper(SCALING_TARGET_ATTACKSPEED, 0, false), CONTROLLED_PET | CONTROLLED_GUARDIANS);
 }
 
 void Unit::ApplyCastTimePercentMod(float val, bool apply)

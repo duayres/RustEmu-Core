@@ -121,6 +121,32 @@ enum PetNameInvalidReason
     PET_NAME_DECLENSION_DOESNT_MATCH_BASE_NAME              = 16
 };
 
+enum ScalingTarget
+{
+    SCALING_TARGET_ALL = 0,
+    SCALING_TARGET_STAT,
+    SCALING_TARGET_RESISTANCE,
+    SCALING_TARGET_ATTACKPOWER,
+    SCALING_TARGET_DAMAGE,
+    SCALING_TARGET_SPELLDAMAGE,
+    SCALING_TARGET_HIT,
+    SCALING_TARGET_SPELLHIT,
+    SCALING_TARGET_EXPERTIZE,
+    SCALING_TARGET_POWERREGEN,
+    SCALING_TARGET_ATTACKSPEED,
+    SCALING_TARGET_MAX
+};
+
+struct ScalingAction
+{
+    explicit ScalingAction(ScalingTarget _target, uint32 _stat, bool _apply) :
+        target(_target), stat(_stat), apply(_apply)
+    {}
+    ScalingTarget target;
+    uint32        stat;
+    bool          apply;
+};
+
 typedef UNORDERED_MAP<uint32, PetSpell> PetSpellMap;
 typedef std::vector<uint32> AutoSpellList;
 
@@ -132,6 +158,7 @@ typedef std::vector<uint32> AutoSpellList;
 #define PET_FOLLOW_ANGLE (M_PI_F/2.0f)
 
 class Player;
+struct PetScalingData;
 
 class MANGOS_DLL_SPEC Pet : public Creature
 {
@@ -179,8 +206,8 @@ class MANGOS_DLL_SPEC Pet : public Creature
 
         bool CanFly() const { return false; } // pet are not able to fly. TODO: check if this is right
 
-        void RegenerateAll(uint32 update_diff) override;    // overwrite Creature::RegenerateAll
-        void LooseHappiness();
+        void RegenerateAll(uint32 update_diff) override; // overwrite Creature::RegenerateAll
+        void Regenerate(Powers power, uint32 diff);
         HappinessState GetHappinessState();
         void GivePetXP(uint32 xp);
         void GivePetLevel(uint32 level);
@@ -190,9 +217,6 @@ class MANGOS_DLL_SPEC Pet : public Creature
         uint32 GetCurrentFoodBenefitLevel(uint32 itemlevel);
         void SetDuration(int32 dur) { m_duration = dur; }
 
-        int32 GetBonusDamage() { return m_bonusdamage; }
-        void SetBonusDamage(int32 damage) { m_bonusdamage = damage; }
-
         bool UpdateStats(Stats stat) override;
         bool UpdateAllStats() override;
         void UpdateResistances(uint32 school) override;
@@ -201,6 +225,8 @@ class MANGOS_DLL_SPEC Pet : public Creature
         void UpdateMaxPower(Powers power) override;
         void UpdateAttackPowerAndDamage(bool ranged = false) override;
         void UpdateDamagePhysical(WeaponAttackType attType) override;
+        void UpdateSpellPower();
+        void UpdateManaRegen();
 
         bool CanTakeMoreActiveSpells(uint32 SpellIconID);
         void ToggleAutocast(uint32 spellid, bool apply);
@@ -214,6 +240,27 @@ class MANGOS_DLL_SPEC Pet : public Creature
         void CastPetAuras(bool current);
         void CastOwnerTalentAuras();
         void CastPetAura(PetAura const* aura);
+
+        void RegenerateHealth(uint32 diff);
+        float OCTRegenHPPerSpirit();
+        float OCTRegenMPPerSpirit();
+        //void CastPetPassiveAuras(bool current); not implemented yet
+        void ApplyScalingBonus(ScalingAction* action);
+        void ApplyAllScalingBonuses(bool apply);
+        void ApplyStatScalingBonus(Stats stat, bool apply);
+        void ApplyResistanceScalingBonus(uint32 school, bool apply);
+        void ApplyAttackPowerScalingBonus(bool apply);
+        void ApplyDamageScalingBonus(bool apply);
+        void ApplySpellDamageScalingBonus(bool apply);
+        void ApplyHitScalingBonus(bool apply);
+        void ApplySpellHitScalingBonus(bool apply);
+        void ApplyExpertizeScalingBonus(bool apply);
+        void ApplyPowerregenScalingBonus(bool apply);
+        void ApplyAttackSpeedScalingBonus(bool apply);
+        bool ReapplyScalingAura(Aura* aura, int32 basePoints);
+        PetScalingData* CalculateScalingData(bool recalculate = false);
+        void AddScalingAction(ScalingTarget target, uint32 stat, bool apply);
+        void ApplyHappinessBonus(bool apply);
 
         void _LoadSpellCooldowns();
         void _SaveSpellCooldowns();
@@ -253,6 +300,8 @@ class MANGOS_DLL_SPEC Pet : public Creature
         void SetAuraUpdateMask(uint8 slot) { m_auraUpdateMask |= (uint64(1) << slot); }
         void ResetAuraUpdateMask() { m_auraUpdateMask = 0; }
 
+        Unit* GetOwner() const;
+
         // overwrite Creature function for name localization back to WorldObject version without localization
         const char* GetNameForLocaleIdx(int32 locale_idx) const { return WorldObject::GetNameForLocaleIdx(locale_idx); }
 
@@ -263,11 +312,16 @@ class MANGOS_DLL_SPEC Pet : public Creature
         uint32  m_happinessTimer;
         PetType m_petType;
         int32   m_duration;                                 // time until unsummon (used mostly for summoned guardians and not used for controlled pets)
-        int32   m_bonusdamage;
         uint64  m_auraUpdateMask;
         bool    m_loading;
 
         DeclinedName* m_declinedname;
+
+        PetScalingData*  m_PetScalingData;
+        PetScalingData*  m_baseBonusData;
+
+        std::queue<ScalingAction> m_scalingQueue;
+        uint8   m_HappinessState;
 
     private:
         PetModeFlags m_petModeFlags;
@@ -280,6 +334,17 @@ class MANGOS_DLL_SPEC Pet : public Creature
         {
             MANGOS_ASSERT(false);
         }
+};
+
+struct ApplyScalingBonusWithHelper
+{
+    explicit ApplyScalingBonusWithHelper(ScalingTarget _target, uint32 _stat, bool _apply) :
+        target(_target), stat(_stat), apply(_apply)
+    {}
+    void operator()(Unit* unit) const;
+    ScalingTarget target;
+    uint32 stat;
+    bool apply;
 };
 
 struct ApplyArenaPreparationWithHelper
