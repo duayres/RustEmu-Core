@@ -791,46 +791,23 @@ namespace Movement
  */
 enum DiminishingLevels
 {
-    DIMINISHING_LEVEL_1             = 0,         //< Won't make a difference to stun duration
-    DIMINISHING_LEVEL_2             = 1,         //< Reduces stun time by 50%
-    DIMINISHING_LEVEL_3             = 2,         //< Reduces stun time by 75%
-    DIMINISHING_LEVEL_IMMUNE        = 3          //< The target is immune to the DiminishingGrouop
+    DIMINISHING_LEVEL_1 = 0,
+    DIMINISHING_LEVEL_2 = 1,
+    DIMINISHING_LEVEL_3 = 2,
+    DIMINISHING_LEVEL_4 = 3,
+    DIMINISHING_LEVEL_5 = 4,
+    DIMINISHING_LEVEL_IMMUNE = 5
 };
 
-/**
- * Structure to keep track of diminishing returns, for more information
- * about the idea behind diminishing returns, see: http://www.wowwiki.com/Diminishing_returns
- * \see Unit::GetDiminishing
- * \see Unit::IncrDiminishing
- * \see Unit::ApplyDiminishingToDuration
- * \see Unit::ApplyDiminishingAura
- */
 struct DiminishingReturn
 {
     DiminishingReturn(DiminishingGroup group, uint32 t, uint32 count)
         : DRGroup(group), stack(0), hitTime(t), hitCount(count)
     {}
 
-    /**
-     * Group that this diminishing return will affect
-     */
-    DiminishingGroup        DRGroup: 16;
-    /**
-     * Seems to be how many times this has been stacked, modified in
-     * Unit::ApplyDiminishingAura
-     */
-    uint16                  stack: 16;
-    /**
-     * Records at what time the last hit with this DiminishingGroup was done, if it's
-     * higher than 15 seconds (ie: 15 000 ms) the DiminishingReturn::hitCount will be reset
-     * to DiminishingLevels::DIMINISHING_LEVEL_1, which will do no difference to the duration
-     * of the stun etc.
-     */
+    DiminishingGroup        DRGroup : 16;
+    uint16                  stack : 16;
     uint32                  hitTime;
-    /**
-     * Records how many times a spell of this DiminishingGroup has hit, this in turn
-     * decides how how long the duration of the stun etc is.
-     */
     uint32                  hitCount;
 };
 
