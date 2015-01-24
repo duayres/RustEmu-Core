@@ -256,7 +256,7 @@ enum SpellAttributes
     SPELL_ATTR_ABILITY                         = 0x00000010,// 4 client puts 'ability' instead of 'spell' in game strings for these spells
     SPELL_ATTR_TRADESPELL                      = 0x00000020,// 5 trade spells, will be added by client to a sublist of profession spell
     SPELL_ATTR_PASSIVE                         = 0x00000040,// 6 Passive spell
-    SPELL_ATTR_UNK7                            = 0x00000080,// 7 can't be linked in chat?
+    SPELL_ATTR_HIDDEN_CLIENTSIDE               = 0x00000080,// 7 Spells with this attribute are not visible in spellbook or aura bar
     SPELL_ATTR_HIDE_IN_COMBAT_LOG              = 0x00000100,// 8 This attribite controls whether spell appears in combat logs
     SPELL_ATTR_UNK9                            = 0x00000200,// 9
     SPELL_ATTR_ON_NEXT_SWING_2                 = 0x00000400,// 10 on next swing 2
@@ -279,7 +279,7 @@ enum SpellAttributes
     SPELL_ATTR_CASTABLE_WHILE_SITTING          = 0x08000000,// 27 castable while sitting
     SPELL_ATTR_CANT_USED_IN_COMBAT             = 0x10000000,// 28 Cannot be used in combat
     SPELL_ATTR_UNAFFECTED_BY_INVULNERABILITY   = 0x20000000,// 29 unaffected by invulnerability (hmm possible not...)
-    SPELL_ATTR_UNK30                           = 0x40000000,// 30 breakable by damage?
+    SPELL_ATTR_BREAKABLE_BY_DAMAGE             = 0x40000000,// 30 random chance the effect will end. breakable by damage?
     SPELL_ATTR_CANT_CANCEL                     = 0x80000000,// 31 positive aura can't be canceled
 };
 
@@ -313,7 +313,7 @@ enum SpellAttributesEx
     SPELL_ATTR_EX_UNK25                        = 0x02000000,// 25
     SPELL_ATTR_EX_UNK26                        = 0x04000000,// 26
     SPELL_ATTR_EX_UNK27                        = 0x08000000,// 27
-    SPELL_ATTR_EX_UNK28                        = 0x10000000,// 28
+    SPELL_ATTR_EX_HIDDEN_AURA                  = 0x10000000,// 28 client doesn't display these spells in aura bar (special and server-side spells)
     SPELL_ATTR_EX_UNK29                        = 0x20000000,// 29
     SPELL_ATTR_EX_UNK30                        = 0x40000000,// 30 overpower
     SPELL_ATTR_EX_UNK31                        = 0x80000000,// 31
@@ -360,7 +360,7 @@ enum SpellAttributesEx3
     SPELL_ATTR_EX3_UNK0                        = 0x00000001,// 0
     SPELL_ATTR_EX3_UNK1                        = 0x00000002,// 1
     SPELL_ATTR_EX3_UNK2                        = 0x00000004,// 2
-    SPELL_ATTR_EX3_UNK3                        = 0x00000008,// 3
+    SPELL_ATTR_EX3_IGNORE_RESURRECTION_TIMER   = 0x00000010,// 4 you don't have to wait to be resurrected with these spells
     SPELL_ATTR_EX3_UNK4                        = 0x00000010,// 4 Druid Rebirth only this spell have this flag
     SPELL_ATTR_EX3_UNK5                        = 0x00000020,// 5
     SPELL_ATTR_EX3_UNK6                        = 0x00000040,// 6
@@ -383,7 +383,7 @@ enum SpellAttributesEx3
     SPELL_ATTR_EX3_UNK23                       = 0x00800000,// 23
     SPELL_ATTR_EX3_REQ_OFFHAND                 = 0x01000000,// 24 Req offhand weapon
     SPELL_ATTR_EX3_UNK25                       = 0x02000000,// 25 no cause spell pushback ?
-    SPELL_ATTR_EX3_UNK26                       = 0x04000000,// 26
+    SPELL_ATTR_EX3_CAN_PROC_WITH_TRIGGERED     = 0x04000000,// 26 auras with this attribute can proc from triggered spell casts (?)
     SPELL_ATTR_EX3_UNK27                       = 0x08000000,// 27
     SPELL_ATTR_EX3_UNK28                       = 0x10000000,// 28
     SPELL_ATTR_EX3_DISABLE_MODS                = 0x20000000,// 29 Client doesn't apply spellmods for those spells (mostly mounting and like this spells)
@@ -400,7 +400,7 @@ enum SpellAttributesEx4
     SPELL_ATTR_EX4_UNK4                        = 0x00000010,// 4 This will no longer cause guards to attack on use??
     SPELL_ATTR_EX4_UNK5                        = 0x00000020,// 5
     SPELL_ATTR_EX4_NOT_STEALABLE               = 0x00000040,// 6 although such auras might be dispellable, they cannot be stolen
-    SPELL_ATTR_EX4_UNK7                        = 0x00000080,// 7
+    SPELL_ATTR_EX4_FORCE_TRIGGERED             = 0x00000080,// 7 forced triggered?
     SPELL_ATTR_EX4_STACK_DOT_MODIFIER          = 0x00000100,// 8 no effect on non DoTs?
     SPELL_ATTR_EX4_UNK9                        = 0x00000200,// 9
     SPELL_ATTR_EX4_SPELL_VS_EXTEND_COST        = 0x00000400,// 10 Rogue Shiv have this flag
@@ -439,7 +439,7 @@ enum SpellAttributesEx5
     SPELL_ATTR_EX5_UNK7                        = 0x00000080,// 7
     SPELL_ATTR_EX5_UNK8                        = 0x00000100,// 8
     SPELL_ATTR_EX5_START_PERIODIC_AT_APPLY     = 0x00000200,// 9  begin periodic tick at aura apply
-    SPELL_ATTR_EX5_UNK10                       = 0x00000400,// 10
+    SPELL_ATTR_EX5_NO_DURATION                 = 0x00000400,// 10 not send duration to client
     SPELL_ATTR_EX5_UNK11                       = 0x00000800,// 11
     SPELL_ATTR_EX5_UNK12                       = 0x00001000,// 12
     SPELL_ATTR_EX5_AFFECTED_BY_HASTE           = 0x00002000,// 13 haste affects duration (e.g. 8050 since 3.3.3)
@@ -473,11 +473,11 @@ enum SpellAttributesEx6
     SPELL_ATTR_EX6_UNK5                        = 0x00000020,// 5
     SPELL_ATTR_EX6_UNK6                        = 0x00000040,// 6
     SPELL_ATTR_EX6_UNK7                        = 0x00000080,// 7
-    SPELL_ATTR_EX6_UNK8                        = 0x00000100,// 8
+    SPELL_ATTR_EX6_IGNORE_CCED_TARGETS         = 0x00000100,// 8
     SPELL_ATTR_EX6_IGNORE_DETECTION            = 0x00000200,// 9 many spells, ignored unit detections/phasing.
-    SPELL_ATTR_EX6_UNK10                       = 0x00000400,// 10
+    SPELL_ATTR_EX6_NORMAL_DIFFICULTY           = 0x00000400,// 10 this spells not have heroic difficulty versions in DBC (may be only one from effects?)
     SPELL_ATTR_EX6_NOT_IN_RAID_INSTANCE        = 0x00000800,// 11 not usable in raid instance
-    SPELL_ATTR_EX6_UNK12                       = 0x00001000,// 12 for auras SPELL_AURA_TRACK_CREATURES, SPELL_AURA_TRACK_RESOURCES and SPELL_AURA_TRACK_STEALTHED select non-stacking tracking spells
+    SPELL_ATTR_EX6_CASTABLE_ON_VEHICLE         = 0x00001000,// 12 for auras SPELL_AURA_TRACK_CREATURES, SPELL_AURA_TRACK_RESOURCES and SPELL_AURA_TRACK_STEALTHED select non-stacking tracking spells
     SPELL_ATTR_EX6_UNK13                       = 0x00002000,// 13
     SPELL_ATTR_EX6_UNK14                       = 0x00004000,// 14
     SPELL_ATTR_EX6_UNK15                       = 0x00008000,// 15 not set in 3.0.3
@@ -491,7 +491,7 @@ enum SpellAttributesEx6
     SPELL_ATTR_EX6_NO_STACK_DEBUFF_MAJOR       = 0x00800000,// 23 only debuff and debuff-like spells in 3.3.5a
     SPELL_ATTR_EX6_UNK24                       = 0x01000000,// 24 not set in 3.0.3
     SPELL_ATTR_EX6_UNK25                       = 0x02000000,// 25 not set in 3.0.3
-    SPELL_ATTR_EX6_UNK26                       = 0x04000000,// 26 not set in 3.0.3
+    SPELL_ATTR_EX6_NO_STACK_BUFF               = 0x04000000,// 26 not set in 3.0.3
     SPELL_ATTR_EX6_UNK27                       = 0x08000000,// 27 not set in 3.0.3
     SPELL_ATTR_EX6_UNK28                       = 0x10000000,// 28 not set in 3.0.3
     SPELL_ATTR_EX6_NO_DMG_MODS                 = 0x20000000,// 29 do not apply damage mods (usually in cases where it has already been applied)
@@ -511,7 +511,7 @@ enum SpellAttributesEx7
     SPELL_ATTR_EX7_UNK7                        = 0x00000080,// 7
     SPELL_ATTR_EX7_UNK8                        = 0x00000100,// 8
     SPELL_ATTR_EX7_UNK9                        = 0x00000200,// 9
-    SPELL_ATTR_EX7_UNK10                       = 0x00000400,// 10
+    SPELL_ATTR_EX7_DISPEL_CHARGES              = 0x00000400,// 10 Dispel and Spellsteal individual charges instead of whole aura.
     SPELL_ATTR_EX7_UNK11                       = 0x00000800,// 11
     SPELL_ATTR_EX7_UNK12                       = 0x00001000,// 12
     SPELL_ATTR_EX7_UNK13                       = 0x00002000,// 13
@@ -776,7 +776,7 @@ enum SpellEffects
     SPELL_EFFECT_CHARGE2                   = 149,
     SPELL_EFFECT_QUEST_OFFER               = 150,
     SPELL_EFFECT_TRIGGER_SPELL_2           = 151,
-    SPELL_EFFECT_152                       = 152,
+    SPELL_EFFECT_FRIEND_SUMMON             = 152,
     SPELL_EFFECT_CREATE_PET                = 153,
     SPELL_EFFECT_TEACH_TAXI_NODE           = 154,
     SPELL_EFFECT_TITAN_GRIP                = 155,
@@ -1101,14 +1101,14 @@ enum AuraState
     AURA_STATE_BERSERKING                   = 3,            // C T |
     AURA_STATE_FROZEN                       = 4,            //  cT | frozen target
     AURA_STATE_JUDGEMENT                    = 5,            // C   |
-    // AURA_STATE_UNKNOWN6                   = 6,           //     | not used
+    //AURA_STATE_UNKNOWN6                   = 6,            //     | not used
     AURA_STATE_HUNTER_PARRY                 = 7,            // C   |
     AURA_STATE_ROGUE_ATTACK_FROM_STEALTH    = 7,            // C   | FIX ME: not implemented yet!
-    // AURA_STATE_UNKNOWN7                   = 7,           //  c  | random/focused bursts spells (?)
-    // AURA_STATE_UNKNOWN8                   = 8,           //     | not used
-    // AURA_STATE_UNKNOWN9                   = 9,           //     | not used
+    //AURA_STATE_UNKNOWN7                   = 7,            //  c  | random/focused bursts spells (?)
+    //AURA_STATE_UNKNOWN8                   = 8,            //     | not used
+    //AURA_STATE_UNKNOWN9                   = 9,            //     | not used
     AURA_STATE_WARRIOR_VICTORY_RUSH         = 10,           // C   | warrior victory rush
-    // AURA_STATE_UNKNOWN11                  = 11,          //    t|
+    //AURA_STATE_UNKNOWN11                  = 11,           //    t|
     AURA_STATE_FAERIE_FIRE                  = 12,           //  c t|
     AURA_STATE_HEALTHLESS_35_PERCENT        = 13,           // C T |
     AURA_STATE_CONFLAGRATE                  = 14,           //   T | per-caster
@@ -1116,10 +1116,10 @@ enum AuraState
     AURA_STATE_DEADLY_POISON                = 16,           //   T |
     AURA_STATE_ENRAGE                       = 17,           // C   |
     AURA_STATE_BLEEDING                     = 18,           // C  t|
-    // AURA_STATE_UNKNOWN19                  = 19,          //     | not used
-    // AURA_STATE_UNKNOWN20                  = 20,          //  c  | only (45317 Suicide)
-    // AURA_STATE_UNKNOWN21                  = 21,          //     | not used
-    // AURA_STATE_UNKNOWN22                  = 22,          // C   | not implemented yet (Requires Evasive Charges to use)
+    AURA_STATE_DARK_TARGET                  = 19,           //     | targeting for light/Gas spells
+    //AURA_STATE_UNKNOWN20                  = 20,           //  c  | only (45317 Suicide)
+    AURA_STATE_SPELLFIRE                    = 21,           //     | Spellfire (targeting, NYI)
+    AURA_STATE_LIGHT_TARGET                 = 22,           // C   | targeting for dark/Ooze spells
     AURA_STATE_HEALTH_ABOVE_75_PERCENT      = 23,           // C   |
 };
 
@@ -1229,7 +1229,7 @@ enum SpellImmunity
 
 #define MAX_SPELL_IMMUNITY           6
 
-enum WeaponAttackType                                       //< The different weapon attack-types
+enum WeaponAttackType
 {
     BASE_ATTACK   = 0,
     OFF_ATTACK    = 1,
@@ -1246,106 +1246,117 @@ enum WeaponAttackType                                       //< The different we
 
 enum Targets
 {
-    TARGET_NONE                        = 0,
-    TARGET_SELF                        = 1,
-    TARGET_RANDOM_ENEMY_CHAIN_IN_AREA  = 2,                 // only one spell has that, but regardless, it's a target type after all
-    TARGET_RANDOM_FRIEND_CHAIN_IN_AREA = 3,
-    TARGET_RANDOM_UNIT_CHAIN_IN_AREA   = 4,                 // some plague spells that are infectious - maybe targets not-infected friends inrange
-    TARGET_PET                         = 5,
-    TARGET_CHAIN_DAMAGE                = 6,
-    TARGET_AREAEFFECT_INSTANT          = 7,                 // targets around provided destination point
-    TARGET_AREAEFFECT_CUSTOM           = 8,
-    TARGET_INNKEEPER_COORDINATES       = 9,                 // uses in teleport to innkeeper spells
-    TARGET_11                          = 11,                // used by spell 4 'Word of Recall Other'
-    TARGET_ALL_ENEMY_IN_AREA           = 15,
-    TARGET_ALL_ENEMY_IN_AREA_INSTANT   = 16,
-    TARGET_TABLE_X_Y_Z_COORDINATES     = 17,                // uses in teleport spells and some other
-    TARGET_EFFECT_SELECT               = 18,                // highly depends on the spell effect
-    TARGET_ALL_PARTY_AROUND_CASTER     = 20,
-    TARGET_SINGLE_FRIEND               = 21,
-    TARGET_CASTER_COORDINATES          = 22,                // used only in TargetA, target selection dependent from TargetB
-    TARGET_GAMEOBJECT                  = 23,
-    TARGET_IN_FRONT_OF_CASTER          = 24,
-    TARGET_DUELVSPLAYER                = 25,
-    TARGET_GAMEOBJECT_ITEM             = 26,
-    TARGET_MASTER                      = 27,
-    TARGET_ALL_ENEMY_IN_AREA_CHANNELED = 28,
-    TARGET_29                          = 29,
-    TARGET_ALL_FRIENDLY_UNITS_AROUND_CASTER = 30,           // select friendly for caster object faction (in different original caster faction) in TargetB used only with TARGET_ALL_AROUND_CASTER and in self casting range in TargetA
-    TARGET_ALL_FRIENDLY_UNITS_IN_AREA  = 31,
-    TARGET_MINION                      = 32,
-    TARGET_ALL_PARTY                   = 33,
-    TARGET_ALL_PARTY_AROUND_CASTER_2   = 34,                // used in Tranquility
-    TARGET_SINGLE_PARTY                = 35,
-    TARGET_ALL_HOSTILE_UNITS_AROUND_CASTER = 36,
-    TARGET_AREAEFFECT_PARTY            = 37,
-    TARGET_SCRIPT                      = 38,
-    TARGET_SELF_FISHING                = 39,
-    TARGET_FOCUS_OR_SCRIPTED_GAMEOBJECT = 40,
-    TARGET_TOTEM_EARTH                 = 41,
-    TARGET_TOTEM_WATER                 = 42,
-    TARGET_TOTEM_AIR                   = 43,
-    TARGET_TOTEM_FIRE                  = 44,
-    TARGET_CHAIN_HEAL                  = 45,
-    TARGET_SCRIPT_COORDINATES          = 46,
-    TARGET_DYNAMIC_OBJECT_FRONT        = 47,
-    TARGET_DYNAMIC_OBJECT_BEHIND       = 48,
-    TARGET_DYNAMIC_OBJECT_LEFT_SIDE    = 49,
-    TARGET_DYNAMIC_OBJECT_RIGHT_SIDE   = 50,
-    TARGET_AREAEFFECT_GO_AROUND_SOURCE = 51,
-    TARGET_AREAEFFECT_GO_AROUND_DEST   = 52,                // gameobject around destination, select by spell_script_target
-    TARGET_CURRENT_ENEMY_COORDINATES   = 53,                // set unit coordinates as dest, only 16 target B imlemented
-    TARGET_LARGE_FRONTAL_CONE          = 54,
-    TARGET_ALL_RAID_AROUND_CASTER      = 56,
-    TARGET_SINGLE_FRIEND_2             = 57,
-    TARGET_58                          = 58,
-    TARGET_FRIENDLY_FRONTAL_CONE       = 59,
-    TARGET_NARROW_FRONTAL_CONE         = 60,
-    TARGET_AREAEFFECT_PARTY_AND_CLASS  = 61,
-    TARGET_DUELVSPLAYER_COORDINATES    = 63,
-    TARGET_INFRONT_OF_VICTIM           = 64,
-    TARGET_BEHIND_VICTIM               = 65,                // used in teleport behind spells, caster/target dependent from spell effect
-    TARGET_RIGHT_FROM_VICTIM           = 66,
-    TARGET_LEFT_FROM_VICTIM            = 67,
-    TARGET_68                          = 68,
-    TARGET_69                          = 69,
-    TARGET_70                          = 70,
-    TARGET_RANDOM_NEARBY_LOC           = 72,                // used in teleport onto nearby locations
-    TARGET_RANDOM_CIRCUMFERENCE_POINT  = 73,
-    TARGET_74                          = 74,
-    TARGET_75                          = 75,
-    TARGET_DYNAMIC_OBJECT_COORDINATES  = 76,
-    TARGET_SINGLE_ENEMY                = 77,
-    TARGET_POINT_AT_NORTH              = 78,                // 78-85 possible _COORDINATES at radius with pi/4 step around target in unknown order, N?
-    TARGET_POINT_AT_SOUTH              = 79,                // S?
-    TARGET_POINT_AT_EAST               = 80,                // 80/81 must be symmetric from line caster->target, E (base at 82/83, 84/85 order) ?
-    TARGET_POINT_AT_WEST               = 81,                // 80/81 must be symmetric from line caster->target, W (base at 82/83, 84/85 order) ?
-    TARGET_POINT_AT_NE                 = 82,                // from spell desc: "(NE)"
-    TARGET_POINT_AT_NW                 = 83,                // from spell desc: "(NW)"
-    TARGET_POINT_AT_SE                 = 84,                // from spell desc: "(SE)"
-    TARGET_POINT_AT_SW                 = 85,                // from spell desc: "(SW)"
-    TARGET_RANDOM_NEARBY_DEST          = 86,                // "Test Nearby Dest Random" - random around selected destination
-    TARGET_SELF2                       = 87,
-    TARGET_88                          = 88,                // Smoke Flare(s) and Hurricane
-    TARGET_DIRECTLY_FORWARD            = 89,
-    TARGET_NONCOMBAT_PET               = 90,
-    TARGET_91                          = 91,
-    TARGET_SUMMONER                    = 92,
-    TARGET_CONTROLLED_VEHICLE          = 94,
-    TARGET_95                          = 95,
-    TARGET_VEHICLE_PASSENGER_0         = 96,
-    TARGET_VEHICLE_PASSENGER_1         = 97,
-    TARGET_VEHICLE_PASSENGER_2         = 98,
-    TARGET_VEHICLE_PASSENGER_3         = 99,
-    TARGET_VEHICLE_PASSENGER_4         = 100,
-    TARGET_VEHICLE_PASSENGER_5         = 101,
-    TARGET_VEHICLE_PASSENGER_6         = 102,
-    TARGET_VEHICLE_PASSENGER_7         = 103,
-    TARGET_IN_FRONT_OF_CASTER_30       = 104,
-    TARGET_105                         = 105,               // 1 spell
-    TARGET_106                         = 106,
-    TARGET_GO_IN_FRONT_OF_CASTER_90    = 108,               // possible TARGET_WMO(GO?)_IN_FRONT_OF_CASTER(_30 ?) TODO: Verify the angle!
-    TARGET_NARROW_FRONTAL_CONE_2       = 110,
+    TARGET_NONE                             = 0,
+    TARGET_SELF                             = 1,
+    TARGET_RANDOM_ENEMY_CHAIN_IN_AREA       = 2,                 // only one spell has that, but regardless, it's a target type after all
+    TARGET_RANDOM_FRIEND_CHAIN_IN_AREA      = 3,
+    TARGET_RANDOM_UNIT_CHAIN_IN_AREA        = 4,                 // targets - any enemies and friends
+    TARGET_PET                              = 5,
+    TARGET_CHAIN_DAMAGE                     = 6,
+    TARGET_AREAEFFECT_INSTANT               = 7,                 // targets around provided destination point
+    TARGET_AREAEFFECT_CUSTOM                = 8,
+    TARGET_INNKEEPER_COORDINATES            = 9,                 // uses in teleport to innkeeper spells
+    TARGET_10                               = 10,
+    TARGET_11                               = 11,
+    TARGET_12                               = 12,
+    TARGET_13                               = 13,
+    TARGET_14                               = 14,
+    TARGET_ALL_ENEMY_IN_AREA                = 15,
+    TARGET_ALL_ENEMY_IN_AREA_INSTANT        = 16,
+    TARGET_TABLE_X_Y_Z_COORDINATES          = 17,                // uses in teleport spells and some other
+    TARGET_EFFECT_SELECT                    = 18,                // highly depends on the spell effect
+    TARGET_19                               = 19,
+    TARGET_ALL_PARTY_AROUND_CASTER          = 20,
+    TARGET_SINGLE_FRIEND                    = 21,
+    TARGET_CASTER_COORDINATES               = 22,                // used only in TargetA, target selection dependent from TargetB
+    TARGET_GAMEOBJECT                       = 23,
+    TARGET_IN_FRONT_OF_CASTER               = 24,
+    TARGET_DUELVSPLAYER                     = 25,
+    TARGET_GAMEOBJECT_ITEM                  = 26,
+    TARGET_MASTER                           = 27,
+    TARGET_ALL_ENEMY_IN_AREA_CHANNELED      = 28,
+    TARGET_29                               = 29,
+    TARGET_ALL_FRIENDLY_UNITS_AROUND_CASTER = 30,                // select friendly for caster object faction (in different original caster faction) in TargetB used only with TARGET_ALL_AROUND_CASTER and in self casting range in TargetA
+    TARGET_ALL_FRIENDLY_UNITS_IN_AREA       = 31,
+    TARGET_MINION                           = 32,
+    TARGET_ALL_PARTY                        = 33,
+    TARGET_ALL_PARTY_AROUND_CASTER_2        = 34,                // used in Tranquility
+    TARGET_SINGLE_PARTY                     = 35,
+    TARGET_ALL_HOSTILE_UNITS_AROUND_CASTER  = 36,
+    TARGET_AREAEFFECT_PARTY                 = 37,
+    TARGET_SCRIPT                           = 38,
+    TARGET_SELF_FISHING                     = 39,
+    TARGET_FOCUS_OR_SCRIPTED_GAMEOBJECT     = 40,
+    TARGET_TOTEM_EARTH                      = 41,
+    TARGET_TOTEM_WATER                      = 42,
+    TARGET_TOTEM_AIR                        = 43,
+    TARGET_TOTEM_FIRE                       = 44,
+    TARGET_CHAIN_HEAL                       = 45,
+    TARGET_SCRIPT_COORDINATES               = 46,
+    TARGET_DYNAMIC_OBJECT_FRONT             = 47,
+    TARGET_DYNAMIC_OBJECT_BEHIND            = 48,
+    TARGET_DYNAMIC_OBJECT_LEFT_SIDE         = 49,
+    TARGET_DYNAMIC_OBJECT_RIGHT_SIDE        = 50,
+    TARGET_AREAEFFECT_GO_AROUND_SOURCE      = 51,
+    TARGET_AREAEFFECT_GO_AROUND_DEST        = 52,                // gameobject around destination, select by spell_script_target
+    TARGET_CURRENT_ENEMY_COORDINATES        = 53,                // set unit coordinates as dest, only 16 target B imlemented
+    TARGET_LARGE_FRONTAL_CONE               = 54,
+    TARGET_LEAP_FORWARD                     = 55,                // Target point must be calculated in target selection
+    TARGET_ALL_RAID_AROUND_CASTER           = 56,
+    TARGET_SINGLE_FRIEND_2                  = 57,
+    TARGET_58                               = 58,
+    TARGET_FRIENDLY_FRONTAL_CONE            = 59,
+    TARGET_NARROW_FRONTAL_CONE              = 60,
+    TARGET_AREAEFFECT_PARTY_AND_CLASS       = 61,
+    TARGET_62                               = 62,
+    TARGET_DUELVSPLAYER_COORDINATES         = 63,
+    TARGET_INFRONT_OF_VICTIM                = 64,
+    TARGET_BEHIND_VICTIM                    = 65,                // used in teleport behind spells, caster/target dependent from spell effect
+    TARGET_RIGHT_FROM_VICTIM                = 66,
+    TARGET_LEFT_FROM_VICTIM                 = 67,
+    TARGET_68                               = 68,
+    TARGET_69                               = 69,
+    TARGET_SINGLE_ENEMY_2                   = 70,
+    TARGET_71                               = 71,
+    TARGET_RANDOM_NEARBY_LOC                = 72,                // used in teleport onto nearby locations
+    TARGET_RANDOM_CIRCUMFERENCE_POINT       = 73,
+    TARGET_RANDOM_POINT_NEAR_TARGET         = 74,                // Target point must be calculated in target selection
+    TARGET_RANDOM_POINT_NEAR_TARGET_2       = 75,                // Target point must be calculated in target selection
+    TARGET_DYNAMIC_OBJECT_COORDINATES       = 76,
+    TARGET_SINGLE_ENEMY                     = 77,
+    TARGET_POINT_AT_NORTH                   = 78,                // 78-85 possible _COORDINATES at radius with pi/4 step around target in unknown order, N?
+    TARGET_POINT_AT_SOUTH                   = 79,                // S?
+    TARGET_POINT_AT_EAST                    = 80,                // 80/81 must be symmetric from line caster->target, E (base at 82/83, 84/85 order) ?
+    TARGET_POINT_AT_WEST                    = 81,                // 80/81 must be symmetric from line caster->target, W (base at 82/83, 84/85 order) ?
+    TARGET_POINT_AT_NE                      = 82,                // from spell desc: "(NE)"
+    TARGET_POINT_AT_NW                      = 83,                // from spell desc: "(NW)"
+    TARGET_POINT_AT_SE                      = 84,                // from spell desc: "(SE)"
+    TARGET_POINT_AT_SW                      = 85,                // from spell desc: "(SW)"
+    TARGET_RANDOM_NEARBY_DEST               = 86,                // "Test Nearby Dest Random" - random around selected destination
+    TARGET_SELF2                            = 87,
+    TARGET_88                               = 88,
+    TARGET_DIRECTLY_FORWARD                 = 89,
+    TARGET_NONCOMBAT_PET                    = 90,
+    TARGET_DEST_RADIUS                      = 91,
+    TARGET_UNIT_CREATOR                     = 92,
+    TARGET_93                               = 93,
+    TARGET_OWNED_VEHICLE                    = 94,
+    TARGET_UNIT_DRIVER                      = 95,
+    TARGET_UNIT_PASSENGER_0                 = 96,
+    TARGET_UNIT_PASSENGER_1                 = 97,
+    TARGET_UNIT_PASSENGER_2                 = 98,
+    TARGET_UNIT_PASSENGER_3                 = 99,
+    TARGET_UNIT_PASSENGER_4                 = 100,
+    TARGET_UNIT_PASSENGER_5                 = 101,
+    TARGET_UNIT_PASSENGER_6                 = 102,
+    TARGET_UNIT_PASSENGER_7                 = 103,
+    TARGET_IN_FRONT_OF_CASTER_30            = 104,
+    TARGET_105                              = 105,
+    TARGET_106                              = 106,
+    TARGET_107                              = 107,
+    TARGET_GO_IN_FRONT_OF_CASTER_90         = 108,
+    TARGET_109                              = 109,
+    TARGET_NARROW_FRONTAL_CONE_2            = 110,
 };
 
 enum SpellMissInfo
@@ -2679,7 +2690,8 @@ enum DiminishingReturnsType
 {
     DRTYPE_NONE         = 0,                                // this spell is not diminished, but may have limited it's duration to 10s
     DRTYPE_PLAYER       = 1,                                // this spell is diminished only when applied on players
-    DRTYPE_ALL          = 2                                 // this spell is diminished in every case
+    DRTYPE_ALL          = 2,                                // this spell is diminished in every case
+    DRTYPE_TAUNT        = 3,                                // this spell is diminished as Taunt Diminishing Returns (http://eu.battle.net/wow/en/game/patch-notes/3-3-0)
 };
 
 // Diminishing Return Groups
@@ -2702,7 +2714,14 @@ enum DiminishingGroup
     DIMINISHING_SILENCE,                                    // From 2.3.0
     DIMINISHING_FREEZE_SLEEP,                               // Hunter's Freezing Trap
     DIMINISHING_BANISH,
+    // Warrior Specific
+    DIMINISHING_CHARGE,
     // Other
+    DIMINISHING_TAUNT,
+    DIMINISHING_DRAGONS_BREATH,
+    DIMINISHING_MIND_CONTROL,
+    DIMINISHING_ENTRAPMENT,
+    DIMINISHING_SCATTER_SHOT,
     // Don't Diminish, but limit duration to 10s
     DIMINISHING_LIMITONLY
 };

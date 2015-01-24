@@ -5630,7 +5630,7 @@ void Aura::HandlePeriodicDamage(bool apply, bool Real)
 
     m_isPeriodic = apply;
 
-    Unit* target = GetTarget();
+    Unit *target = GetTarget();
     SpellEntry const* spellProto = GetSpellProto();
 
     // For prevent double apply bonuses
@@ -5642,7 +5642,7 @@ void Aura::HandlePeriodicDamage(bool apply, bool Real)
         if (loading)
             return;
 
-        Unit* caster = GetCaster();
+        Unit *caster = GetCaster();
         if (!caster)
             return;
 
@@ -5651,7 +5651,7 @@ void Aura::HandlePeriodicDamage(bool apply, bool Real)
         case SPELLFAMILY_WARRIOR:
         {
             // Rend
-            if (spellProto->SpellFamilyFlags.test<CF_WARRIOR_REND>())
+            if (spellProto->GetSpellFamilyFlags().test<CF_WARRIOR_REND>())
             {
                 // $0.2*(($MWB+$mwb)/2+$AP/14*$MWS) bonus per tick
                 float ap = caster->GetTotalAttackPowerValue(BASE_ATTACK);
@@ -5676,7 +5676,7 @@ void Aura::HandlePeriodicDamage(bool apply, bool Real)
         case SPELLFAMILY_DRUID:
         {
             // Rip
-            if (spellProto->SpellFamilyFlags.test<CF_DRUID_RIP_BITE>())
+            if (spellProto->GetSpellFamilyFlags().test<CF_DRUID_RIP_BITE>())
             {
                 if (caster->GetTypeId() != TYPEID_PLAYER)
                     break;
@@ -5697,7 +5697,7 @@ void Aura::HandlePeriodicDamage(bool apply, bool Real)
                 m_modifier.m_amount += int32(caster->GetTotalAttackPowerValue(BASE_ATTACK) * cp / 100);
             }
             // Insect Swarm
-            else if (spellProto->SpellFamilyFlags.test<CF_DRUID_INSECT_SWARM>())
+            else if (spellProto->GetSpellFamilyFlags().test<CF_DRUID_INSECT_SWARM>())
             {
                 // Idol of the Crying Wind
                 Unit::AuraList const& dummyAuras = caster->GetAurasByType(SPELL_AURA_DUMMY);
@@ -5715,7 +5715,7 @@ void Aura::HandlePeriodicDamage(bool apply, bool Real)
         case SPELLFAMILY_ROGUE:
         {
             // Rupture
-            if (spellProto->SpellFamilyFlags.test<CF_ROGUE_RUPTURE>())
+            if (spellProto->GetSpellFamilyFlags().test<CF_ROGUE_RUPTURE>())
             {
                 if (caster->GetTypeId() != TYPEID_PLAYER)
                     break;
@@ -5734,7 +5734,7 @@ void Aura::HandlePeriodicDamage(bool apply, bool Real)
         case SPELLFAMILY_PALADIN:
         {
             // Holy Vengeance / Blood Corruption
-            if (spellProto->SpellFamilyFlags.test<CF_PALADIN_SEAL_OF_CORRUPT_VENGE>() && spellProto->SpellVisual[0] == 7902)
+            if (spellProto->GetSpellFamilyFlags().test<CF_PALADIN_SEAL_OF_CORRUPT_VENGE>() && spellProto->GetSpellVisual() == 7902)
             {
                 // AP * 0.025 + SPH * 0.013 bonus per tick
                 float ap = caster->GetTotalAttackPowerValue(BASE_ATTACK);
@@ -5809,7 +5809,7 @@ void Aura::HandlePeriodicDamage(bool apply, bool Real)
         if (apply)
         {
             target->CastSpell(target, 70955, true); // Bounce Protection
-            if (Unit* pCaster = GetCaster())
+            if (Unit *pCaster = GetCaster())
             {
                 if (SpellAuraHolder* holder = pCaster->GetSpellAuraHolder(GetId()))
                 {
@@ -5897,7 +5897,7 @@ void Aura::HandlePeriodicHealthFunnel(bool apply, bool /*Real*/)
 
 void Aura::HandleAuraModResistanceExclusive(bool apply, bool /*Real*/)
 {
-    Unit* target = GetTarget();
+    Unit *target = GetTarget();
 
     for (int8 x = SPELL_SCHOOL_NORMAL; x < MAX_SPELL_SCHOOL; x++)
     {
@@ -5913,7 +5913,7 @@ void Aura::HandleAuraModResistanceExclusive(bool apply, bool /*Real*/)
 
 void Aura::HandleAuraModResistance(bool apply, bool /*Real*/)
 {
-    Unit* target = GetTarget();
+    Unit *target = GetTarget();
 
     for (int8 x = SPELL_SCHOOL_NORMAL; x < MAX_SPELL_SCHOOL; x++)
     {
@@ -5928,16 +5928,10 @@ void Aura::HandleAuraModResistance(bool apply, bool /*Real*/)
 
 void Aura::HandleAuraModBaseResistancePCT(bool apply, bool /*Real*/)
 {
-    // only players have base stats
-    if (GetTarget()->GetTypeId() != TYPEID_PLAYER)
+    // only players and pets have base stats
+    if (GetTarget()->GetTypeId() == TYPEID_PLAYER || ((Creature*)GetTarget())->IsPet())
     {
-        // pets only have base armor
-        if (((Creature*)GetTarget())->IsPet() && (m_modifier.m_miscvalue & SPELL_SCHOOL_MASK_NORMAL))
-            GetTarget()->HandleStatModifier(UNIT_MOD_ARMOR, BASE_PCT, float(m_modifier.m_amount), apply);
-    }
-    else
-    {
-        for (int8 x = SPELL_SCHOOL_NORMAL; x < MAX_SPELL_SCHOOL; ++x)
+        for (int8 x = SPELL_SCHOOL_NORMAL; x < MAX_SPELL_SCHOOL; x++)
         {
             if (m_modifier.m_miscvalue & int32(1 << x))
                 GetTarget()->HandleStatModifier(UnitMods(UNIT_MOD_RESISTANCE_START + x), BASE_PCT, float(m_modifier.m_amount), apply);
@@ -5947,7 +5941,7 @@ void Aura::HandleAuraModBaseResistancePCT(bool apply, bool /*Real*/)
 
 void Aura::HandleModResistancePercent(bool apply, bool /*Real*/)
 {
-    Unit* target = GetTarget();
+    Unit *target = GetTarget();
 
     for (int8 i = SPELL_SCHOOL_NORMAL; i < MAX_SPELL_SCHOOL; i++)
     {
@@ -5962,16 +5956,10 @@ void Aura::HandleModResistancePercent(bool apply, bool /*Real*/)
 
 void Aura::HandleModBaseResistance(bool apply, bool /*Real*/)
 {
-    // only players have base stats
-    if (GetTarget()->GetTypeId() != TYPEID_PLAYER)
+    // only players and pets have base stats
+    if (GetTarget()->GetTypeId() == TYPEID_PLAYER || ((Creature*)GetTarget())->IsPet())
     {
-        // only pets have base stats
-        if (((Creature*)GetTarget())->IsPet() && (m_modifier.m_miscvalue & SPELL_SCHOOL_MASK_NORMAL))
-            GetTarget()->HandleStatModifier(UNIT_MOD_ARMOR, TOTAL_VALUE, float(m_modifier.m_amount), apply);
-    }
-    else
-    {
-        for (int i = SPELL_SCHOOL_NORMAL; i < MAX_SPELL_SCHOOL; ++i)
+        for (int i = SPELL_SCHOOL_NORMAL; i < MAX_SPELL_SCHOOL; i++)
             if (m_modifier.m_miscvalue & (1 << i))
                 GetTarget()->HandleStatModifier(UnitMods(UNIT_MOD_RESISTANCE_START + i), TOTAL_VALUE, float(m_modifier.m_amount), apply);
     }
@@ -5989,7 +5977,7 @@ void Aura::HandleAuraModStat(bool apply, bool /*Real*/)
         return;
     }
 
-    Unit* target = GetTarget();
+    Unit *target = GetTarget();
 
     for (int32 i = STAT_STRENGTH; i < MAX_STATS; i++)
     {
@@ -6012,8 +6000,8 @@ void Aura::HandleModPercentStat(bool apply, bool /*Real*/)
         return;
     }
 
-    // only players have base stats
-    if (GetTarget()->GetTypeId() != TYPEID_PLAYER)
+    // only players and pets have base stats
+    if (GetTarget()->GetTypeId() != TYPEID_PLAYER && !((Creature*)GetTarget())->IsPet())
         return;
 
     for (int32 i = STAT_STRENGTH; i < MAX_STATS; ++i)
@@ -6089,13 +6077,13 @@ void Aura::HandleModTotalPercentStat(bool apply, bool /*Real*/)
         return;
     }
 
-    Unit* target = GetTarget();
+    Unit *target = GetTarget();
 
-    // save current and max HP before applying aura
+    //save current and max HP before applying aura
     uint32 curHPValue = target->GetHealth();
     uint32 maxHPValue = target->GetMaxHealth();
 
-    for (int32 i = STAT_STRENGTH; i < MAX_STATS; ++i)
+    for (int32 i = STAT_STRENGTH; i < MAX_STATS; i++)
     {
         if (m_modifier.m_miscvalue == i || m_modifier.m_miscvalue == -1)
         {
@@ -6105,11 +6093,19 @@ void Aura::HandleModTotalPercentStat(bool apply, bool /*Real*/)
         }
     }
 
-    // recalculate current HP/MP after applying aura modifications (only for spells with 0x10 flag)
+    //recalculate current HP/MP after applying aura modifications (only for spells with 0x10 flag)
     if (m_modifier.m_miscvalue == STAT_STAMINA && maxHPValue > 0 && GetSpellProto()->HasAttribute(SPELL_ATTR_ABILITY))
     {
         // newHP = (curHP / maxHP) * newMaxHP = (newMaxHP * curHP) / maxHP -> which is better because no int -> double -> int conversion is needed
-        uint32 newHPValue = (target->GetMaxHealth() * curHPValue) / maxHPValue;
+        // Multiplication of large numbers cause uint32 overflow so using trick
+        // a*b/c = (a/c) * (b/c) * c + (a%c) * (b%c) / c + (a/c) * (b%c) + (a%c) * (b/c)
+        uint32 max_hp = target->GetMaxHealth();
+        // max_hp * curHPValue / maxHPValue
+        uint32 newHPValue =
+            (max_hp / maxHPValue) * (curHPValue / maxHPValue) * maxHPValue
+            + (max_hp%maxHPValue) * (curHPValue%maxHPValue) / maxHPValue
+            + (max_hp / maxHPValue) * (curHPValue%maxHPValue)
+            + (max_hp%maxHPValue) * (curHPValue / maxHPValue);
         target->SetHealth(newHPValue);
     }
 }
@@ -6168,6 +6164,8 @@ void Aura::HandleModPowerRegen(bool apply, bool Real)       // drinking
         // Anger Management (only spell use this aura for rage)
         if (powerType == POWER_RAGE)
             m_modifier.periodictime = 3000;
+        else if (powerType == POWER_RUNIC_POWER)
+            m_modifier.periodictime = 5000;
         else
             m_modifier.periodictime = 2000;
     }
@@ -6210,7 +6208,7 @@ void Aura::HandleModManaRegen(bool /*apply*/, bool Real)
     if (GetTarget()->GetTypeId() != TYPEID_PLAYER)
         return;
 
-    // Note: an increase in regen does NOT cause threat.
+    //Note: an increase in regen does NOT cause threat.
     ((Player*)GetTarget())->UpdateManaRegen();
 }
 
@@ -6267,7 +6265,7 @@ void Aura::HandleAuraModIncreaseHealth(bool apply, bool Real)
         }
         return;
     }
-        // generic case
+    // generic case
     default:
         target->HandleStatModifier(UNIT_MOD_HEALTH, TOTAL_VALUE, float(m_modifier.m_amount), apply);
     }
@@ -6278,7 +6276,7 @@ void Aura::HandleAuraModIncreaseHealth(bool apply, bool Real)
 
 void  Aura::HandleAuraModIncreaseMaxHealth(bool apply, bool /*Real*/)
 {
-    Unit* target = GetTarget();
+    Unit *target = GetTarget();
     uint32 oldhealth = target->GetHealth();
     double healthPercentage = (double)oldhealth / (double)target->GetMaxHealth();
 
@@ -6298,55 +6296,78 @@ void  Aura::HandleAuraModIncreaseMaxHealth(bool apply, bool /*Real*/)
 void Aura::HandleAuraModIncreaseEnergy(bool apply, bool Real)
 {
     Unit* target = GetTarget();
-    Powers powerType = target->GetPowerType();
-    if (int32(powerType) != m_modifier.m_miscvalue)
+
+    if (!target)
         return;
+
+    Powers powerType = target->GetPowerType();
+
+    if (int32(powerType) != m_modifier.m_miscvalue)
+    {
+        DEBUG_LOG("HandleAuraModIncreaseEnergy: unit %u change energy %u but current type %u", target->GetObjectGuid().GetCounter(), m_modifier.m_miscvalue, powerType);
+        powerType = Powers(m_modifier.m_miscvalue);
+    }
 
     UnitMods unitMod = UnitMods(UNIT_MOD_POWER_START + powerType);
 
-    // Special case with temporary increase max/current power (percent)
-    if (GetId() == 64904)                                   // Hymn of Hope
-    {
-        if (Real)
-        {
-            uint32 val = target->GetPower(powerType);
-            target->HandleStatModifier(unitMod, TOTAL_PCT, float(m_modifier.m_amount), apply);
-            target->SetPower(powerType, apply ? val * (100 + m_modifier.m_amount) / 100 : val * 100 / (100 + m_modifier.m_amount));
-        }
-        return;
-    }
-
-    // generic flat case
     target->HandleStatModifier(unitMod, TOTAL_VALUE, float(m_modifier.m_amount), apply);
 }
 
 void Aura::HandleAuraModIncreaseEnergyPercent(bool apply, bool /*Real*/)
 {
-    Powers powerType = GetTarget()->GetPowerType();
-    if (int32(powerType) != m_modifier.m_miscvalue)
+    Unit* target = GetTarget();
+
+    if (!target)
         return;
+
+    Powers powerType = target->GetPowerType();
+
+    if (int32(powerType) != m_modifier.m_miscvalue)
+    {
+        DEBUG_LOG("HandleAuraModIncreaseEnergy: unit %u change energy %u but current type %u", target->GetObjectGuid().GetCounter(), m_modifier.m_miscvalue, powerType);
+        powerType = Powers(m_modifier.m_miscvalue);
+    }
 
     UnitMods unitMod = UnitMods(UNIT_MOD_POWER_START + powerType);
 
-    GetTarget()->HandleStatModifier(unitMod, TOTAL_PCT, float(m_modifier.m_amount), apply);
+    target->HandleStatModifier(unitMod, TOTAL_PCT, float(m_modifier.m_amount), apply);
 }
 
 void Aura::HandleAuraModIncreaseHealthPercent(bool apply, bool /*Real*/)
 {
     Unit* target = GetTarget();
 
+    if (!target)
+        return;
+
+    uint32 oldhealth = target->GetHealth();
+
     target->HandleStatModifier(UNIT_MOD_HEALTH, TOTAL_PCT, float(m_modifier.m_amount), apply);
 
     // spell special cases when current health set to max value at apply
-    switch (GetId())
+    if (apply)
     {
+        switch (GetId())
+        {
         case 60430:                                         // Molten Fury
+        case 61254:                                         // Will of Sartharion
         case 64193:                                         // Heartbreak
         case 65737:                                         // Heartbreak
+        case 64582:                                         // Emergency Mode (Ulduar - Mimiron)
             target->SetHealth(target->GetMaxHealth());
             break;
         default:
+            if (oldhealth > target->GetMaxHealth())
+                target->SetHealth(target->GetMaxHealth());
             break;
+        }
+    }
+    else
+    {
+        if (oldhealth > target->GetMaxHealth())
+            target->SetHealth(target->GetMaxHealth());
+        else
+            target->SetHealth(oldhealth);
     }
 }
 

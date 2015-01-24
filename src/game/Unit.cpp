@@ -10620,21 +10620,26 @@ bool Unit::HandleStatModifier(UnitMods unitMod, UnitModifierType modifierType, f
 
     switch (modifierType)
     {
-        case BASE_VALUE:
-        case TOTAL_VALUE:
-            m_auraModifiersGroup[unitMod][modifierType] += apply ? amount : -amount;
-            break;
-        case BASE_PCT:
-        case TOTAL_PCT:
-            if (amount <= -100.0f)                          // small hack-fix for -100% modifiers
-                amount = -200.0f;
+    case BASE_VALUE:
+    case TOTAL_VALUE:
+        m_auraModifiersGroup[unitMod][modifierType] += apply ? amount : -amount;
+        break;
+    case BASE_PCT:
+    case TOTAL_PCT:
+        if (amount <= -100.0f)                           //small hack-fix for -100% modifiers
+            amount = -200.0f;
 
-            val = (100.0f + amount) / 100.0f;
-            m_auraModifiersGroup[unitMod][modifierType] *= apply ? val : (1.0f / val);
-            break;
-
-        default:
-            break;
+        val = (100.0f + amount) / 100.0f;
+        m_auraModifiersGroup[unitMod][modifierType] *= apply ? val : (1.0f / val);
+        break;
+    case NONSTACKING_PCT:
+    case NONSTACKING_PCT_MINOR:
+    case NONSTACKING_VALUE_POS:
+    case NONSTACKING_VALUE_NEG:
+        m_auraModifiersGroup[unitMod][modifierType] = amount;
+        break;
+    default:
+        break;
     }
 
     if (!CanModifyStats())
@@ -10642,39 +10647,39 @@ bool Unit::HandleStatModifier(UnitMods unitMod, UnitModifierType modifierType, f
 
     switch (unitMod)
     {
-        case UNIT_MOD_STAT_STRENGTH:
-        case UNIT_MOD_STAT_AGILITY:
-        case UNIT_MOD_STAT_STAMINA:
-        case UNIT_MOD_STAT_INTELLECT:
-        case UNIT_MOD_STAT_SPIRIT:         UpdateStats(GetStatByAuraGroup(unitMod));  break;
+    case UNIT_MOD_STAT_STRENGTH:
+    case UNIT_MOD_STAT_AGILITY:
+    case UNIT_MOD_STAT_STAMINA:
+    case UNIT_MOD_STAT_INTELLECT:
+    case UNIT_MOD_STAT_SPIRIT:         UpdateStats(GetStatByAuraGroup(unitMod));  break;
 
-        case UNIT_MOD_ARMOR:               UpdateArmor();           break;
-        case UNIT_MOD_HEALTH:              UpdateMaxHealth();       break;
+    case UNIT_MOD_ARMOR:               UpdateArmor();           break;
+    case UNIT_MOD_HEALTH:              UpdateMaxHealth();       break;
 
-        case UNIT_MOD_MANA:
-        case UNIT_MOD_RAGE:
-        case UNIT_MOD_FOCUS:
-        case UNIT_MOD_ENERGY:
-        case UNIT_MOD_HAPPINESS:
-        case UNIT_MOD_RUNE:
-        case UNIT_MOD_RUNIC_POWER:         UpdateMaxPower(GetPowerTypeByAuraGroup(unitMod)); break;
+    case UNIT_MOD_MANA:
+    case UNIT_MOD_RAGE:
+    case UNIT_MOD_FOCUS:
+    case UNIT_MOD_ENERGY:
+    case UNIT_MOD_HAPPINESS:
+    case UNIT_MOD_RUNE:
+    case UNIT_MOD_RUNIC_POWER:         UpdateMaxPower(GetPowerTypeByAuraGroup(unitMod)); break;
 
-        case UNIT_MOD_RESISTANCE_HOLY:
-        case UNIT_MOD_RESISTANCE_FIRE:
-        case UNIT_MOD_RESISTANCE_NATURE:
-        case UNIT_MOD_RESISTANCE_FROST:
-        case UNIT_MOD_RESISTANCE_SHADOW:
-        case UNIT_MOD_RESISTANCE_ARCANE:   UpdateResistances(GetSpellSchoolByAuraGroup(unitMod)); break;
+    case UNIT_MOD_RESISTANCE_HOLY:
+    case UNIT_MOD_RESISTANCE_FIRE:
+    case UNIT_MOD_RESISTANCE_NATURE:
+    case UNIT_MOD_RESISTANCE_FROST:
+    case UNIT_MOD_RESISTANCE_SHADOW:
+    case UNIT_MOD_RESISTANCE_ARCANE:   UpdateResistances(GetSpellSchoolByAuraGroup(unitMod)); break;
 
-        case UNIT_MOD_ATTACK_POWER:        UpdateAttackPowerAndDamage();         break;
-        case UNIT_MOD_ATTACK_POWER_RANGED: UpdateAttackPowerAndDamage(true);     break;
+    case UNIT_MOD_ATTACK_POWER:        UpdateAttackPowerAndDamage();         break;
+    case UNIT_MOD_ATTACK_POWER_RANGED: UpdateAttackPowerAndDamage(true);     break;
 
-        case UNIT_MOD_DAMAGE_MAINHAND:     UpdateDamagePhysical(BASE_ATTACK);    break;
-        case UNIT_MOD_DAMAGE_OFFHAND:      UpdateDamagePhysical(OFF_ATTACK);     break;
-        case UNIT_MOD_DAMAGE_RANGED:       UpdateDamagePhysical(RANGED_ATTACK);  break;
+    case UNIT_MOD_DAMAGE_MAINHAND:     UpdateDamagePhysical(BASE_ATTACK);    break;
+    case UNIT_MOD_DAMAGE_OFFHAND:      UpdateDamagePhysical(OFF_ATTACK);     break;
+    case UNIT_MOD_DAMAGE_RANGED:       UpdateDamagePhysical(RANGED_ATTACK);  break;
 
-        default:
-            break;
+    default:
+        break;
     }
 
     return true;
@@ -10682,32 +10687,41 @@ bool Unit::HandleStatModifier(UnitMods unitMod, UnitModifierType modifierType, f
 
 float Unit::GetModifierValue(UnitMods unitMod, UnitModifierType modifierType) const
 {
+    double retvalue = 0.0f;
+
     if (unitMod >= UNIT_MOD_END || modifierType >= MODIFIER_TYPE_END)
     {
-        sLog.outError("attempt to access nonexistent modifier value from UnitMods!");
-        return 0.0f;
+        sLog.outError("Unit::GetModifierValue attempt to access nonexistent modifier value (type %u) from UnitMods!", modifierType);
     }
+    else if (modifierType == TOTAL_PCT)
+    {
+        if (m_auraModifiersGroup[unitMod][modifierType] > M_NULL_F)
+            retvalue = m_auraModifiersGroup[unitMod][TOTAL_PCT] * ((m_auraModifiersGroup[unitMod][NONSTACKING_PCT] + m_auraModifiersGroup[unitMod][NONSTACKING_PCT_MINOR] + 100.0f) / 100.0f);
+    }
+    else if (modifierType == TOTAL_VALUE)
+    {
+        retvalue = m_auraModifiersGroup[unitMod][TOTAL_VALUE] + m_auraModifiersGroup[unitMod][NONSTACKING_VALUE_POS] + m_auraModifiersGroup[unitMod][NONSTACKING_VALUE_NEG];
+    }
+    else
+        retvalue = m_auraModifiersGroup[unitMod][modifierType];
 
-    if (modifierType == TOTAL_PCT && m_auraModifiersGroup[unitMod][modifierType] <= 0.0f)
-        return 0.0f;
-
-    return m_auraModifiersGroup[unitMod][modifierType];
+    return round_pct(retvalue);
 }
 
 float Unit::GetTotalStatValue(Stats stat) const
 {
     UnitMods unitMod = UnitMods(UNIT_MOD_STAT_START + stat);
 
-    if (m_auraModifiersGroup[unitMod][TOTAL_PCT] <= 0.0f)
+    if (m_auraModifiersGroup[unitMod][TOTAL_PCT] <= M_NULL_F)
         return 0.0f;
 
     // value = ((base_value * base_pct) + total_value) * total_pct
-    float value  = m_auraModifiersGroup[unitMod][BASE_VALUE] + GetCreateStat(stat);
+    double value = m_auraModifiersGroup[unitMod][BASE_VALUE] + GetCreateStat(stat);
     value *= m_auraModifiersGroup[unitMod][BASE_PCT];
-    value += m_auraModifiersGroup[unitMod][TOTAL_VALUE];
-    value *= m_auraModifiersGroup[unitMod][TOTAL_PCT];
+    value += (m_auraModifiersGroup[unitMod][TOTAL_VALUE] + m_auraModifiersGroup[unitMod][NONSTACKING_VALUE_POS] + m_auraModifiersGroup[unitMod][NONSTACKING_VALUE_NEG]);
+    value *= m_auraModifiersGroup[unitMod][TOTAL_PCT] * ((m_auraModifiersGroup[unitMod][NONSTACKING_PCT] + m_auraModifiersGroup[unitMod][NONSTACKING_PCT_MINOR] + 100.0f) / 100.0f);
 
-    return value;
+    return round_pct(value);
 }
 
 float Unit::GetTotalAuraModValue(UnitMods unitMod) const
@@ -10718,15 +10732,15 @@ float Unit::GetTotalAuraModValue(UnitMods unitMod) const
         return 0.0f;
     }
 
-    if (m_auraModifiersGroup[unitMod][TOTAL_PCT] <= 0.0f)
+    if (m_auraModifiersGroup[unitMod][TOTAL_PCT] <= M_NULL_F)
         return 0.0f;
 
-    float value  = m_auraModifiersGroup[unitMod][BASE_VALUE];
+    double value = m_auraModifiersGroup[unitMod][BASE_VALUE];
     value *= m_auraModifiersGroup[unitMod][BASE_PCT];
-    value += m_auraModifiersGroup[unitMod][TOTAL_VALUE];
-    value *= m_auraModifiersGroup[unitMod][TOTAL_PCT];
+    value += (m_auraModifiersGroup[unitMod][TOTAL_VALUE] + m_auraModifiersGroup[unitMod][NONSTACKING_VALUE_POS] + m_auraModifiersGroup[unitMod][NONSTACKING_VALUE_NEG]);
+    value *= m_auraModifiersGroup[unitMod][TOTAL_PCT] * ((m_auraModifiersGroup[unitMod][NONSTACKING_PCT] + m_auraModifiersGroup[unitMod][NONSTACKING_PCT_MINOR] + 100.0f) / 100.0f);
 
-    return value;
+    return round_pct(value);
 }
 
 SpellSchools Unit::GetSpellSchoolByAuraGroup(UnitMods unitMod) const
@@ -10735,15 +10749,15 @@ SpellSchools Unit::GetSpellSchoolByAuraGroup(UnitMods unitMod) const
 
     switch (unitMod)
     {
-        case UNIT_MOD_RESISTANCE_HOLY:     school = SPELL_SCHOOL_HOLY;          break;
-        case UNIT_MOD_RESISTANCE_FIRE:     school = SPELL_SCHOOL_FIRE;          break;
-        case UNIT_MOD_RESISTANCE_NATURE:   school = SPELL_SCHOOL_NATURE;        break;
-        case UNIT_MOD_RESISTANCE_FROST:    school = SPELL_SCHOOL_FROST;         break;
-        case UNIT_MOD_RESISTANCE_SHADOW:   school = SPELL_SCHOOL_SHADOW;        break;
-        case UNIT_MOD_RESISTANCE_ARCANE:   school = SPELL_SCHOOL_ARCANE;        break;
+    case UNIT_MOD_RESISTANCE_HOLY:     school = SPELL_SCHOOL_HOLY;          break;
+    case UNIT_MOD_RESISTANCE_FIRE:     school = SPELL_SCHOOL_FIRE;          break;
+    case UNIT_MOD_RESISTANCE_NATURE:   school = SPELL_SCHOOL_NATURE;        break;
+    case UNIT_MOD_RESISTANCE_FROST:    school = SPELL_SCHOOL_FROST;         break;
+    case UNIT_MOD_RESISTANCE_SHADOW:   school = SPELL_SCHOOL_SHADOW;        break;
+    case UNIT_MOD_RESISTANCE_ARCANE:   school = SPELL_SCHOOL_ARCANE;        break;
 
-        default:
-            break;
+    default:
+        break;
     }
 
     return school;
@@ -10755,14 +10769,14 @@ Stats Unit::GetStatByAuraGroup(UnitMods unitMod) const
 
     switch (unitMod)
     {
-        case UNIT_MOD_STAT_STRENGTH:    stat = STAT_STRENGTH;      break;
-        case UNIT_MOD_STAT_AGILITY:     stat = STAT_AGILITY;       break;
-        case UNIT_MOD_STAT_STAMINA:     stat = STAT_STAMINA;       break;
-        case UNIT_MOD_STAT_INTELLECT:   stat = STAT_INTELLECT;     break;
-        case UNIT_MOD_STAT_SPIRIT:      stat = STAT_SPIRIT;        break;
+    case UNIT_MOD_STAT_STRENGTH:    stat = STAT_STRENGTH;      break;
+    case UNIT_MOD_STAT_AGILITY:     stat = STAT_AGILITY;       break;
+    case UNIT_MOD_STAT_STAMINA:     stat = STAT_STAMINA;       break;
+    case UNIT_MOD_STAT_INTELLECT:   stat = STAT_INTELLECT;     break;
+    case UNIT_MOD_STAT_SPIRIT:      stat = STAT_SPIRIT;        break;
 
-        default:
-            break;
+    default:
+        break;
     }
 
     return stat;
@@ -10772,14 +10786,14 @@ Powers Unit::GetPowerTypeByAuraGroup(UnitMods unitMod) const
 {
     switch (unitMod)
     {
-        case UNIT_MOD_MANA:       return POWER_MANA;
-        case UNIT_MOD_RAGE:       return POWER_RAGE;
-        case UNIT_MOD_FOCUS:      return POWER_FOCUS;
-        case UNIT_MOD_ENERGY:     return POWER_ENERGY;
-        case UNIT_MOD_HAPPINESS:  return POWER_HAPPINESS;
-        case UNIT_MOD_RUNE:       return POWER_RUNE;
-        case UNIT_MOD_RUNIC_POWER: return POWER_RUNIC_POWER;
-        default:                  return POWER_MANA;
+    case UNIT_MOD_MANA:       return POWER_MANA;
+    case UNIT_MOD_RAGE:       return POWER_RAGE;
+    case UNIT_MOD_FOCUS:      return POWER_FOCUS;
+    case UNIT_MOD_ENERGY:     return POWER_ENERGY;
+    case UNIT_MOD_HAPPINESS:  return POWER_HAPPINESS;
+    case UNIT_MOD_RUNE:       return POWER_RUNE;
+    case UNIT_MOD_RUNIC_POWER:return POWER_RUNIC_POWER;
+    default:                  return POWER_MANA;
     }
 }
 
@@ -10801,7 +10815,7 @@ float Unit::GetTotalAttackPowerValue(WeaponAttackType attType) const
     }
 }
 
-float Unit::GetWeaponDamageRange(WeaponAttackType attType , WeaponDamageRange type) const
+float Unit::GetWeaponDamageRange(WeaponAttackType attType, WeaponDamageRange type) const
 {
     if (attType == OFF_ATTACK && !haveOffhandWeapon())
         return 0.0f;
@@ -10834,10 +10848,10 @@ void Unit::SetHealth(uint32 val)
     }
     else if (((Creature*)this)->IsPet())
     {
-        Pet* pet = ((Pet*)this);
+        Pet *pet = ((Pet*)this);
         if (pet->isControlled())
         {
-            Unit* owner = GetOwner();
+            Unit *owner = GetOwner();
             if (owner && (owner->GetTypeId() == TYPEID_PLAYER) && ((Player*)owner)->GetGroup())
                 ((Player*)owner)->SetGroupUpdateFlag(GROUP_UPDATE_FLAG_PET_CUR_HP);
         }
@@ -10857,10 +10871,10 @@ void Unit::SetMaxHealth(uint32 val)
     }
     else if (((Creature*)this)->IsPet())
     {
-        Pet* pet = ((Pet*)this);
+        Pet *pet = ((Pet*)this);
         if (pet->isControlled())
         {
-            Unit* owner = GetOwner();
+            Unit *owner = GetOwner();
             if (owner && (owner->GetTypeId() == TYPEID_PLAYER) && ((Player*)owner)->GetGroup())
                 ((Player*)owner)->SetGroupUpdateFlag(GROUP_UPDATE_FLAG_PET_MAX_HP);
         }
@@ -10887,6 +10901,12 @@ void Unit::SetPower(Powers power, uint32 val)
 
     SetStatInt32Value(UNIT_FIELD_POWER1 + power, val);
 
+    WorldPacket data(SMSG_POWER_UPDATE, GetPackGUID().size() + 1 + 4);
+    data << GetPackGUID();
+    data << uint8(power);
+    data << uint32(val);
+    SendMessageToSet(&data, true);
+
     // group update
     if (GetTypeId() == TYPEID_PLAYER)
     {
@@ -10895,10 +10915,10 @@ void Unit::SetPower(Powers power, uint32 val)
     }
     else if (((Creature*)this)->IsPet())
     {
-        Pet* pet = ((Pet*)this);
+        Pet *pet = ((Pet*)this);
         if (pet->isControlled())
         {
-            Unit* owner = GetOwner();
+            Unit *owner = GetOwner();
             if (owner && (owner->GetTypeId() == TYPEID_PLAYER) && ((Player*)owner)->GetGroup())
                 ((Player*)owner)->SetGroupUpdateFlag(GROUP_UPDATE_FLAG_PET_CUR_POWER);
         }
@@ -10922,10 +10942,10 @@ void Unit::SetMaxPower(Powers power, uint32 val)
     }
     else if (((Creature*)this)->IsPet())
     {
-        Pet* pet = ((Pet*)this);
+        Pet *pet = ((Pet*)this);
         if (pet->isControlled())
         {
-            Unit* owner = GetOwner();
+            Unit *owner = GetOwner();
             if (owner && (owner->GetTypeId() == TYPEID_PLAYER) && ((Player*)owner)->GetGroup())
                 ((Player*)owner)->SetGroupUpdateFlag(GROUP_UPDATE_FLAG_PET_MAX_POWER);
         }
@@ -10947,10 +10967,10 @@ void Unit::ApplyPowerMod(Powers power, uint32 val, bool apply)
     }
     else if (((Creature*)this)->IsPet())
     {
-        Pet* pet = ((Pet*)this);
+        Pet *pet = ((Pet*)this);
         if (pet->isControlled())
         {
-            Unit* owner = GetOwner();
+            Unit *owner = GetOwner();
             if (owner && (owner->GetTypeId() == TYPEID_PLAYER) && ((Player*)owner)->GetGroup())
                 ((Player*)owner)->SetGroupUpdateFlag(GROUP_UPDATE_FLAG_PET_CUR_POWER);
         }
@@ -10969,10 +10989,10 @@ void Unit::ApplyMaxPowerMod(Powers power, uint32 val, bool apply)
     }
     else if (((Creature*)this)->IsPet())
     {
-        Pet* pet = ((Pet*)this);
+        Pet *pet = ((Pet*)this);
         if (pet->isControlled())
         {
-            Unit* owner = GetOwner();
+            Unit *owner = GetOwner();
             if (owner && (owner->GetTypeId() == TYPEID_PLAYER) && ((Player*)owner)->GetGroup())
                 ((Player*)owner)->SetGroupUpdateFlag(GROUP_UPDATE_FLAG_PET_MAX_POWER);
         }
@@ -10992,14 +11012,14 @@ uint32 Unit::GetCreatePowers(Powers power) const
 {
     switch (power)
     {
-        case POWER_HEALTH:      return 0;                   // is it really should be here?
-        case POWER_MANA:        return GetCreateMana();
-        case POWER_RAGE:        return POWER_RAGE_DEFAULT;
-        case POWER_FOCUS:       return (GetTypeId() == TYPEID_PLAYER || !((Creature const*)this)->IsPet() || ((Pet const*)this)->getPetType() != HUNTER_PET ? 0 : POWER_FOCUS_DEFAULT);
-        case POWER_ENERGY:      return POWER_ENERGY_DEFAULT;
-        case POWER_HAPPINESS:   return (GetTypeId() == TYPEID_PLAYER || !((Creature const*)this)->IsPet() || ((Pet const*)this)->getPetType() != HUNTER_PET ? 0 : POWER_HAPPINESS_DEFAULT);
-        case POWER_RUNE:        return (GetTypeId() == TYPEID_PLAYER && ((Player const*)this)->getClass() == CLASS_DEATH_KNIGHT ? POWER_RUNE_DEFAULT : 0);
-        case POWER_RUNIC_POWER: return (GetTypeId() == TYPEID_PLAYER && ((Player const*)this)->getClass() == CLASS_DEATH_KNIGHT ? POWER_RUNIC_POWER_DEFAULT : 0);
+    case POWER_HEALTH:      return 0;                   // is it really should be here?
+    case POWER_MANA:        return GetCreateMana();
+    case POWER_RAGE:        return POWER_RAGE_DEFAULT;
+    case POWER_FOCUS:       return (GetTypeId() == TYPEID_PLAYER || !((Creature const*)this)->IsPet() || ((Pet const*)this)->getPetType() != HUNTER_PET ? 0 : POWER_FOCUS_DEFAULT);
+    case POWER_ENERGY:      return POWER_ENERGY_DEFAULT;
+    case POWER_HAPPINESS:   return (GetTypeId() == TYPEID_PLAYER || !((Creature const*)this)->IsPet() || ((Pet const*)this)->getPetType() != HUNTER_PET ? 0 : POWER_HAPPINESS_DEFAULT);
+    case POWER_RUNE:        return (GetTypeId() == TYPEID_PLAYER && ((Player const*)this)->getClass() == CLASS_DEATH_KNIGHT ? POWER_RUNE_DEFAULT : 0);
+    case POWER_RUNIC_POWER: return (GetTypeId() == TYPEID_PLAYER && ((Player const*)this)->getClass() == CLASS_DEATH_KNIGHT ? POWER_RUNIC_POWER_DEFAULT : 0);
     }
 
     return 0;
