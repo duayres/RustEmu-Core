@@ -972,6 +972,20 @@ bool Pet::UpdateStats(Stats stat)
 
     // value = ((create_value + base_value * base_pct) + total_value) * total_pct
     float value = GetTotalStatValue(stat);
+
+    Unit* owner = GetOwner();
+    if (stat == STAT_STAMINA)
+    {
+        if (owner)
+            value += float(owner->GetStat(stat)) * 0.3f;
+    }
+    // warlock's and mage's pets gain 30% of owner's intellect
+    else if (stat == STAT_INTELLECT && getPetType() == SUMMON_PET)
+    {
+        if (owner && (owner->getClass() == CLASS_WARLOCK || owner->getClass() == CLASS_MAGE))
+            value += float(owner->GetStat(stat)) * 0.3f;
+    }
+
     SetStat(stat, int32(value));
 
     switch (stat)
@@ -1016,7 +1030,14 @@ void Pet::UpdateResistances(uint32 school)
 {
     if (school > SPELL_SCHOOL_NORMAL)
     {
-        SetResistance(SpellSchools(school), int32(GetTotalAuraModValue(UnitMods(UNIT_MOD_RESISTANCE_START + school))));
+        float value = GetTotalAuraModValue(UnitMods(UNIT_MOD_RESISTANCE_START + school));
+
+        Unit* owner = GetOwner();
+        // hunter and warlock pets gain 40% of owner's resistance
+        if (owner && (getPetType() == HUNTER_PET || (getPetType() == SUMMON_PET && owner->getClass() == CLASS_WARLOCK)))
+            value += float(owner->GetResistance(SpellSchools(school))) * 0.4f;
+
+        SetResistance(SpellSchools(school), int32(value));
     }
     else
         UpdateArmor();
@@ -1025,11 +1046,18 @@ void Pet::UpdateResistances(uint32 school)
 void Pet::UpdateArmor()
 {
     float value = 0.0f;
+    float bonus_armor = 0.0f;
     UnitMods unitMod = UNIT_MOD_ARMOR;
 
-    value = GetModifierValue(unitMod, BASE_VALUE) + GetStat(STAT_AGILITY) * 2.0f;
+    Unit* owner = GetOwner();
+    // hunter and warlock pets gain 35% of owner's armor value
+    if (owner && (getPetType() == HUNTER_PET || (getPetType() == SUMMON_PET && owner->getClass() == CLASS_WARLOCK)))
+        bonus_armor = 0.35f * float(owner->GetArmor());
+
+    value = GetModifierValue(unitMod, BASE_VALUE);
     value *= GetModifierValue(unitMod, BASE_PCT);
-    value += GetModifierValue(unitMod, TOTAL_VALUE);
+    value += GetStat(STAT_AGILITY) * 2.0f;
+    value += GetModifierValue(unitMod, TOTAL_VALUE) + bonus_armor;
     value *= GetModifierValue(unitMod, TOTAL_PCT);
 
     SetArmor(int32(value));
