@@ -244,7 +244,7 @@ class MANGOS_DLL_SPEC Pet : public Creature
         void RegenerateHealth(uint32 diff);
         float OCTRegenHPPerSpirit();
         float OCTRegenMPPerSpirit();
-        //void CastPetPassiveAuras(bool current); not implemented yet
+        void CastPetPassiveAuras(bool current);
         void ApplyScalingBonus(ScalingAction* action);
         void ApplyAllScalingBonuses(bool apply);
         void ApplyStatScalingBonus(Stats stat, bool apply);

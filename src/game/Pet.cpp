@@ -255,8 +255,7 @@ bool Pet::LoadPetFromDB(Player* owner, uint32 petentry, uint32 petnumber, bool c
     }
 
     // load action bar, if data broken will fill later by default spells.
-    if (!is_temporary_summoned)
-        m_charmInfo->LoadPetActionBar(fields[13].GetCppString());
+    m_charmInfo->LoadPetActionBar(fields[13].GetCppString());
 
     // since last save (in seconds)
     uint32 timediff = uint32(time(NULL) - fields[14].GetUInt64());
@@ -266,21 +265,31 @@ bool Pet::LoadPetFromDB(Player* owner, uint32 petentry, uint32 petnumber, bool c
 
     delete result;
 
-    // load spells/cooldowns/auras
-    _LoadAuras(timediff);
-
     // init AB
     if (is_temporary_summoned)
     {
         // Temporary summoned pets always have initial spell list at load
         InitPetCreateSpells();
     }
+
+    //load spells/cooldowns/auras
+    _LoadAuras(timediff);
+    _LoadSpells();
+    SynchronizeLevelWithOwner();
+    InitLevelupSpellsForLevel();
+    LearnPetPassives();
+    _LoadSpellCooldowns();
+
+    CleanupActionBar();                                     // remove unknown spells from action bar after load
+
+    if (getPetType() == SUMMON_PET)
+        CastPetAuras(true);
     else
-    {
-        LearnPetPassives();
         CastPetAuras(current);
-        CastOwnerTalentAuras();
-    }
+
+    CastPetPassiveAuras(true);
+    CalculateScalingData(true);
+    ApplyAllScalingBonuses(true);
 
     Powers powerType = GetPowerType();
 
@@ -295,18 +304,7 @@ bool Pet::LoadPetFromDB(Player* owner, uint32 petentry, uint32 petnumber, bool c
         SetPower(powerType, savedpower > GetMaxPower(powerType) ? GetMaxPower(powerType) : savedpower);
     }
 
-    CalculateScalingData(true);
-    ApplyAllScalingBonuses(true);
-    AIM_Initialize();
     map->Add((Creature*)this);
-
-    // Spells should be loaded after pet is added to map, because in CheckCast is check on it
-    _LoadSpells();
-    InitLevelupSpellsForLevel();
-
-    CleanupActionBar();                                     // remove unknown spells from action bar after load
-
-    _LoadSpellCooldowns();
 
     owner->SetPet(this);                                    // in DB stored only full controlled creature
     DEBUG_LOG("New Pet has guid %u", GetGUIDLow());
@@ -337,9 +335,9 @@ bool Pet::LoadPetFromDB(Player* owner, uint32 petentry, uint32 petnumber, bool c
         }
     }
 
+    AIM_Initialize();
+    DEBUG_LOG("Pet::LoadPetFromDB pet %s successfully loaded", GetGuidStr().c_str());
     m_loading = false;
-
-    SynchronizeLevelWithOwner();
     return true;
 }
 
@@ -2174,6 +2172,51 @@ bool Pet::ReapplyScalingAura(Aura* aura, int32 basePoints)
     }
     SetCanModifyStats(true);
     return true;
+}
+
+void Pet::CastPetPassiveAuras(bool current)
+{
+    Unit* owner = GetOwner();
+
+    if (!owner || owner->GetTypeId() != TYPEID_PLAYER)
+        return;
+
+    // Cast pet passive aura (if not casted as passive)
+    uint32 creature_id;
+
+    switch (getPetType())
+    {
+    case SUMMON_PET:
+    case GUARDIAN_PET:
+    case PROTECTOR_PET:
+        creature_id = GetEntry();
+        break;
+    case HUNTER_PET:
+        creature_id = 1;
+        break;
+    default:
+        creature_id = 0;
+        break;
+    }
+
+    PetPassiveAuraList const* pPassiveAuraList = sSpellMgr.GetPetPassiveAuraList(creature_id);
+    if (!pPassiveAuraList || pPassiveAuraList->empty())
+        return;
+
+    for (PetPassiveAuraList::const_iterator itr = pPassiveAuraList->begin(); itr != pPassiveAuraList->end(); ++itr)
+    {
+        PetAura const petAura = *itr;
+
+        uint32 auraID = petAura.GetAura(creature_id);
+
+        if (!current && HasAura(auraID))
+            RemoveAurasDueToSpell(auraID);
+        else if (current && !HasAura(auraID))
+        {
+            CastSpell(this, auraID, true);
+            DEBUG_LOG("Cast passive pet aura %u", auraID);
+        }
+    }
 }
 
 PetScalingData* Pet::CalculateScalingData(bool recalculate)
