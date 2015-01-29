@@ -732,7 +732,6 @@ bool IsPositiveEffect(SpellEntry const *spellproto, SpellEffectIndex effIndex)
             return false;
         case 552:                                           // Abolish Disease
         case 12042:                                         // Arcane Power
-        case 19714:                                         // Magic Grounding
         case 24732:                                         // Bat Costume
         case 59286:                                         // Opening
         case 43730:                                         // Electrified
@@ -887,6 +886,7 @@ bool IsPositiveEffect(SpellEntry const *spellproto, SpellEffectIndex effIndex)
                         return false;
                     break;
                 case SPELL_AURA_MOD_DAMAGE_TAKEN:           // dependent from bas point sign (positive -> negative)
+                case SPELL_AURA_MOD_DAMAGE_PERCENT_TAKEN:
                     if (spellproto->CalculateSimpleValue(effIndex) < 0)
                         return true;
                     // let check by target modes (for Amplify Magic cases/etc)
