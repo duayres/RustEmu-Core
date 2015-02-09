@@ -592,7 +592,7 @@ void Unit::DealDamageMods(DamageInfo* damageInfo)
         damageInfo->AddAbsorb(originalDamage - damageInfo->damage);
 }
 
-uint32 Unit::DealDamage(Unit* pVictim, uint32 damage, DamageInfo* damageInfo, DamageEffectType damagetype, SpellSchoolMask damageSchoolMask, SpellEntry const *spellProto, bool durabilityLoss)
+uint32 Unit::DealDamage(Unit* pVictim, uint32 damage, DamageInfo* damageInfo, DamageEffectType damagetype, SpellSchoolMask damageSchoolMask, SpellEntry const* spellProto, bool durabilityLoss)
 {
     // wrapper for old method of damage calculation (mostly for scripts)
     if (!damageInfo)
@@ -6267,7 +6267,7 @@ void Unit::RemoveAllGameObjects()
     m_wildGameObjs.clear();
 }
 
-void Unit::SendSpellNonMeleeDamageLog(DamageInfo *log)
+void Unit::SendSpellNonMeleeDamageLog(DamageInfo* log)
 {
     uint32 targetHealth = log->target->GetHealth();
     uint32 overkill = log->damage > targetHealth ? log->damage - targetHealth : 0;
@@ -7457,7 +7457,7 @@ void Unit::EnergizeBySpell(Unit* pVictim, uint32 SpellID, uint32 Damage, Powers 
  * @param defCoeffMod default coefficient for additional scaling (i.e. normal player healing 1.88)
  */
 
-int32 Unit::SpellBonusWithCoeffs(SpellEntry const *spellProto, int32 total, int32 benefit, int32 ap_benefit, DamageEffectType damagetype, bool donePart, float defCoeffMod)
+int32 Unit::SpellBonusWithCoeffs(SpellEntry const* spellProto, int32 total, int32 benefit, int32 ap_benefit, DamageEffectType damagetype, bool donePart, float defCoeffMod)
 {
 
     // Not apply this to spells with SPELL_ATTR_EX3_DISABLE_MODS attribute
@@ -8403,7 +8403,7 @@ uint32 Unit::SpellCriticalHealingBonus(SpellEntry const *spellProto, uint32 dama
 * Calculates caster part of healing spell bonuses,
 * also includes different bonuses dependent from target auras
 */
-uint32 Unit::SpellHealingBonusDone(Unit* pVictim, SpellEntry const *spellProto, int32 healamount, DamageEffectType damagetype, uint32 stack)
+uint32 Unit::SpellHealingBonusDone(Unit* pVictim, SpellEntry const* spellProto, int32 healamount, DamageEffectType damagetype, uint32 stack)
 {
     // For totems get healing bonus from owner (statue isn't totem in fact)
     if (GetTypeId() == TYPEID_UNIT && ((Creature*)this)->IsTotem() && ((Totem*)this)->GetTotemType() != TOTEM_STATUE)
@@ -8539,7 +8539,7 @@ uint32 Unit::SpellHealingBonusDone(Unit* pVictim, SpellEntry const *spellProto, 
 * Calculates target part of healing spell bonuses,
 * will be called on each tick for periodic damage over time auras
 */
-uint32 Unit::SpellHealingBonusTaken(Unit* pCaster, SpellEntry const *spellProto, int32 healamount, DamageEffectType damagetype, uint32 stack)
+uint32 Unit::SpellHealingBonusTaken(Unit* pCaster, SpellEntry const* spellProto, int32 healamount, DamageEffectType damagetype, uint32 stack)
 {
     // Healing taken percent
     float  TakenTotalMod = GetTotalAuraMultiplier(SPELL_AURA_MOD_HEALING_PCT);

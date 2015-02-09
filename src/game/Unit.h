@@ -842,13 +842,13 @@ struct DamageInfo
 {
 public:
     // Constructors for use with spell and melee damage
-    DamageInfo(Unit* _attacker, Unit* _target, uint32 _SpellID, uint32 _damage)
+    DamageInfo(Unit *_attacker, Unit *_target, uint32 _SpellID, uint32 _damage)
         : attacker(_attacker), target(_target), m_spellInfo(NULL), SpellID(_SpellID)
     {
         Reset(_damage);
     };
 
-    DamageInfo(Unit* _attacker, Unit* _target, SpellEntry const* spellInfo, uint32 _damage = 0)
+    DamageInfo(Unit *_attacker, Unit *_target, SpellEntry const* spellInfo, uint32 _damage = 0)
         : attacker(_attacker), target(_target), m_spellInfo(spellInfo), SpellID(0)
     {
         Reset(_damage);
@@ -963,26 +963,6 @@ private:
     uint32            SpellID;
 };
 
-// Spell damage info structure based on structure sending in SMSG_SPELLNONMELEEDAMAGELOG opcode
-struct SpellNonMeleeDamage
-{
-    SpellNonMeleeDamage(Unit* _attacker, Unit* _target, uint32 _SpellID, SpellSchoolMask _schoolMask)
-        : target(_target), attacker(_attacker), SpellID(_SpellID), damage(0), schoolMask(_schoolMask),
-          absorb(0), resist(0), physicalLog(false), unused(false), blocked(0), HitInfo(0)
-    {}
-
-    Unit*   target;
-    Unit*   attacker;
-    uint32 SpellID;
-    uint32 damage;
-    SpellSchoolMask schoolMask;
-    uint32 absorb;
-    uint32 resist;
-    bool   physicalLog;
-    bool   unused;
-    uint32 blocked;
-    uint32 HitInfo;
-};
 
 struct SpellPeriodicAuraLogInfo
 {
@@ -1527,7 +1507,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         uint16 GetMaxSkillValueForLevel(Unit const* target = NULL) const { return (target ? GetLevelForTarget(target) : getLevel()) * 5; }
         void DealDamageMods(DamageInfo* damageInfo);
-        uint32 DealDamage(Unit* pVictim, uint32 damage, DamageInfo* cleanDamage, DamageEffectType damagetype, SpellSchoolMask damageSchoolMask, SpellEntry const *spellProto, bool durabilityLoss);
+        uint32 DealDamage(Unit* pVictim, uint32 damage, DamageInfo* cleanDamage, DamageEffectType damagetype, SpellSchoolMask damageSchoolMask, SpellEntry const* spellProto, bool durabilityLoss);
         uint32 DealDamage(Unit* pVictim, DamageInfo* damageInfo, bool durabilityLoss);
         uint32 DealDamage(DamageInfo* damageInfo);
         int32  DealHeal(Unit* pVictim, uint32 addhealth, SpellEntry const* spellProto, bool critical = false, uint32 absorb = 0);
@@ -1547,8 +1527,8 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         float MeleeMissChanceCalc(const Unit* pVictim, WeaponAttackType attType) const;
 
-        void CalculateMeleeDamage(DamageInfo *damageInfo);
-        void DealMeleeDamage(DamageInfo *damageInfo, bool durabilityLoss);
+        void CalculateMeleeDamage(DamageInfo* damageInfo);
+        void DealMeleeDamage(DamageInfo* damageInfo, bool durabilityLoss);
 
         bool IsAllowedDamageInArea(Unit* pVictim) const;
 
@@ -1675,7 +1655,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         void DeMorph();
 
         void SendAttackStateUpdate(DamageInfo* damageInfo);
-        void SendSpellNonMeleeDamageLog(DamageInfo *log);
+        void SendSpellNonMeleeDamageLog(DamageInfo* log);
         void SendSpellNonMeleeDamageLog(Unit* target, uint32 SpellID, uint32 Damage, SpellSchoolMask damageSchoolMask, uint32 AbsorbedDamage, uint32 Resist, bool PhysicalDamage, uint32 Blocked, bool CriticalHit = false);
         void SendPeriodicAuraLog(SpellPeriodicAuraLogInfo *pInfo);
         void SendSpellMiss(Unit* target, uint32 spellID, SpellMissInfo missInfo);
@@ -2077,7 +2057,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         void UnsummonAllTotems();
         Unit* SelectMagnetTarget(Unit* victim, Spell* spell = NULL, SpellEffectIndex eff = EFFECT_INDEX_0);
 
-        int32 SpellBonusWithCoeffs(SpellEntry const *spellProto, int32 total, int32 benefit, int32 ap_benefit, DamageEffectType damagetype, bool donePart, float defCoeffMod = 1.0f);
+        int32 SpellBonusWithCoeffs(SpellEntry const* spellProto, int32 total, int32 benefit, int32 ap_benefit, DamageEffectType damagetype, bool donePart, float defCoeffMod = 1.0f);
         int32 SpellBaseDamageBonusDone(SpellSchoolMask schoolMask);
         int32 SpellBaseDamageBonusTaken(SpellSchoolMask schoolMask);
 
@@ -2086,8 +2066,8 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         int32 SpellBaseHealingBonusDone(SpellSchoolMask schoolMask);
         int32 SpellBaseHealingBonusTaken(SpellSchoolMask schoolMask);
-        uint32 SpellHealingBonusDone(Unit* pVictim, SpellEntry const *spellProto, int32 healamount, DamageEffectType damagetype, uint32 stack = 1);
-        uint32 SpellHealingBonusTaken(Unit* pCaster, SpellEntry const *spellProto, int32 healamount, DamageEffectType damagetype, uint32 stack = 1);
+        uint32 SpellHealingBonusDone(Unit* pVictim, SpellEntry const* spellProto, int32 healamount, DamageEffectType damagetype, uint32 stack = 1);
+        uint32 SpellHealingBonusTaken(Unit* pCaster, SpellEntry const* spellProto, int32 healamount, DamageEffectType damagetype, uint32 stack = 1);
 
         void MeleeDamageBonusDone(DamageInfo* damageInfo, uint32 stack = 1);
         void MeleeDamageBonusTaken(DamageInfo* damageInfo, uint32 stack = 1);
