@@ -170,9 +170,9 @@ void LFGMgr::LoadRewards()
     {
         BarGoLink bar(1);
         bar.step();
-
-        sLog.outString();
+        
         sLog.outErrorDb(">> Loaded 0 LFG dungeon rewards. DB table `lfg_dungeon_rewards` is empty!");
+        sLog.outString();
         return;
     }
 
@@ -222,9 +222,9 @@ void LFGMgr::LoadRewards()
     while (result->NextRow());
 
     delete result;
-
-    sLog.outString();
+    
     sLog.outString(">> Loaded %u LFG dungeon rewards.", count);
+    sLog.outString();
 }
 
 LFGReward const* LFGMgr::GetRandomDungeonReward(LFGDungeonEntry const* dungeon, Player* pPlayer)

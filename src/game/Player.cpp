@@ -13552,12 +13552,12 @@ bool Player::CanSeeStartQuest(Quest const* pQuest) const
 bool Player::CanTakeQuest(Quest const* pQuest, bool msg) const
 {
     return SatisfyQuestStatus(pQuest, msg) && SatisfyQuestExclusiveGroup(pQuest, msg) &&
-           SatisfyQuestClass(pQuest, msg) && SatisfyQuestRace(pQuest, msg) && SatisfyQuestLevel(pQuest, msg) &&
-           SatisfyQuestSkill(pQuest, msg) && SatisfyQuestReputation(pQuest, msg) &&
-           SatisfyQuestPreviousQuest(pQuest, msg) && SatisfyQuestTimed(pQuest, msg) &&
-           SatisfyQuestNextChain(pQuest, msg) && SatisfyQuestPrevChain(pQuest, msg) &&
-           SatisfyQuestDay(pQuest, msg) && SatisfyQuestWeek(pQuest, msg) && SatisfyQuestMonth(pQuest, msg) &&
-           pQuest->IsActive();
+        SatisfyQuestClass(pQuest, msg) && SatisfyQuestRace(pQuest, msg) && SatisfyQuestLevel(pQuest, msg) &&
+        SatisfyQuestSkill(pQuest, msg) && SatisfyQuestReputation(pQuest, msg) &&
+        SatisfyQuestPreviousQuest(pQuest, msg) && SatisfyQuestTimed(pQuest, msg) &&
+        SatisfyQuestNextChain(pQuest, msg) && SatisfyQuestPrevChain(pQuest, msg) &&
+        SatisfyQuestDay(pQuest, msg) && SatisfyQuestWeek(pQuest, msg) && SatisfyQuestMonth(pQuest, msg) &&
+        pQuest->IsActive();
 }
 
 bool Player::CanAddQuest(Quest const* pQuest, bool msg) const
@@ -13790,7 +13790,8 @@ void Player::AddQuest(Quest const* pQuest, Object* questGiver)
 
         // shared timed quest
         if (questGiver && questGiver->GetTypeId() == TYPEID_PLAYER)
-            limittime = ((Player*)questGiver)->getQuestStatusMap()[quest_id].m_timer / IN_MILLISECONDS;
+            if (QuestStatusData* data = ((Player*)questGiver)->GetQuestStatusData(quest_id))
+                limittime = data->m_timer / IN_MILLISECONDS;
 
         AddTimedQuest(quest_id);
         questStatusData.m_timer = limittime * IN_MILLISECONDS;
@@ -13809,16 +13810,16 @@ void Player::AddQuest(Quest const* pQuest, Object* questGiver)
     {
         switch (questGiver->GetTypeId())
         {
-            case TYPEID_UNIT:
-                sScriptMgr.OnQuestAccept(this, (Creature*)questGiver, pQuest);
-                break;
-            case TYPEID_ITEM:
-            case TYPEID_CONTAINER:
-                sScriptMgr.OnQuestAccept(this, (Item*)questGiver, pQuest);
-                break;
-            case TYPEID_GAMEOBJECT:
-                sScriptMgr.OnQuestAccept(this, (GameObject*)questGiver, pQuest);
-                break;
+        case TYPEID_UNIT:
+            sScriptMgr.OnQuestAccept(this, (Creature*)questGiver, pQuest);
+            break;
+        case TYPEID_ITEM:
+        case TYPEID_CONTAINER:
+            sScriptMgr.OnQuestAccept(this, (Item*)questGiver, pQuest);
+            break;
+        case TYPEID_GAMEOBJECT:
+            sScriptMgr.OnQuestAccept(this, (GameObject*)questGiver, pQuest);
+            break;
         }
 
         // starting initial DB quest script
@@ -13906,8 +13907,11 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
 
     for (int i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
     {
-        if (pQuest->ReqItemId[i])
-            DestroyItemCount(pQuest->ReqItemId[i], pQuest->ReqItemCount[i], true);
+        uint32 reqItemId = pQuest->ReqItemId[i];
+        uint32 reqItemCount = pQuest->ReqItemCount[i];
+
+        if (reqItemId && reqItemCount)
+            DestroyItemCount(reqItemId, reqItemCount, true);
     }
 
     for (int i = 0; i < QUEST_SOURCE_ITEM_IDS_COUNT; ++i)
@@ -13968,13 +13972,13 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
 
     if (getLevel() < sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
     {
-        GiveXP(xp , NULL);
+        GiveXP(xp, NULL);
 
         // Give player extra money (for max level already included in pQuest->GetRewMoneyMaxLevel())
         if (pQuest->GetRewOrReqMoney() > 0)
         {
             ModifyMoney(pQuest->GetRewOrReqMoney());
-            GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_MONEY_FROM_QUEST_REWARD, pQuest->GetRewOrReqMoney());
+            GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_MONEY_FROM_QUEST_REWARD, uint32(pQuest->GetRewOrReqMoney()));
         }
     }
     else
@@ -14053,8 +14057,8 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
         }
     }
 
-    if (!handled && questGiver && pQuest->GetQuestCompleteScript() != 0)
-        GetMap()->ScriptsStart(sQuestEndScripts, pQuest->GetQuestCompleteScript(), questGiver, this);
+    if (!handled && pQuest->GetQuestCompleteScript() != 0)
+        GetMap()->ScriptsStart(sQuestEndScripts, pQuest->GetQuestCompleteScript(), questGiver, this, Map::SCRIPT_EXEC_PARAM_UNIQUE_BY_SOURCE);
 
     // cast spells after mark quest complete (some spells have quest completed state reqyurements in spell_area data)
     if (pQuest->GetRewSpellCast() > 0)
@@ -14373,7 +14377,7 @@ bool Player::SatisfyQuestExclusiveGroup(Quest const* qInfo, bool msg) const
 
         // alternative quest already started or completed
         if (i_exstatus != mQuestStatus.end() &&
-                (i_exstatus->second.m_status == QUEST_STATUS_COMPLETE || i_exstatus->second.m_status == QUEST_STATUS_INCOMPLETE))
+            (i_exstatus->second.m_status == QUEST_STATUS_COMPLETE || i_exstatus->second.m_status == QUEST_STATUS_INCOMPLETE))
         {
             if (msg)
                 SendCanTakeQuestResponse(INVALIDREASON_DONT_HAVE_REQ);
@@ -14393,7 +14397,7 @@ bool Player::SatisfyQuestNextChain(Quest const* qInfo, bool msg) const
     // next quest in chain already started or completed
     QuestStatusMap::const_iterator itr = mQuestStatus.find(qInfo->GetNextQuestInChain());
     if (itr != mQuestStatus.end() &&
-            (itr->second.m_status == QUEST_STATUS_COMPLETE || itr->second.m_status == QUEST_STATUS_INCOMPLETE))
+        (itr->second.m_status == QUEST_STATUS_COMPLETE || itr->second.m_status == QUEST_STATUS_INCOMPLETE))
     {
         if (msg)
             SendCanTakeQuestResponse(INVALIDREASON_DONT_HAVE_REQ);
@@ -14428,7 +14432,7 @@ bool Player::SatisfyQuestPrevChain(Quest const* qInfo, bool msg) const
 
         // check for all quests further down the chain
         // only necessary if there are quest chains with more than one quest that can be skipped
-        // if( !SatisfyQuestPrevChain( prevId, msg ) )
+        //if (!SatisfyQuestPrevChain(prevId, msg))
         //    return false;
     }
 
@@ -14463,7 +14467,7 @@ bool Player::SatisfyQuestDay(Quest const* qInfo, bool msg) const
     return true;
 }
 
-bool Player::SatisfyQuestWeek(Quest const* qInfo, bool /*msg*/) const
+bool Player::SatisfyQuestWeek(Quest const* qInfo, bool msg) const
 {
     if (!qInfo->IsWeekly() || m_weeklyquests.empty())
         return true;
@@ -14472,7 +14476,7 @@ bool Player::SatisfyQuestWeek(Quest const* qInfo, bool /*msg*/) const
     return m_weeklyquests.find(qInfo->GetQuestId()) == m_weeklyquests.end();
 }
 
-bool Player::SatisfyQuestMonth(Quest const* qInfo, bool /*msg*/) const
+bool Player::SatisfyQuestMonth(Quest const* qInfo, bool msg) const
 {
     if (!qInfo->IsMonthly() || m_monthlyquests.empty())
         return true;
@@ -14563,7 +14567,7 @@ bool Player::GetQuestRewardStatus(uint32 quest_id) const
         // for repeatable quests: rewarded field is set after first reward only to prevent getting XP more than once
         QuestStatusMap::const_iterator itr = mQuestStatus.find(quest_id);
         if (itr != mQuestStatus.end() && itr->second.m_status != QUEST_STATUS_NONE
-                && !qInfo->IsRepeatable())
+            && !qInfo->IsRepeatable())
             return itr->second.m_rewarded;
 
         return false;
@@ -14580,6 +14584,12 @@ QuestStatus Player::GetQuestStatus(uint32 quest_id) const
             return itr->second.m_status;
     }
     return QUEST_STATUS_NONE;
+}
+
+QuestStatusData* Player::GetQuestStatusData(uint32 questId)
+{
+    QuestStatusMap::iterator itr = mQuestStatus.find(questId);
+    return itr == mQuestStatus.end() ? NULL : &itr->second;
 }
 
 bool Player::CanShareQuest(uint32 quest_id) const

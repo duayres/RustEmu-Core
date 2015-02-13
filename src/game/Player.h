@@ -1372,8 +1372,8 @@ class MANGOS_DLL_SPEC Player : public Unit
         bool SatisfyQuestDay(Quest const* qInfo, bool msg) const;
         bool SatisfyQuestWeek(Quest const* qInfo, bool msg) const;
         bool SatisfyQuestMonth(Quest const* qInfo, bool msg) const;
-        bool CanGiveQuestSourceItemIfNeed(Quest const* pQuest, ItemPosCountVec* dest = NULL) const;
-        void GiveQuestSourceItemIfNeed(Quest const* pQuest);
+        bool CanGiveQuestSourceItemIfNeed(Quest const *pQuest, ItemPosCountVec* dest = NULL) const;
+        void GiveQuestSourceItemIfNeed(Quest const *pQuest);
         bool TakeQuestSourceItem(uint32 quest_id, bool msg);
         bool GetQuestRewardStatus(uint32 quest_id) const;
         QuestStatus GetQuestStatus(uint32 quest_id) const;
@@ -1516,7 +1516,8 @@ class MANGOS_DLL_SPEC Player : public Unit
             UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_GOLD_VALUE_OWNED);
         }
 
-        QuestStatusMap& getQuestStatusMap() { return mQuestStatus; };
+        QuestStatusMap const& GetQuestStatusMap() { return mQuestStatus; };
+        QuestStatusData* GetQuestStatusData(uint32 questId);
 
         ObjectGuid const& GetSelectionGuid() const { return m_curSelectionGuid; }
         void SetSelectionGuid(ObjectGuid guid) { m_curSelectionGuid = guid; SetTargetGuid(guid); }

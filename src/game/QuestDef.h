@@ -1,20 +1,20 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- */
+* Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*/
 
 #ifndef MANGOSSERVER_QUEST_H
 #define MANGOSSERVER_QUEST_H
@@ -143,7 +143,7 @@ enum QuestFlags
     QUEST_FLAGS_PARTY_ACCEPT   = 0x00000002,                // If player in party, all players that can accept this quest will receive confirmation box to accept quest CMSG_QUEST_CONFIRM_ACCEPT/SMSG_QUEST_CONFIRM_ACCEPT
     QUEST_FLAGS_EXPLORATION    = 0x00000004,                // Not used currently
     QUEST_FLAGS_SHARABLE       = 0x00000008,                // Can be shared: Player::CanShareQuest()
-    // QUEST_FLAGS_NONE2        = 0x00000010,               // Not used currently
+    //QUEST_FLAGS_NONE2        = 0x00000010,                // Not used currently
     QUEST_FLAGS_EPIC           = 0x00000020,                // Not used currently - 1 quest in 3.3
     QUEST_FLAGS_RAID           = 0x00000040,                // Not used currently
     QUEST_FLAGS_TBC            = 0x00000080,                // Not used currently: Available if TBC expansion enabled only
@@ -196,10 +196,10 @@ struct QuestLocale
 // xp to give
 class Quest
 {
-        friend class ObjectMgr;
+    friend class ObjectMgr;
     public:
-        Quest(Field* questRecord);
-        uint32 XPValue(Player* pPlayer) const;
+        Quest(Field * questRecord);
+        uint32 XPValue( Player *pPlayer ) const;
 
         uint32 GetQuestFlags() const { return m_QuestFlags; }
         bool HasQuestFlag(QuestFlags flag) const { return (m_QuestFlags & flag) != 0; }
@@ -246,8 +246,8 @@ class Quest
         int32  GetRewOrReqMoney() const;
         uint32 GetRewHonorAddition() const { return RewHonorAddition; }
         float GetRewHonorMultiplier() const { return RewHonorMultiplier; }
-        uint32 GetRewMoneyMaxLevel() const { return RewMoneyMaxLevel; }
-        // use in XP calculation at client
+        uint32 GetRewMoneyMaxLevel() const;
+                                                            // use in XP calculation at client
         uint32 GetRewSpell() const { return RewSpell; }
         uint32 GetRewSpellCast() const { return RewSpellCast; }
         uint32 GetRewMailTemplateId() const { return RewMailTemplateId; }
@@ -384,8 +384,8 @@ enum QuestUpdateState
 struct QuestStatusData
 {
     QuestStatusData()
-        : m_status(QUEST_STATUS_NONE), m_rewarded(false),
-          m_explored(false), m_timer(0), uState(QUEST_NEW)
+        : m_status(QUEST_STATUS_NONE),m_rewarded(false),
+        m_explored(false), m_timer(0), uState(QUEST_NEW)
     {
         memset(m_itemcount, 0, QUEST_ITEM_OBJECTIVES_COUNT * sizeof(uint32));
         memset(m_creatureOrGOcount, 0, QUEST_OBJECTIVES_COUNT * sizeof(uint32));
