@@ -1,5 +1,5 @@
 /*
-* This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -400,6 +400,10 @@ class MANGOS_DLL_SPEC Group
         bool isLFRGroup()  const { return ((m_groupType & GROUPTYPE_LFD) && (m_groupType & GROUPTYPE_RAID)) ; }
         void SetGroupRoles(ObjectGuid guid, LFGRoleMask roles);
         LFGRoleMask GetGroupRoles(ObjectGuid guid);
+
+        // Frozen Mod
+        void BroadcastGroupUpdate(void);
+        // Frozen Mod
 
     protected:
         bool _addMember(ObjectGuid guid, const char* name);

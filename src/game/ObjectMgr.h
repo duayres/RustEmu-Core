@@ -565,7 +565,7 @@ class ObjectMgr
 
         typedef UNORDERED_MAP<uint32, Item*> ItemMap;
 
-        typedef UNORDERED_MAP<uint32, Group*> GroupMap;
+        typedef UNORDERED_MAP<ObjectGuid, Group*> GroupMap;
 
         typedef UNORDERED_MAP<uint32, ArenaTeam*> ArenaTeamMap;
 
@@ -588,6 +588,9 @@ class ObjectMgr
         Group* GetGroup(ObjectGuid guid) const;
         void AddGroup(Group* group);
         void RemoveGroup(Group* group);
+
+        GroupMap::iterator GetGroupMapBegin() { return mGroupMap.begin(); }
+        GroupMap::iterator GetGroupMapEnd()   { return mGroupMap.end(); }
 
         ArenaTeam* GetArenaTeamById(uint32 arenateamid) const;
         ArenaTeam* GetArenaTeamByName(const std::string& arenateamname) const;

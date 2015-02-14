@@ -429,7 +429,7 @@ Player::Player(WorldSession* session): Unit(), m_mover(this), m_camera(this), m_
     m_social = NULL;
 
     // group is initialized in the reference constructor
-    SetGroupInvite(NULL);
+    SetGroupInvite(ObjectGuid());
     m_groupUpdateMask = 0;
     m_auraUpdateMask = 0;
 
@@ -2438,46 +2438,39 @@ bool Player::IsGroupVisibleFor(Player* p) const
 
 bool Player::IsInSameGroupWith(Player const* p) const
 {
-    return (p == this || (GetGroup() != NULL &&
-        GetGroup()->SameSubGroup(this, p)));
+    return (p == this || (GetGroup() != NULL && GetGroup()->SameSubGroup(this, p)));
 }
 
 ///- If the player is invited, remove him. If the group if then only 1 person, disband the group.
 /// \todo Shouldn't we also check if there is no other invitees before disbanding the group?
 void Player::UninviteFromGroup()
 {
-    Group* group = GetGroupInvite();
+    Group* group = sObjectMgr.GetGroup(GetGroupInvite());
     if (!group)
+    {
+        SetGroupInvite(ObjectGuid());
         return;
+    }
 
     group->RemoveInvite(this);
 
-    if (group->GetMembersCount() <= 1)                      // group has just 1 member => disband
+    if (group->GetMembersCount() <= 1)                       // group has just 1 member => disband
     {
-        if (group->IsCreated())
-        {
-            group->Disband(true);
-            sObjectMgr.RemoveGroup(group);
-        }
-        else
-            group->RemoveAllInvites();
-
+        group->RemoveAllInvites();
+        group->Disband(true);
         delete group;
     }
 }
 
-void Player::RemoveFromGroup(Group* group, ObjectGuid guid)
+void Player::RemoveFromGroup(bool logout /*=false*/)
 {
-    if (group)
+    if (Group* group = GetGroup())
     {
-        if (group->RemoveMember(guid, 0) <= 1)
-        {
-            // group->Disband(); already disbanded in RemoveMember
-            sObjectMgr.RemoveGroup(group);
+        if (group->RemoveMember(GetObjectGuid(), 0, logout) <= 1)
             delete group;
-            // removemember sets the player's group pointer to NULL
-        }
     }
+    else
+        SetGroup(ObjectGuid());
 }
 
 void Player::SendLogXPGain(uint32 GivenXP, Unit* victim, uint32 RestXP)
@@ -16824,7 +16817,7 @@ void Player::_LoadGroup(QueryResult* result)
                 SetFlag(PLAYER_FLAGS, PLAYER_FLAGS_GROUP_LEADER);
 
             uint8 subgroup = group->GetMemberGroup(GetObjectGuid());
-            SetGroup(group, subgroup);
+            SetGroup(groupGuid, subgroup);
             if (getLevel() >= LEVELREQUIREMENT_HEROIC)
             {
                 // the group leader may change the instance difficulty while the player is offline
@@ -20136,17 +20129,37 @@ void Player::ClearComboPoints()
     m_comboTargetGuid.Clear();
 }
 
-void Player::SetGroup(Group* group, int8 subgroup)
+void Player::SetGroup(ObjectGuid const& guid, int8 subgroup)
 {
-    if (group == NULL)
-        m_group.unlink();
-    else
-    {
-        // never use SetGroup without a subgroup unless you specify NULL for group
-        MANGOS_ASSERT(subgroup >= 0);
-        m_group.link(group, this);
-        m_group.setSubGroup((uint8)subgroup);
-    }
+    m_groupGuid.Clear();
+    m_group.unlink();
+
+    Group* group = sObjectMgr.GetGroup(guid);
+
+    if (!group)
+        return;
+
+    m_groupGuid = guid;
+
+    // never use SetGroup without a subgroup unless you specify NULL for group
+    MANGOS_ASSERT(subgroup >= 0);
+    m_group.link(group, this);
+    m_group.setSubGroup((uint8)subgroup);
+}
+
+Group* Player::GetGroup()
+{
+    return sObjectMgr.GetGroup(GetGroupGuid());
+}
+
+Group const* Player::GetGroup() const
+{
+    return (Group const*)sObjectMgr.GetGroup(GetGroupGuid());
+}
+
+Group* Player::GetOriginalGroup()
+{
+    return sObjectMgr.GetGroup(GetOriginalGroupGuid());
 }
 
 void Player::SendInitialPacketsBeforeAddToMap()
@@ -20246,6 +20259,7 @@ void Player::SendUpdateToOutOfRangeGroupMembers()
 {
     if (m_groupUpdateMask == GROUP_UPDATE_FLAG_NONE)
         return;
+
     if (Group* group = GetGroup())
         group->UpdatePlayerOutOfRange(this);
 
@@ -21326,7 +21340,7 @@ void Player::SendCorpseReclaimDelay(bool load)
     GetSession()->SendPacket(&data);
 }
 
-Player* Player::GetNextRandomRaidMember(float radius)
+Player* Player::GetNextRandomRaidMember(float radius, bool onlyAlive)
 {
     Group* pGroup = GetGroup();
     if (!pGroup)
@@ -21337,24 +21351,22 @@ Player* Player::GetNextRandomRaidMember(float radius)
 
     for (GroupReference* itr = pGroup->GetFirstMember(); itr != NULL; itr = itr->next())
     {
-        Player* Target = itr->getSource();
+        Player* pMember = itr->getSource();
 
         // IsHostileTo check duel and controlled by enemy
-        if (Target && Target != this && IsWithinDistInMap(Target, radius) &&
-            !Target->HasInvisibilityAura() && !IsHostileTo(Target))
-            nearMembers.push_back(Target);
+        if (pMember && pMember != this &&
+            (!onlyAlive || pMember->isAlive()) &&
+            IsWithinDistInMap(pMember, radius) &&
+            !pMember->HasInvisibilityAura() && !IsHostileTo(pMember))
+            nearMembers.push_back(pMember);
     }
 
-    if (nearMembers.empty())
-        return NULL;
-
-    uint32 randTarget = urand(0, nearMembers.size() - 1);
-    return nearMembers[randTarget];
+    return nearMembers.empty() ? NULL : nearMembers[urand(0, nearMembers.size() - 1)];
 }
 
 PartyResult Player::CanUninviteFromGroup() const
 {
-    const Group* grp = GetGroup();
+    Group const* grp = GetGroup();
     if (!grp)
         return ERR_NOT_IN_GROUP;
 
@@ -21367,39 +21379,39 @@ PartyResult Player::CanUninviteFromGroup() const
     return ERR_PARTY_RESULT_OK;
 }
 
-void Player::SetBattleGroundRaid(Group* group, int8 subgroup)
+void Player::SetBattleGroundRaid(ObjectGuid const& guid, int8 subgroup)
 {
-    // we must move references from m_group to m_originalGroup
-    SetOriginalGroup(GetGroup(), GetSubGroup());
+    if (!guid || !guid.IsGroup())
+        return;
 
-    m_group.unlink();
-    m_group.link(group, this);
-    m_group.setSubGroup((uint8)subgroup);
+    //we must move references from m_group to m_originalGroup
+    SetOriginalGroup(GetGroupGuid(), GetSubGroup());
+    SetGroup(guid, subgroup);
 }
 
 void Player::RemoveFromBattleGroundRaid()
 {
-    // remove existing reference
-    m_group.unlink();
-    if (Group* group = GetOriginalGroup())
-    {
-        m_group.link(group, this);
-        m_group.setSubGroup(GetOriginalSubGroup());
-    }
-    SetOriginalGroup(NULL);
+    //remove existing reference
+    SetGroup(GetOriginalGroupGuid(), GetOriginalSubGroup());
+    SetOriginalGroup(ObjectGuid());
 }
 
-void Player::SetOriginalGroup(Group* group, int8 subgroup)
+void Player::SetOriginalGroup(ObjectGuid const& guid, int8 subgroup)
 {
-    if (group == NULL)
-        m_originalGroup.unlink();
-    else
-    {
-        // never use SetOriginalGroup without a subgroup unless you specify NULL for group
-        MANGOS_ASSERT(subgroup >= 0);
-        m_originalGroup.link(group, this);
-        m_originalGroup.setSubGroup((uint8)subgroup);
-    }
+    m_originalGroupGuid.Clear();
+    m_originalGroup.unlink();
+
+    Group* group = sObjectMgr.GetGroup(guid);
+
+    if (!group)
+        return;
+
+    m_originalGroupGuid = guid;
+
+    // never use SetOriginalGroup without a subgroup unless you specify NULL for group
+    MANGOS_ASSERT(subgroup >= 0);
+    m_originalGroup.link(group, this);
+    m_originalGroup.setSubGroup((uint8)subgroup);
 }
 
 void Player::UpdateUnderwaterState(Map* m, float x, float y, float z)

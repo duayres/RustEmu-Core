@@ -196,7 +196,7 @@ void WorldSession::HandleGroupAcceptOpcode(WorldPacket& recv_data)
 {
     recv_data.read_skip<uint32>();                          // roles mask?
 
-    Group* group = GetPlayer()->GetGroupInvite();
+    Group* group = sObjectMgr.GetGroup(GetPlayer()->GetGroupInvite());
     if (!group)
         return;
 
@@ -211,14 +211,7 @@ void WorldSession::HandleGroupAcceptOpcode(WorldPacket& recv_data)
     group->RemoveInvite(GetPlayer());
 
     /** error handling **/
-    /********************/
-
-    // not have place
-    if (group->IsFull())
-    {
-        SendPartyResult(PARTY_OP_INVITE, "", ERR_GROUP_FULL);
-        return;
-    }
+    /********************/ 
 
     Player* leader = sObjectMgr.GetPlayer(group->GetLeaderGuid());
 
@@ -236,16 +229,38 @@ void WorldSession::HandleGroupAcceptOpcode(WorldPacket& recv_data)
     else
         DEBUG_LOG("WorldSession::HandleGroupAcceptOpcode %s accept %s invite.",GetPlayer()->GetObjectGuid().GetString().c_str(), group->GetObjectGuid().GetString().c_str());
 
+    // Need to recheck groups, when we doing multi invites in one time, or we will create more then 1 group.
+    Group* checkgroup = sObjectMgr.GetGroup(leader->GetGroupGuid());
+    if (!checkgroup)
+        return;
+
+    if (group != checkgroup)
+        group = checkgroup;
+
+    // not have place
+    if (group->IsFull())
+    {
+        SendPartyResult(PARTY_OP_INVITE, "", ERR_GROUP_FULL);
+        return;
+    }
+
     // everything is fine, do it, PLAYER'S GROUP IS SET IN ADDMEMBER!!!
     if (!group->AddMember(GetPlayer()->GetObjectGuid(), GetPlayer()->GetName()))
         return;
+
+    // Frozen Mod
+    group->BroadcastGroupUpdate();
+    // Frozen Mod
 }
 
 void WorldSession::HandleGroupDeclineOpcode(WorldPacket& /*recv_data*/ )
 {
-    Group*  group = GetPlayer()->GetGroupInvite();
+    Group* group  = sObjectMgr.GetGroup(GetPlayer()->GetGroupInvite());
     if (!group)
+    {
+        GetPlayer()->SetGroupInvite(ObjectGuid());
         return;
+    }
 
     // remember leader if online
     Player* leader = sObjectMgr.GetPlayer(group->GetLeaderGuid());
@@ -300,7 +315,7 @@ void WorldSession::HandleGroupUninviteGuidOpcode(WorldPacket & recv_data)
 
     if (grp->IsMember(guid))
     {
-        Player::RemoveFromGroup(grp, guid);
+        grp->RemoveMember(guid, 0);
         return;
     }
 
@@ -353,7 +368,7 @@ void WorldSession::HandleGroupUninviteOpcode(WorldPacket & recv_data)
 
     if (!guid.IsEmpty())
     {
-        Player::RemoveFromGroup(grp, guid);
+        grp->RemoveMember(guid, 0);
         return;
     }
 
@@ -391,7 +406,7 @@ void WorldSession::HandleGroupSetLeaderOpcode(WorldPacket& recv_data)
 
 void WorldSession::HandleGroupDisbandOpcode(WorldPacket& /*recv_data*/)
 {
-    if (!GetPlayer()->GetGroup())
+    if (!GetPlayer()->GetGroupGuid())
         return;
 
     if (_player->InBattleGround())

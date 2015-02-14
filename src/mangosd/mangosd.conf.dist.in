@@ -3,7 +3,7 @@
 #####################################
 
 [MangosdConf]
-ConfVersion=2015011715
+ConfVersion=2015021401
 
 ###################################################################################################################
 # CONNECTIONS AND DIRECTORIES
@@ -579,6 +579,10 @@ LogColors = ""
 #        The time in sec. the leader of a group has to reconnect before the lead goes to another player (also applies for a server crash)
 #        Default: 180 (3 min.)
 #
+#    Group.Timer (milliseconds)
+#        Timer for update group events
+#        Default: 1000 (1 second)
+#
 #    AllFlightPaths
 #        Players will start with all flight paths (Note: ALL flight paths, not only player's team)
 #        Default: 0 (false)
@@ -845,6 +849,7 @@ MaxArenaPoints = 5000
 StartArenaPoints = 0
 InstantLogout = 1
 GroupLeaderReconnectPeriod = 180
+Groups.Timer         = 1000
 DisableWaterBreath = 4
 AllFlightPaths = 0
 AlwaysMaxSkillForLevel = 0

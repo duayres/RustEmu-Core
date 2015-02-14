@@ -45,6 +45,7 @@
 #include "LootMgr.h"
 #include "ItemEnchantmentMgr.h"
 #include "MapManager.h"
+#include "Group.h"
 #include "ScriptMgr.h"
 #include "CreatureAIRegistry.h"
 #include "Policies/Singleton.h"
@@ -1368,6 +1369,10 @@ void World::SetInitialWorldSettings()
     // for AhBot
     m_timers[WUPDATE_AHBOT].SetInterval(20 * IN_MILLISECONDS); // every 20 sec
 
+    //for groups (time update for keep leader of group (Group::CheckLeader) )
+    m_timers[WUPDATE_GROUPS].SetInterval(sConfig.GetIntDefault("Groups.Timer", 1000));
+    m_timers[WUPDATE_GROUPS].Reset();
+
     // to set mailtimer to return mails every day between 4 and 5 am
     // mailtimer is increased when updating auctions
     // one second is 1000 -(tested on win system)
@@ -1549,6 +1554,20 @@ void World::Update(uint32 diff)
 
     /// <li> Handle session updates
     UpdateSessions(diff);
+
+    /// <li> Update groups
+    if (m_timers[WUPDATE_GROUPS].Passed())
+    {
+        ObjectMgr::GroupMap::iterator i_next;
+        for (ObjectMgr::GroupMap::iterator itr = sObjectMgr.GetGroupMapBegin(); itr != sObjectMgr.GetGroupMapEnd(); itr = i_next)
+        {
+            i_next = itr;
+            ++i_next;
+            if (Group* group = itr->second)
+                group->Update(m_timers[WUPDATE_GROUPS].GetInterval());
+        }
+        m_timers[WUPDATE_GROUPS].Reset();
+    }
 
     /// <li> Update uptime table
     if (m_timers[WUPDATE_UPTIME].Passed())

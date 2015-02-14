@@ -9734,12 +9734,12 @@ bool ObjectMgr::IsVendorItemValid(bool isTemplate, char const* tableName, uint32
 
 void ObjectMgr::AddGroup(Group* group)
 {
-    mGroupMap[group->GetId()] = group ;
+    mGroupMap[group->GetObjectGuid()] = group;
 }
 
 void ObjectMgr::RemoveGroup(Group* group)
 {
-    mGroupMap.erase(group->GetId());
+    mGroupMap.erase(group->GetObjectGuid());
 }
 
 void ObjectMgr::AddArenaTeam(ArenaTeam* arenaTeam)
