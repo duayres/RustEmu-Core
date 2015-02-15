@@ -3019,7 +3019,8 @@ enum TradeStatus
     TRADE_STATUS_YOU_LOGOUT     = 19,
     TRADE_STATUS_TARGET_LOGOUT  = 20,
     TRADE_STATUS_TRIAL_ACCOUNT  = 21,                       // Trial accounts can not perform that action
-    TRADE_STATUS_ONLY_CONJURED  = 22                        // You can only trade conjured items... (cross realm BG related).
+    TRADE_STATUS_WRONG_REALM    = 22,                       // You can only trade conjured items... (cross realm BG related).
+    TRADE_STATUS_NOT_ON_TAPLIST = 23                        // Related to trading soulbound loot items
 };
 
 enum EncounterCreditType
@@ -3080,6 +3081,7 @@ enum TrackedAuraType
 // others will not and opposite
 // will only support WoW, WoW:TBC and WoW:WotLK 3.3.5a client build 12340...
 
+#define TRADE_DISTANCE              11.11f
 #define EXPECTED_MANGOSD_CLIENT_BUILD        {12340, 0}
 
 // max supported expansion level in mangosd

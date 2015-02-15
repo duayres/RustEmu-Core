@@ -947,58 +947,73 @@ struct BGData
     bool HasTaxiPath() const { return taxiPath[0] && taxiPath[1]; }
 };
 
+struct TTradeStatusInfo
+{
+    TTradeStatusInfo() :
+        m_status(TRADE_STATUS_BUSY), m_traderGuid(ObjectGuid()),
+        m_itemLimitCategoryId(0), m_slot(0),
+        m_invResult(EQUIP_ERR_OK), m_isTargetResult(false) {}
+
+    TradeStatus      m_status;
+    ObjectGuid       m_traderGuid;
+    uint32           m_itemLimitCategoryId;
+    uint8            m_slot;
+    InventoryResult  m_invResult;
+    bool             m_isTargetResult;
+};
+
 class TradeData
 {
-    public:                                                 // constructors
-        TradeData(Player* player, Player* trader) :
-            m_player(player),  m_trader(trader), m_accepted(false), m_acceptProccess(false),
-            m_money(0), m_spell(0) {}
+public:                                                 // constructors
+    TradeData(Player* player, Player* trader) :
+        m_player(player), m_trader(trader), m_accepted(false), m_acceptProccess(false),
+        m_money(0), m_spell(0) {}
 
-    public:                                                 // access functions
+public:                                                 // access functions
 
-        Player* GetTrader() const { return m_trader; }
-        TradeData* GetTraderData() const;
+    Player* GetTrader() const { return m_trader; }
+    TradeData* GetTraderData() const;
 
-        Item* GetItem(TradeSlots slot) const;
-        bool HasItem(ObjectGuid item_guid) const;
+    Item* GetItem(TradeSlots slot) const;
+    bool HasItem(ObjectGuid item_guid) const;
 
-        uint32 GetSpell() const { return m_spell; }
-        Item*  GetSpellCastItem() const;
-        bool HasSpellCastItem() const { return !m_spellCastItem.IsEmpty(); }
+    uint32 GetSpell() const { return m_spell; }
+    Item*  GetSpellCastItem() const;
+    bool HasSpellCastItem() const { return !m_spellCastItem.IsEmpty(); }
 
-        uint32 GetMoney() const { return m_money; }
+    uint32 GetMoney() const { return m_money; }
 
-        bool IsAccepted() const { return m_accepted; }
-        bool IsInAcceptProcess() const { return m_acceptProccess; }
-    public:                                                 // access functions
+    bool IsAccepted() const { return m_accepted; }
+    bool IsInAcceptProcess() const { return m_acceptProccess; }
+public:                                                 // access functions
 
-        void SetItem(TradeSlots slot, Item* item);
-        void SetSpell(uint32 spell_id, Item* castItem = NULL);
-        void SetMoney(uint32 money);
+    void SetItem(TradeSlots slot, Item* item);
+    void SetSpell(uint32 spell_id, Item* castItem = NULL);
+    void SetMoney(uint32 money);
 
-        void SetAccepted(bool state, bool crosssend = false);
+    void SetAccepted(bool state, bool crosssend = false);
 
-        // must be called only from accept handler helper functions
-        void SetInAcceptProcess(bool state) { m_acceptProccess = state; }
+    // must be called only from accept handler helper functions
+    void SetInAcceptProcess(bool state) { m_acceptProccess = state; }
 
-    private:                                                // internal functions
+private:                                                // internal functions
 
-        void Update(bool for_trader = true);
+    void Update(bool for_trader = true);
 
-    private:                                                // fields
+private:                                                // fields
 
-        Player*    m_player;                                // Player who own of this TradeData
-        Player*    m_trader;                                // Player who trade with m_player
+    Player*    m_player;                                // Player who own of this TradeData
+    Player*    m_trader;                                // Player who trade with m_player
 
-        bool       m_accepted;                              // m_player press accept for trade list
-        bool       m_acceptProccess;                        // one from player/trader press accept and this processed
+    bool       m_accepted;                              // m_player press accept for trade list
+    bool       m_acceptProccess;                        // one from player/trader press accept and this processed
 
-        uint32     m_money;                                 // m_player place money to trade
+    uint32     m_money;                                 // m_player place money to trade
 
-        uint32     m_spell;                                 // m_player apply spell to non-traded slot item
-        ObjectGuid m_spellCastItem;                         // applied spell casted by item use
+    uint32     m_spell;                                 // m_player apply spell to non-traded slot item
+    ObjectGuid m_spellCastItem;                         // applied spell casted by item use
 
-        ObjectGuid m_items[TRADE_SLOT_COUNT];               // traded itmes from m_player side including non-traded slot
+    ObjectGuid m_items[TRADE_SLOT_COUNT];               // traded itmes from m_player side including non-traded slot
 };
 
 class MANGOS_DLL_SPEC Player : public Unit
@@ -1181,36 +1196,38 @@ class MANGOS_DLL_SPEC Player : public Unit
         bool CanNoReagentCast(SpellEntry const* spellInfo) const;
         bool HasItemOrGemWithIdEquipped(uint32 item, uint32 count, uint8 except_slot = NULL_SLOT) const;
         bool HasItemOrGemWithLimitCategoryEquipped(uint32 limitCategory, uint32 count, uint8 except_slot = NULL_SLOT) const;
-        InventoryResult CanTakeMoreSimilarItems(Item* pItem) const { return _CanTakeMoreSimilarItems(pItem->GetEntry(), pItem->GetCount(), pItem); }
-        InventoryResult CanTakeMoreSimilarItems(uint32 entry, uint32 count) const { return _CanTakeMoreSimilarItems(entry, count, NULL); }
+        InventoryResult CanTakeMoreSimilarItems(Item* pItem, uint32* itemLimitCategory = NULL) const { return _CanTakeMoreSimilarItems(pItem->GetEntry(), pItem->GetCount(), pItem, NULL, itemLimitCategory); }
+        InventoryResult CanTakeMoreSimilarItems(uint32 entry, uint32 count, uint32* itemLimitCategory = NULL) const { return _CanTakeMoreSimilarItems(entry, count, NULL, NULL, itemLimitCategory); }
         InventoryResult CanStoreNewItem(uint8 bag, uint8 slot, ItemPosCountVec& dest, uint32 item, uint32 count, uint32* no_space_count = NULL) const
         {
             return _CanStoreItem(bag, slot, dest, item, count, NULL, false, no_space_count);
         }
-        InventoryResult CanStoreItem(uint8 bag, uint8 slot, ItemPosCountVec& dest, Item* pItem, bool swap = false) const
+        InventoryResult CanStoreItem(uint8 bag, uint8 slot, ItemPosCountVec& dest, Item *pItem, bool swap = false) const
         {
             if (!pItem)
                 return EQUIP_ERR_ITEM_NOT_FOUND;
             uint32 count = pItem->GetCount();
             return _CanStoreItem(bag, slot, dest, pItem->GetEntry(), count, pItem, swap, NULL);
-        }
-        InventoryResult CanStoreItems(Item** pItem, int count) const;
-        InventoryResult CanEquipNewItem(uint8 slot, uint16& dest, uint32 item, bool swap) const;
-        InventoryResult CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool swap, bool direct_action = true) const;
 
-        InventoryResult CanEquipUniqueItem(Item* pItem, uint8 except_slot = NULL_SLOT, uint32 limit_count = 1) const;
+        }
+        InventoryResult CanStoreItems(Item** pItem, int count, uint32* itemLimitCategory) const;
+        InventoryResult CanEquipNewItem(uint8 slot, uint16 &dest, uint32 item, bool swap) const;
+        InventoryResult CanEquipItem(uint8 slot, uint16 &dest, Item *pItem, bool swap, bool direct_action = true) const;
+
+        InventoryResult CanEquipUniqueItem(Item * pItem, uint8 except_slot = NULL_SLOT, uint32 limit_count = 1) const;
         InventoryResult CanEquipUniqueItem(ItemPrototype const* itemProto, uint8 except_slot = NULL_SLOT, uint32 limit_count = 1) const;
+        InventoryResult CanEquipMoreJewelcraftingGems(uint32 count, uint8 except_slot) const;
         InventoryResult CanUnequipItems(uint32 item, uint32 count) const;
         InventoryResult CanUnequipItem(uint16 src, bool swap) const;
-        InventoryResult CanBankItem(uint8 bag, uint8 slot, ItemPosCountVec& dest, Item* pItem, bool swap, bool not_loading = true) const;
-        InventoryResult CanUseItem(Item* pItem, bool direct_action = true) const;
+        InventoryResult CanBankItem(uint8 bag, uint8 slot, ItemPosCountVec& dest, Item *pItem, bool swap, bool not_loading = true) const;
+        InventoryResult CanUseItem(Item *pItem, bool direct_action = true) const;
         bool HasItemTotemCategory(uint32 TotemCategory) const;
-        InventoryResult CanUseItem(ItemPrototype const* pItem) const;
+        InventoryResult CanUseItem(ItemPrototype const *pItem) const;
         InventoryResult CanUseAmmo(uint32 item) const;
         Item* StoreNewItem(ItemPosCountVec const& pos, uint32 item, bool update, int32 randomPropertyId = 0, AllowedLooterSet* allowedLooters = NULL);
-        Item* StoreItem(ItemPosCountVec const& pos, Item* pItem, bool update);
+        Item* StoreItem(ItemPosCountVec const& pos, Item *pItem, bool update);
         Item* EquipNewItem(uint16 pos, uint32 item, bool update);
-        Item* EquipItem(uint16 pos, Item* pItem, bool update);
+        Item* EquipItem(uint16 pos, Item *pItem, bool update);
         void AutoUnequipOffhandIfNeed();
         bool StoreNewItemInBestSlots(uint32 item_id, uint32 item_count);
         Item* StoreNewItemInInventorySlot(uint32 itemEntry, uint32 amount);
@@ -1220,8 +1237,8 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         Item* ConvertItem(Item* item, uint32 newItemId);
 
-        InventoryResult _CanTakeMoreSimilarItems(uint32 entry, uint32 count, Item* pItem, uint32* no_space_count = NULL) const;
-        InventoryResult _CanStoreItem(uint8 bag, uint8 slot, ItemPosCountVec& dest, uint32 entry, uint32 count, Item* pItem = NULL, bool swap = false, uint32* no_space_count = NULL) const;
+        InventoryResult _CanTakeMoreSimilarItems(uint32 entry, uint32 count, Item* pItem, uint32* no_space_count = NULL, uint32* itemLimitCategory = NULL) const;
+        InventoryResult _CanStoreItem(uint8 bag, uint8 slot, ItemPosCountVec& dest, uint32 entry, uint32 count, Item *pItem = NULL, bool swap = false, uint32* no_space_count = NULL) const;
 
         void ApplyEquipCooldown(Item* pItem);
         void SetAmmo(uint32 item);
@@ -1231,17 +1248,16 @@ class MANGOS_DLL_SPEC Player : public Unit
         void QuickEquipItem(uint16 pos, Item* pItem);
         void VisualizeItem(uint8 slot, Item* pItem);
         void SetVisibleItemSlot(uint8 slot, Item* pItem);
-        Item* BankItem(ItemPosCountVec const& dest, Item* pItem, bool update)
+        Item* BankItem(ItemPosCountVec const& dest, Item *pItem, bool update)
         {
             return StoreItem(dest, pItem, update);
         }
-        Item* BankItem(uint16 pos, Item* pItem, bool update);
-        void RemoveItem(uint8 bag, uint8 slot, bool update);// see ApplyItemOnStoreSpell notes
+        void RemoveItem(uint8 bag, uint8 slot, bool update);
         void MoveItemFromInventory(uint8 bag, uint8 slot, bool update);
         // in trade, auction, guild bank, mail....
         void MoveItemToInventory(ItemPosCountVec const& dest, Item* pItem, bool update, bool in_characterInventoryDB = false);
         // in trade, guild bank, mail....
-        void RemoveItemDependentAurasAndCasts(Item* pItem);
+        void RemoveItemDependentAurasAndCasts(Item * pItem);
         void DestroyItem(uint8 bag, uint8 slot, bool update);
         void DestroyItemCount(uint32 item, uint32 count, bool update, bool unequip_check = false, bool inBankAlso = false);
         void DestroyItemCount(Item* item, uint32& count, bool update);
@@ -1249,7 +1265,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         void DestroyZoneLimitedItem(bool update, uint32 new_zone);
         void SplitItem(uint16 src, uint16 dst, uint32 count);
         void SwapItem(uint16 src, uint16 dst);
-        void AddItemToBuyBackSlot(Item* pItem);
+        void AddItemToBuyBackSlot(Item *pItem);
         Item* GetItemFromBuyBackSlot(uint32 slot);
         void RemoveItemFromBuyBackSlot(uint32 slot, bool del);
 
@@ -1279,6 +1295,7 @@ class MANGOS_DLL_SPEC Player : public Unit
             return !IsInFeralForm() && (!mainhand || !HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_DISARMED));
         }
         void SendNewItem(Item* item, uint32 count, bool received, bool created, bool broadcast = false);
+        bool _StoreOrEquipNewItem(uint32 vendorSlot, uint32 item, uint8 count, uint8 bag, uint8 slot, int32 price, ItemPrototype const* pProto, Creature* pVendor, VendorItem const* crItem, bool store);
         bool BuyItemFromVendorSlot(ObjectGuid vendorGuid, uint32 vendorslot, uint32 item, uint8 count, uint8 bag, uint8 slot);
 
         float GetReputationPriceDiscount(Creature const* pCreature) const;
@@ -1515,6 +1532,7 @@ class MANGOS_DLL_SPEC Player : public Unit
             MoneyChanged(value);
             UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_GOLD_VALUE_OWNED);
         }
+        bool HasEnoughMoney(uint32 amount) const { return (GetMoney() >= amount); }
 
         QuestStatusMap const& GetQuestStatusMap() { return mQuestStatus; };
         QuestStatusData* GetQuestStatusData(uint32 questId);

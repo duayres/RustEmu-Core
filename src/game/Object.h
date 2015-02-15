@@ -379,10 +379,6 @@ class MANGOS_DLL_SPEC Object
 
         uint16 GetValuesCount() const { return m_valuesCount; }
 
-        // Frozen Mod
-        void ForceValuesUpdateAtIndex(uint16);
-        // Frozen Mod
-
         virtual bool HasQuest(uint32 /* quest_id */) const { return false; }
         virtual bool HasInvolvedQuest(uint32 /* quest_id */) const { return false; }
 
@@ -390,7 +386,8 @@ class MANGOS_DLL_SPEC Object
         Object();
 
         void _InitValues();
-        void _Create(uint32 guidlow, uint32 entry, HighGuid guidhigh);
+        void _Create(uint32 guidlow, uint32 entry, HighGuid guidhigh) { _Create(ObjectGuid(guidhigh, entry, guidlow)); }
+        void _Create(ObjectGuid guid);
 
         void _SetUpdateBits(UpdateMask* updateMask, Player* target) const;
         void _SetCreateBits(UpdateMask* updateMask, Player* target) const;

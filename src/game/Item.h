@@ -177,6 +177,7 @@ enum EnchantmentSlot
 #define MAX_VISIBLE_ITEM_OFFSET       2                     // 2 fields per visible item (entry+enchantment)
 
 #define MAX_GEM_SOCKETS               MAX_ITEM_PROTO_SOCKETS// (BONUS_ENCHANTMENT_SLOT-SOCK_ENCHANTMENT_SLOT) and item proto size, equal value expected
+#define MAX_JEWELCRAFTING_GEMS        3
 
 enum EnchantmentOffset
 {
@@ -228,7 +229,7 @@ enum ItemDynFlags
     ITEM_DYNFLAG_READABLE                     = 0x00000200, // can be open for read, it or item proto pagetText make show "Right click to read"
     ITEM_DYNFLAG_UNK10                        = 0x00000400,
     ITEM_DYNFLAG_UNK11                        = 0x00000800,
-    ITEM_DYNFLAG_UNK12                        = 0x00001000,
+    ITEM_DYNFLAG_REFUNDABLE                   = 0x00001000, // Item can be returned to vendor for its original cost (extended cost)
     ITEM_DYNFLAG_UNK13                        = 0x00002000,
     ITEM_DYNFLAG_UNK14                        = 0x00004000,
     ITEM_DYNFLAG_UNK15                        = 0x00008000,
@@ -291,19 +292,27 @@ class MANGOS_DLL_SPEC Item : public Object
         bool IsBoundAccountWide() const { return GetProto()->Flags & ITEM_FLAG_BOA; }
         bool IsBindedNotWith(Player const* player) const;
         bool IsBoundByEnchant() const;
-        virtual void SaveToDB();
+
         virtual bool LoadFromDB(uint32 guidLow, Field* fields, ObjectGuid ownerGuid = ObjectGuid());
+        virtual void SaveToDB();
+
+        void LoadLootFromDB(Field* fields);
+        static void DeleteLootFromDB(uint32 guidLow, uint32 itemId = 0);
+
         virtual void DeleteFromDB();
         void DeleteFromInventoryDB();
-        void LoadLootFromDB(Field* fields);
+        static void DeleteFromDB(uint32 guidLow);
+        static void DeleteFromInventoryDB(uint32 guidLow);
+        void DeleteGiftsFromDB();
 
         bool IsBag() const { return GetProto()->InventoryType == INVTYPE_BAG; }
         bool IsBroken() const { return GetUInt32Value(ITEM_FIELD_MAXDURABILITY) > 0 && GetUInt32Value(ITEM_FIELD_DURABILITY) == 0; }
-        bool CanBeTraded(bool mail = false) const;
-        void SetInTrade(bool b = true) { mb_in_trade = b; }
-        bool IsInTrade() const { return mb_in_trade; }
+        bool CanBeTraded(bool mail = false, bool trade = false) const;
+        void SetInTrade(bool trade = true) { m_inTrade = trade; }
+        bool IsInTrade() const { return m_inTrade; }
 
         bool IsFitToSpellRequirements(SpellEntry const* spellInfo) const;
+        bool HasTriggeredByAuraSpell(SpellEntry const* spellInfo) const;
         bool IsTargetValidForItemUse(Unit* pUnitTarget);
         bool IsLimitedToAnotherMapOrZone(uint32 cur_mapId, uint32 cur_zoneId) const;
         bool GemsFitSockets() const;
@@ -313,6 +322,7 @@ class MANGOS_DLL_SPEC Item : public Object
         uint32 GetMaxStackCount() const { return GetProto()->GetMaxStackSize(); }
         uint8 GetGemCountWithID(uint32 GemID) const;
         uint8 GetGemCountWithLimitCategory(uint32 limitCategory) const;
+        uint8 GetJewelcraftingGemCount() const;
         InventoryResult CanBeMergedPartlyWith(ItemPrototype const* proto) const;
 
         uint8 GetSlot() const {return m_slot;}
@@ -363,16 +373,13 @@ class MANGOS_DLL_SPEC Item : public Object
         bool HasSavedLoot() const { return m_lootState != ITEM_LOOT_NONE && m_lootState != ITEM_LOOT_NEW && m_lootState != ITEM_LOOT_TEMPORARY; }
 
         // Update States
-        ItemUpdateState GetState() const { return uState; }
+        ItemUpdateState GetState() const { return m_state; }
         void SetState(ItemUpdateState state, Player* forplayer = NULL);
         void AddToUpdateQueueOf(Player* player);
         void RemoveFromUpdateQueueOf(Player* player);
-        bool IsInUpdateQueue() const { return uQueuePos != -1; }
-        uint16 GetQueuePos() const { return uQueuePos; }
-        void FSetState(ItemUpdateState state)               // forced
-        {
-            uState = state;
-        }
+        bool IsInUpdateQueue() const { return m_queuePos != -1; }
+        uint16 GetQueuePos() const { return m_queuePos; }
+        void FSetState(ItemUpdateState state) { m_state = state; } // forced
 
         bool HasQuest(uint32 quest_id) const override { return GetProto()->StartQuest == quest_id; }
         bool HasInvolvedQuest(uint32 /*quest_id*/) const override { return false; }
@@ -400,8 +407,8 @@ class MANGOS_DLL_SPEC Item : public Object
 
         bool LoadSoulboundTradeableDataFromDB(Player* owner);
         bool CheckSoulboundTradeExpire(Player* owner);
-
     private:
+        void GetDataValuesStr(std::ostringstream& ss);
 
         bool IsRefundOrSoulboundTradeExpired(Player* owner) const;
 
@@ -413,13 +420,13 @@ class MANGOS_DLL_SPEC Item : public Object
         void DeleteSoulboundTradeableFromDB();
         void SaveSoulboundTradeableToDB();
 
-        std::string m_text;
-        uint8 m_slot;
-        Bag* m_container;
-        ItemUpdateState uState;
-        int16 uQueuePos;
-        bool mb_in_trade;                                   // true if item is currently in trade-window
+        std::string         m_text;
+        Bag*                m_container;
+        uint8               m_slot;
+        ItemUpdateState     m_state;
+        int16               m_queuePos;
         ItemLootUpdateState m_lootState;
+        bool                m_inTrade;                      // true if item is currently in trade-window
 
         uint32              m_paidCost;
         uint16              m_paidExtCost;

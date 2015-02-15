@@ -142,12 +142,11 @@ void Object::_InitValues()
     m_objectUpdated = false;
 }
 
-void Object::_Create(uint32 guidlow, uint32 entry, HighGuid guidhigh)
+void Object::_Create(ObjectGuid guid)
 {
     if (!m_uint32Values)
         _InitValues();
 
-    ObjectGuid guid = ObjectGuid(guidhigh, entry, guidlow);
     SetGuidValue(OBJECT_FIELD_GUID, guid);
     SetUInt32Value(OBJECT_FIELD_TYPE, m_objectType);
     m_PackGUID.Set(guid);
@@ -2051,16 +2050,6 @@ bool WorldObject::IsControlledByPlayer() const
     }
 }
 
-// Frozen Mod
-void Object::ForceValuesUpdateAtIndex(uint16 index)
-{
-    MANGOS_ASSERT( index < m_valuesCount || PrintIndexError(index, true));
-
-    m_changedValues[index] = true; // makes server think the field changed
-
-    MarkForClientUpdate();
-}
-// Frozen Mod
 bool WorldObject::PrintCoordinatesError(float x, float y, float z, char const* descr) const
 {
     sLog.outError("%s with invalid %s coordinates: mapid = %uu, x = %f, y = %f, z = %f", GetGuidStr().c_str(), descr, GetMapId(), x, y, z);

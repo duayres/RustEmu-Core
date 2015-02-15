@@ -323,21 +323,21 @@ bool WorldSession::Update(PacketFilter& updater)
 void WorldSession::LogoutPlayer(bool Save)
 {
     // finish pending transfers before starting the logout
-    while (_player && _player->IsBeingTeleportedFar())
+    while (GetPlayer() && GetPlayer()->IsBeingTeleportedFar())
         HandleMoveWorldportAckOpcode();
 
     m_playerLogout = true;
     m_playerSave = Save;
 
-    if (_player)
+    if (GetPlayer())
     {
-        sLog.outChar("Account: %d (IP: %s) Logout Character:[%s] (guid: %u)", GetAccountId(), GetRemoteAddress().c_str(), _player->GetName() , _player->GetGUIDLow());
+        sLog.outChar("Account: %d (IP: %s) Logout Character:[%s] (guid: %u)", GetAccountId(), GetRemoteAddress().c_str(), GetPlayer()->GetName(), GetPlayer()->GetGUIDLow());
 
         if (ObjectGuid lootGuid = GetPlayer()->GetLootGuid())
             DoLootRelease(lootGuid);
 
         ///- If the player just died before logging out, make him appear as a ghost
-        // FIXME: logout must be delayed in case lost connection with client in time of combat
+        //FIXME: logout must be delayed in case lost connection with client in time of combat
         if (GetPlayer()->GetDeathTimer())
         {
             GetPlayer()->getHostileRefManager().deleteReferences();
@@ -436,27 +436,27 @@ void WorldSession::LogoutPlayer(bool Save)
         stmt.PExecute(uint32(0), GetAccountId());
 
         ///- If the player is in a guild, update the guild roster and broadcast a logout message to other guild members
-        if (Guild* guild = sGuildMgr.GetGuildById(_player->GetGuildId()))
+        if (Guild* guild = sGuildMgr.GetGuildById(GetPlayer()->GetGuildId()))
         {
-            if (MemberSlot* slot = guild->GetMemberSlot(_player->GetObjectGuid()))
+            if (MemberSlot* slot = guild->GetMemberSlot(GetPlayer()->GetObjectGuid()))
             {
-                slot->SetMemberStats(_player);
+                slot->SetMemberStats(GetPlayer());
                 slot->UpdateLogoutTime();
             }
 
-            guild->BroadcastEvent(GE_SIGNED_OFF, _player->GetObjectGuid(), _player->GetName());
+            guild->BroadcastEvent(GE_SIGNED_OFF, GetPlayer()->GetObjectGuid(), GetPlayer()->GetName());
         }
 
         ///- Remove pet
-        _player->RemovePet(PET_SAVE_AS_CURRENT);
+        GetPlayer()->RemovePet(PET_SAVE_AS_CURRENT);
 
         ///- empty buyback items and save the player in the database
         // some save parts only correctly work in case player present in map/player_lists (pets, etc)
         if (Save)
-            _player->SaveToDB();
+            GetPlayer()->SaveToDB();
 
         ///- Leave all channels before player delete...
-        _player->CleanupChannels();
+        GetPlayer()->CleanupChannels();
 
         // LFG cleanup
         sLFGMgr.Leave(GetPlayer());
@@ -477,22 +477,22 @@ void WorldSession::LogoutPlayer(bool Save)
         }
 
         ///- Broadcast a logout message to the player's friends
-        sSocialMgr.SendFriendStatus(_player, FRIEND_OFFLINE, _player->GetObjectGuid(), true);
-        sSocialMgr.RemovePlayerSocial(_player->GetGUIDLow());
+        sSocialMgr.SendFriendStatus(GetPlayer(), FRIEND_OFFLINE, GetPlayer()->GetObjectGuid(), true);
+        sSocialMgr.RemovePlayerSocial(GetPlayer()->GetGUIDLow());
 
         ///- Remove the player from the world
         // the player may not be in the world when logging out
         // e.g if he got disconnected during a transfer to another map
         // calls to GetMap in this case may cause crashes
-        if (_player->IsInWorld())
+        if (GetPlayer()->IsInWorld())
         {
-            Map* _map = _player->GetMap();
-            _map->Remove(_player, true);
+            Map* _map = GetPlayer()->GetMap();
+            _map->Remove(GetPlayer(), true);
         }
         else
         {
-            _player->CleanupsBeforeDelete();
-            Map::DeleteFromWorld(_player);
+            GetPlayer()->CleanupsBeforeDelete();
+            Map::DeleteFromWorld(GetPlayer());
         }
 
         SetPlayer(NULL);                                    // deleted in Remove/DeleteFromWorld call

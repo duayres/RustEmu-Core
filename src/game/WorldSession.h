@@ -38,6 +38,7 @@ struct ItemPrototype;
 struct AuctionEntry;
 struct AuctionHouseEntry;
 struct DeclinedName;
+struct TTradeStatusInfo;
 
 class ObjectGuid;
 class Creature;
@@ -279,7 +280,7 @@ class MANGOS_DLL_SPEC WorldSession
 
         void SendBattlegGroundList(ObjectGuid guid, BattleGroundTypeId bgTypeId);
 
-        void SendTradeStatus(TradeStatus status);
+        void SendTradeStatus(TTradeStatusInfo const& status);
         void SendUpdateTrade(bool trader_state = true);
         void SendCancelTrade();
 
@@ -819,7 +820,9 @@ class MANGOS_DLL_SPEC WorldSession
         void HandleSocketOpcode(WorldPacket& recv_data);
 
         void HandleCancelTempEnchantmentOpcode(WorldPacket& recv_data);
+
         void HandleItemRefundInfoRequest(WorldPacket& recv_data);
+        void HandleItemRefund(WorldPacket& recv_data);
 
         void HandleChannelVoiceOnOpcode(WorldPacket& recv_data);
         void HandleVoiceSessionEnableOpcode(WorldPacket& recv_data);

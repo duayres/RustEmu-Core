@@ -248,9 +248,6 @@ void WorldSession::HandleGroupAcceptOpcode(WorldPacket& recv_data)
     if (!group->AddMember(GetPlayer()->GetObjectGuid(), GetPlayer()->GetName()))
         return;
 
-    // Frozen Mod
-    group->BroadcastGroupUpdate();
-    // Frozen Mod
 }
 
 void WorldSession::HandleGroupDeclineOpcode(WorldPacket& /*recv_data*/ )

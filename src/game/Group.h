@@ -401,10 +401,6 @@ class MANGOS_DLL_SPEC Group
         void SetGroupRoles(ObjectGuid guid, LFGRoleMask roles);
         LFGRoleMask GetGroupRoles(ObjectGuid guid);
 
-        // Frozen Mod
-        void BroadcastGroupUpdate(void);
-        // Frozen Mod
-
     protected:
         bool _addMember(ObjectGuid guid, const char* name);
         bool _addMember(ObjectGuid guid, const char* name, uint8 group, GroupFlagMask flags = GROUP_MEMBER, LFGRoleMask roles = LFG_ROLE_MASK_NONE);
