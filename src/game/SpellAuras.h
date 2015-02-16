@@ -492,6 +492,9 @@ class MANGOS_DLL_SPEC Aura
 
         void SetRemoveMode(AuraRemoveMode mode) { m_removeMode = mode; }
 
+        bool IsDeleted() const { return m_deleted; }
+        void SetDeleted()      { m_deleted = true; }
+
         virtual Unit* GetTriggerTarget() const { return m_spellAuraHolder->GetTarget(); }
 
         // add/remove SPELL_AURA_MOD_SHAPESHIFT (36) linked auras
@@ -535,6 +538,7 @@ class MANGOS_DLL_SPEC Aura
 
         SpellEffectIndex m_effIndex : 8;                    // Aura effect index in spell
 
+        bool m_deleted : 1;
         bool m_positive: 1;
         bool m_isPeriodic: 1;
         bool m_isAreaAura: 1;

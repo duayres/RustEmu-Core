@@ -1217,6 +1217,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         typedef std::set<uint32 /*playerGuidLow*/> ComboPointHolderSet;
         typedef std::map<uint8 /*slot*/, uint32 /*spellId*/> VisibleAuraMap;
         typedef std::map<SpellEntry const*, ObjectGuid /*targetGuid*/> TrackedAuraTargetMap;
+        typedef UNORDERED_SET<uint32> SpellIdSet;
 
         virtual ~Unit();
 
@@ -1794,13 +1795,14 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         // removing unknown aura stacks by diff reasons and selections
         void RemoveNotOwnTrackedTargetAuras(uint32 newPhase = 0x0);
         void RemoveAurasAtMechanicImmunity(uint32 mechMask, uint32 exceptSpellId, bool non_positive = false);
+        void RemoveAurasBySpellMechanic(uint32 mechMask);
         void RemoveSpellsCausingAura(AuraType auraType);
         void RemoveSpellsCausingAura(AuraType auraType, SpellAuraHolder* except);
         void RemoveSpellsCausingAura(AuraType auraType, ObjectGuid casterGuid);
         void RemoveRankAurasDueToSpell(uint32 spellId);
         bool RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder);
         void RemoveAurasWithInterruptFlags(uint32 flags);
-        void RemoveAurasWithAttribute(uint32 flags);
+        void RemoveAurasWithAttribute(uint32 flags, uint32 exclude = 0);
         void RemoveAurasWithDispelType(DispelType type, ObjectGuid casterGuid = ObjectGuid());
         void RemoveAllAuras(AuraRemoveMode mode = AURA_REMOVE_BY_DEFAULT);
         void RemoveArenaAuras(bool onleave = false);

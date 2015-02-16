@@ -928,21 +928,28 @@ bool Aura::CanProcFrom(SpellEntry const* spell, uint32 /*procFlag*/, uint32 Even
 
 void Aura::ReapplyAffectedPassiveAuras(Unit* target, bool owner_mode)
 {
+    if (!target)
+        return;
+
     // we need store cast item guids for self casted spells
     // expected that not exist permanent auras from stackable auras from different items
     std::map<uint32, ObjectGuid> affectedSelf;
 
-    std::set<uint32> affectedAuraCaster;
+    Unit::SpellIdSet affectedAuraCaster;
 
-    for (Unit::SpellAuraHolderMap::const_iterator itr = target->GetSpellAuraHolderMap().begin(); itr != target->GetSpellAuraHolderMap().end(); ++itr)
+    Unit::SpellAuraHolderMap const& holderMap = target->GetSpellAuraHolderMap();
+    for (Unit::SpellAuraHolderMap::const_iterator itr = holderMap.begin(); itr != holderMap.end(); ++itr)
     {
+        if (!itr->second || itr->second->IsDeleted())
+            continue;
+
         // permanent passive or permanent area aura
         // passive spells can be affected only by own or owner spell mods)
         if ((itr->second->IsPermanent() && ((owner_mode && itr->second->IsPassive()) || itr->second->IsAreaAura())) &&
-                // non deleted and not same aura (any with same spell id)
-                !itr->second->IsDeleted() && itr->second->GetId() != GetId() &&
-                // and affected by aura
-                isAffectedOnSpell(itr->second->GetSpellProto()))
+            // non deleted and not same aura (any with same spell id)
+            itr->second->GetId() != GetId() &&
+            // and affected by aura
+            isAffectedOnSpell(itr->second->GetSpellProto()))
         {
             // only applied by self or aura caster
             if (itr->second->GetCasterGuid() == target->GetObjectGuid())
@@ -967,7 +974,7 @@ void Aura::ReapplyAffectedPassiveAuras(Unit* target, bool owner_mode)
     if (!affectedAuraCaster.empty())
     {
         Unit* caster = GetCaster();
-        for (std::set<uint32>::const_iterator set_itr = affectedAuraCaster.begin(); set_itr != affectedAuraCaster.end(); ++set_itr)
+        for (Unit::SpellIdSet::const_iterator set_itr = affectedAuraCaster.begin(); set_itr != affectedAuraCaster.end(); ++set_itr)
         {
             target->RemoveAurasDueToSpell(*set_itr);
             if (caster)
@@ -5284,17 +5291,17 @@ void Aura::HandleAuraModStateImmunity(bool apply, bool Real)
 {
     if (apply && Real && GetSpellProto()->HasAttribute(SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY))
     {
+        Unit::SpellIdSet toRemoveSpellList;
         Unit::AuraList const& auraList = GetTarget()->GetAurasByType(AuraType(m_modifier.m_miscvalue));
-        for (Unit::AuraList::const_iterator itr = auraList.begin(); itr != auraList.end();)
+        for (Unit::AuraList::const_iterator itr = auraList.begin(); itr != auraList.end(); ++itr)
         {
-            if (auraList.front() != this)                   // skip itself aura (it already added)
-            {
-                GetTarget()->RemoveAurasDueToSpell(auraList.front()->GetId());
-                itr = auraList.begin();
-            }
-            else
-                ++itr;
+            if ((*itr)->IsEmpty() || (*itr) == this)                   // skip itself aura (it already added)
+                continue;
+            toRemoveSpellList.insert(auraList.front()->GetId());
         }
+
+        for (Unit::SpellIdSet::const_iterator i = toRemoveSpellList.begin(); i != toRemoveSpellList.end(); ++i)
+            GetTarget()->RemoveAurasDueToSpell(*i);
     }
 
     GetTarget()->ApplySpellImmune(GetId(), IMMUNITY_STATE, m_modifier.m_miscvalue, apply);
