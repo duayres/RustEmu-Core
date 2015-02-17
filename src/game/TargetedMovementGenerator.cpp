@@ -37,6 +37,9 @@ void TargetedMovementGeneratorMedium<T, D>::_setTargetLocation(T& owner, bool up
     if (owner.hasUnitState(UNIT_STAT_NOT_MOVE))
         return;
 
+    if (owner.IsNonMeleeSpellCasted(false))
+        return;
+
     float x, y, z;
 
     // i_path can be NULL in case this is the first call for this MMGen (via Update)

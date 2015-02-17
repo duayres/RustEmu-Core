@@ -496,7 +496,7 @@ enum SpellAttributesEx6
     SPELL_ATTR_EX6_UNK28                       = 0x10000000,// 28 not set in 3.0.3
     SPELL_ATTR_EX6_NO_DMG_MODS                 = 0x20000000,// 29 do not apply damage mods (usually in cases where it has already been applied)
     SPELL_ATTR_EX6_UNK30                       = 0x40000000,// 30 not set in 3.0.3
-    SPELL_ATTR_EX6_UNK31                       = 0x80000000,// 31 not set in 3.0.3
+    SPELL_ATTR_EX6_IGNORE_CAT_COOLDOWN_MODS    = 0x80000000,// 31 Spells with this attribute skip applying modifiers to category cooldowns
 };
 
 enum SpellAttributesEx7

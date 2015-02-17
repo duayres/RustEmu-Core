@@ -151,9 +151,6 @@ Creature::Creature(CreatureSubtype subtype) : Unit(),
     for (int i = 0; i < CREATURE_MAX_SPELLS; ++i)
         m_spells[i] = 0;
 
-    m_CreatureSpellCooldowns.clear();
-    m_CreatureCategoryCooldowns.clear();
-
     SetWalk(true, true);
 }
 
@@ -1571,42 +1568,48 @@ void Creature::DeleteFromDB(uint32 lowguid, CreatureData const* data)
     WorldDatabase.CommitTransaction();
 }
 
-float Creature::GetAttackDistance(Unit const* pl) const
+float Creature::GetAttackDistance(Unit const* pPlayer) const
 {
     float aggroRate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
-    if (aggroRate == 0)
+    if (aggroRate < M_NULL_F)
         return 0.0f;
 
-    uint32 playerlevel   = pl->GetLevelForTarget(this);
-    uint32 creaturelevel = GetLevelForTarget(pl);
+    uint32 playerLevel = pPlayer->GetLevelForTarget(this);
+    uint32 creatureLevel = GetLevelForTarget(pPlayer);
+    int32 levelDiff = int32(playerLevel) - int32(creatureLevel);
 
-    int32 leveldif       = int32(playerlevel) - int32(creaturelevel);
-
-    // "The maximum Aggro Radius has a cap of 25 levels under. Example: A level 30 char has the same Aggro Radius of a level 5 char on a level 60 mob."
-    if (leveldif < - 25)
-        leveldif = -25;
+    // "The maximum Aggro Radius has a cap of 25 levels under.
+    // Example: A level 30 char has the same Aggro Radius of a level 5 char on a level 60 mob."
+    if (levelDiff < -25)
+        levelDiff = -25;
 
     // "The aggro radius of a mob having the same level as the player is roughly 20 yards"
-    float RetDistance = 20;
+    float retDistance = 20.0f;
 
     // "Aggro Radius varies with level difference at a rate of roughly 1 yard/level"
-    // radius grow if playlevel < creaturelevel
-    RetDistance -= (float)leveldif;
+    // radius grow if playerLevel < creatureLevel
+    retDistance -= float(levelDiff);
 
-    if (creaturelevel + 5 <= sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
+    if (creatureLevel + 5 <= sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL))
     {
         // detect range auras
-        RetDistance += GetTotalAuraModifier(SPELL_AURA_MOD_DETECT_RANGE);
+        retDistance += GetTotalAuraModifier(SPELL_AURA_MOD_DETECT_RANGE);
 
         // detected range auras
-        RetDistance += pl->GetTotalAuraModifier(SPELL_AURA_MOD_DETECTED_RANGE);
+        retDistance += pPlayer->GetTotalAuraModifier(SPELL_AURA_MOD_DETECTED_RANGE);
     }
 
     // "Minimum Aggro Radius for a mob seems to be combat range (5 yards)"
-    if (RetDistance < 5)
-        RetDistance = 5;
+    if (retDistance < 5.0f)
+        retDistance = 5.0f;
 
-    return (RetDistance * aggroRate);
+    return (retDistance * aggroRate);
+}
+
+float Creature::GetReachDistance(Unit const* unit) const
+{
+    //require realization of creature strategy (melee/spellcaster diffirent).
+    return GetAttackDistance(unit);
 }
 
 void Creature::SetDeathState(DeathState s)
@@ -2238,46 +2241,6 @@ Unit* Creature::SelectAttackingTarget(AttackingTarget target, uint32 position, S
     return NULL;
 }
 
-void Creature::_AddCreatureSpellCooldown(uint32 spell_id, time_t end_time)
-{
-    m_CreatureSpellCooldowns[spell_id] = end_time;
-}
-
-void Creature::_AddCreatureCategoryCooldown(uint32 category, time_t apply_time)
-{
-    m_CreatureCategoryCooldowns[category] = apply_time;
-}
-
-void Creature::AddCreatureSpellCooldown(uint32 spellid)
-{
-    SpellEntry const* spellInfo = sSpellStore.LookupEntry(spellid);
-    if (!spellInfo)
-        return;
-
-    uint32 cooldown = GetSpellRecoveryTime(spellInfo);
-    if (cooldown)
-        _AddCreatureSpellCooldown(spellid, time(NULL) + cooldown / IN_MILLISECONDS);
-
-    if (spellInfo->Category)
-        _AddCreatureCategoryCooldown(spellInfo->Category, time(NULL));
-}
-
-bool Creature::HasCategoryCooldown(uint32 spell_id) const
-{
-    SpellEntry const* spellInfo = sSpellStore.LookupEntry(spell_id);
-    if (!spellInfo)
-        return false;
-
-    CreatureSpellCooldowns::const_iterator itr = m_CreatureCategoryCooldowns.find(spellInfo->Category);
-    return (itr != m_CreatureCategoryCooldowns.end() && time_t(itr->second + (spellInfo->CategoryRecoveryTime / IN_MILLISECONDS)) > time(NULL));
-}
-
-bool Creature::HasSpellCooldown(uint32 spell_id) const
-{
-    CreatureSpellCooldowns::const_iterator itr = m_CreatureSpellCooldowns.find(spell_id);
-    return (itr != m_CreatureSpellCooldowns.end() && itr->second > time(NULL)) || HasCategoryCooldown(spell_id);
-}
-
 uint8 Creature::getRace() const
 {
     uint8 race = Unit::getRace();
@@ -2289,13 +2252,43 @@ bool Creature::IsInEvadeMode() const
     return !i_motionMaster.empty() && i_motionMaster.GetCurrentMovementGeneratorType() == HOME_MOTION_TYPE;
 }
 
-bool Creature::HasSpell(uint32 spellID) const
+void Creature::ProhibitSpellSchool(SpellSchoolMask idSchoolMask, uint32 unTimeMs)
 {
-    uint8 i;
-    for (i = 0; i < CREATURE_MAX_SPELLS; ++i)
-        if (spellID == m_spells[i])
-            break;
-    return i < CREATURE_MAX_SPELLS;                         // break before end of iteration of known spells
+    time_t curTime = time(NULL);
+
+    for (uint8 i = 0; i <= GetSpellMaxIndex(); ++i)
+    {
+        uint32 spellId = GetSpell(i);
+        if (!spellId)
+            continue;
+
+        SpellEntry const* spellInfo = sSpellStore.LookupEntry(spellId);
+        if (!spellInfo)
+        {
+            sLog.outError("Creature::ProhibitSpellSchool: %s have nonexistent spell %u!", GetGuidStr().c_str(), spellId);
+            continue;
+        }
+
+        // Not send cooldown for this spells
+        if (spellInfo->HasAttribute(SPELL_ATTR_DISABLED_WHILE_ACTIVE))
+            continue;
+
+        if (spellInfo->PreventionType != SPELL_PREVENTION_TYPE_SILENCE)
+            continue;
+
+        if ((idSchoolMask & GetSpellSchoolMask(spellInfo)) && GetSpellCooldownDelay(spellInfo) < unTimeMs)
+            AddSpellCooldown(spellId, 0, curTime + unTimeMs / IN_MILLISECONDS);
+    }
+}
+
+bool Creature::HasSpell(uint32 spellId)
+{
+    for (uint8 i = 0; i <= GetSpellMaxIndex(); ++i)
+    {
+        if (spellId == GetSpell(i))
+            return true;
+    }
+    return false;
 }
 
 time_t Creature::GetRespawnTimeEx() const
@@ -2654,6 +2647,42 @@ bool Creature::HasStaticDBSpawnData() const
     return sObjectMgr.GetCreatureData(GetGUIDLow()) != NULL;
 }
 
+uint32 Creature::GetSpell(uint8 index, uint8 activeState)
+{
+    if (index > GetSpellMaxIndex(activeState))
+        return 0;
+
+    CreatureSpellsList const* spellList = sObjectMgr.GetCreatureSpells(GetEntry(), activeState);
+    if (!spellList)
+        return 0;
+
+    CreatureSpellsList::const_iterator itr = spellList->find(index);
+
+    if (itr == spellList->end())
+        return 0;
+
+    CreatureSpellEntry const* spellEntry = &itr->second;
+
+    if (!spellEntry)
+        return 0;
+
+    if (spellEntry->disabled)
+        return 0;
+
+    // other checks there
+
+    return spellEntry->spell;
+}
+
+uint8 Creature::GetSpellMaxIndex(uint8 activeState)
+{
+    CreatureSpellsList const* spellList = sObjectMgr.GetCreatureSpells(GetEntry(), activeState);
+    if (!spellList)
+        return 0;
+
+    return (spellList ? spellList->rbegin()->first : 0);
+}
+
 void Creature::SetWalk(bool enable, bool asDefault)
 {
     if (asDefault)
@@ -2736,6 +2765,93 @@ void Creature::SetHover(bool enable)
     WorldPacket data(enable ? SMSG_SPLINE_MOVE_SET_HOVER : SMSG_SPLINE_MOVE_UNSET_HOVER, 9);
     data << GetPackGUID();
     SendMessageToSet(&data, false);
+}
+
+Unit* Creature::SelectPreferredTargetForSpell(SpellEntry const* spellInfo)
+{
+    Unit* target = NULL;
+
+    if (spellInfo->PreventionType == SPELL_PREVENTION_TYPE_SILENCE && HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SILENCED))
+        return NULL;
+    if (spellInfo->PreventionType == SPELL_PREVENTION_TYPE_PACIFY && HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PACIFIED))
+        return NULL;
+
+    SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(spellInfo->GetRangeIndex());
+    float max_range = GetSpellMaxRange(srange);
+    if (Player* modOwner = GetSpellModOwner())
+        modOwner->ApplySpellMod(spellInfo->Id, SPELLMOD_RANGE, max_range);
+
+    switch (GetPreferredTargetForSpell(spellInfo))
+    {
+    case SPELL_PREFERRED_TARGET_SELF:
+        target = this;
+        break;
+
+    case SPELL_PREFERRED_TARGET_VICTIM:
+        if (Unit* pVictim = getVictim())
+            target = pVictim;
+        else
+            target = SelectAttackingTarget(ATTACKING_TARGET_TOPAGGRO, 0, spellInfo, 0);
+        break;
+
+    case SPELL_PREFERRED_TARGET_ENEMY:
+        target = SelectAttackingTarget(ATTACKING_TARGET_TOPAGGRO, 0, spellInfo, 0);
+        break;
+
+    case SPELL_PREFERRED_TARGET_OWNER:
+        if (GetCharmerOrOwner())
+            target = GetCharmerOrOwner();
+        else
+            target = this;
+        break;
+
+    case SPELL_PREFERRED_TARGET_FRIEND:
+        target = SelectRandomFriendlyTarget(this, max_range);
+        break;
+
+    case SPELL_PREFERRED_TARGET_AREA:
+    case SPELL_PREFERRED_TARGET_MAX:
+    default:
+        break;
+    }
+
+    if (!target)
+        return NULL;
+
+    if (target && target != this)
+    {
+        float dist = GetDistance(target);
+        if (dist > max_range || dist < GetSpellMinRange(srange))
+            target = NULL;
+    }
+
+    if (target && IsSpellAppliesAura(spellInfo))
+    {
+        for (int j = 0; j < MAX_EFFECT_INDEX; ++j)
+        {
+            if (target && spellInfo->Effect[j] == SPELL_EFFECT_APPLY_AURA)
+            {
+                if (spellInfo->StackAmount <= 1)
+                {
+                    if (target->HasAura(spellInfo->Id, SpellEffectIndex(j)))
+                        target = NULL;
+                }
+                else
+                {
+                    if (Aura* aura = target->GetAura(spellInfo->Id, SpellEffectIndex(j)))
+                        if (aura->GetStackAmount() >= spellInfo->StackAmount)
+                            target = NULL;
+                }
+            }
+            else if (IsAreaAuraEffect(spellInfo->Effect[j]))
+            {
+                if (target->HasAura(spellInfo->Id, SpellEffectIndex(j)))
+                    target = NULL;
+            }
+        }
+    }
+
+    return target;
 }
 
 void Creature::SetRoot(bool enable)

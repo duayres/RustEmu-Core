@@ -753,6 +753,8 @@ class MANGOS_DLL_SPEC GameObject : public WorldObject
         void SummonLinkedTrapIfAny();
         void TriggerLinkedGameObject(Unit* target);
 
+        bool IsInRange(float x, float y, float z, float radius) const;
+
         // Destructible GO handling
         void DealGameObjectDamage(uint32 damage, uint32 spell, Unit* caster);
         void RebuildGameObject(uint32 spell, Unit* caster);

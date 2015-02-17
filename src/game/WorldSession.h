@@ -276,8 +276,6 @@ class MANGOS_DLL_SPEC WorldSession
         void SendGMTicketGetTicket(uint32 status, GMTicket* ticket = NULL);
         void SendGMResponse(GMTicket* ticket);
 
-        void SendAttackStop(Unit const* enemy);
-
         void SendBattlegGroundList(ObjectGuid guid, BattleGroundTypeId bgTypeId);
 
         void SendTradeStatus(TTradeStatusInfo const& status);
@@ -715,15 +713,14 @@ class MANGOS_DLL_SPEC WorldSession
         void HandleTutorialClearOpcode(WorldPacket& recv_data);
         void HandleTutorialResetOpcode(WorldPacket& recv_data);
 
-        // Pet
-        void HandlePetAction(WorldPacket& recv_data);
+        //Pet
+        void HandlePetAction(WorldPacket & recv_data);
         void HandlePetStopAttack(WorldPacket& recv_data);
-        void HandlePetNameQueryOpcode(WorldPacket& recv_data);
-        void HandlePetSetAction(WorldPacket& recv_data);
-        void HandlePetAbandon(WorldPacket& recv_data);
-        void HandlePetRename(WorldPacket& recv_data);
+        void HandlePetNameQueryOpcode(WorldPacket & recv_data);
+        void HandlePetSetAction(WorldPacket & recv_data);
+        void HandlePetAbandon(WorldPacket & recv_data);
+        void HandlePetRename(WorldPacket & recv_data);
         void HandlePetCancelAuraOpcode(WorldPacket& recvPacket);
-        void HandlePetUnlearnOpcode(WorldPacket& recvPacket);
         void HandlePetSpellAutocastOpcode(WorldPacket& recvPacket);
         void HandlePetCastSpellOpcode(WorldPacket& recvPacket);
         void HandlePetLearnTalent(WorldPacket& recvPacket);
@@ -732,7 +729,7 @@ class MANGOS_DLL_SPEC WorldSession
         void HandleSetActionBarTogglesOpcode(WorldPacket& recv_data);
 
         void HandleCharRenameOpcode(WorldPacket& recv_data);
-        static void HandleChangePlayerNameOpcodeCallBack(QueryResult* result, uint32 accountId, std::string newname);
+        static void HandleChangePlayerNameOpcodeCallBack(QueryResult *result, uint32 accountId, std::string newname);
         void HandleSetPlayerDeclinedNamesOpcode(WorldPacket& recv_data);
 
         void HandleTotemDestroyed(WorldPacket& recv_data);

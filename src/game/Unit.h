@@ -66,9 +66,9 @@ enum SpellChannelInterruptFlags
 
 enum SpellAuraInterruptFlags
 {
-    AURA_INTERRUPT_FLAG_UNK0                        = 0x00000001,   // 0    removed when getting hit by a negative spell?
-    AURA_INTERRUPT_FLAG_DAMAGE                      = 0x00000002,   // 1    removed by any damage
-    AURA_INTERRUPT_FLAG_UNK2                        = 0x00000004,   // 2
+    AURA_INTERRUPT_FLAG_SPELLHIT                    = 0x00000001,   // 0    removed when getting hit by a negative spell?
+    AURA_INTERRUPT_FLAG_DAMAGE                      = 0x00000002,   // 1    removed by take any damage
+    AURA_INTERRUPT_FLAG_CAST                        = 0x00000004,   // 2    removed by cast any spell
     AURA_INTERRUPT_FLAG_MOVE                        = 0x00000008,   // 3    removed by any movement
     AURA_INTERRUPT_FLAG_TURNING                     = 0x00000010,   // 4    removed by any turning
     AURA_INTERRUPT_FLAG_ENTER_COMBAT                = 0x00000020,   // 5    removed by entering combat
@@ -76,21 +76,22 @@ enum SpellAuraInterruptFlags
     AURA_INTERRUPT_FLAG_NOT_ABOVEWATER              = 0x00000080,   // 7    removed by entering water
     AURA_INTERRUPT_FLAG_NOT_UNDERWATER              = 0x00000100,   // 8    removed by leaving water
     AURA_INTERRUPT_FLAG_NOT_SHEATHED                = 0x00000200,   // 9    removed by unsheathing
-    AURA_INTERRUPT_FLAG_UNK10                       = 0x00000400,   // 10
-    AURA_INTERRUPT_FLAG_UNK11                       = 0x00000800,   // 11
+    AURA_INTERRUPT_FLAG_ACTION                      = 0x00000400,   // 10   removed by any action (talk/loot/gossip)
+    AURA_INTERRUPT_FLAG_USE                         = 0x00000800,   // 11   removed by use (or casting open spell)
     AURA_INTERRUPT_FLAG_MELEE_ATTACK                = 0x00001000,   // 12   removed by melee attack?
     AURA_INTERRUPT_FLAG_SPELL_ATTACK                = 0x00002000,   // 13   removed by spell attack?
     AURA_INTERRUPT_FLAG_UNK14                       = 0x00004000,   // 14
-    AURA_INTERRUPT_FLAG_UNK15                       = 0x00008000,   // 15   removed by casting a spell?
+    AURA_INTERRUPT_FLAG_TRANSFORM                   = 0x00008000,   // 15   removed by casting a transform spell?
     AURA_INTERRUPT_FLAG_UNK16                       = 0x00010000,   // 16
     AURA_INTERRUPT_FLAG_MOUNTING                    = 0x00020000,   // 17   removed by mounting
     AURA_INTERRUPT_FLAG_NOT_SEATED                  = 0x00040000,   // 18   removed by standing up (used by food and drink mostly and sleep/Fake Death like)
     AURA_INTERRUPT_FLAG_CHANGE_MAP                  = 0x00080000,   // 19   leaving map/getting teleported
     AURA_INTERRUPT_FLAG_IMMUNE_OR_LOST_SELECTION    = 0x00100000,   // 20   removed by auras that make you invulnerable, or make other to loose selection on you
     AURA_INTERRUPT_FLAG_UNK21                       = 0x00200000,   // 21
-    AURA_INTERRUPT_FLAG_UNK22                       = 0x00400000,   // 22
+    AURA_INTERRUPT_FLAG_TELEPORTED                  = 0x00400000,   // 22
     AURA_INTERRUPT_FLAG_ENTER_PVP_COMBAT            = 0x00800000,   // 23   removed by entering pvp combat
-    AURA_INTERRUPT_FLAG_DIRECT_DAMAGE               = 0x01000000    // 24   removed by any direct damage
+    AURA_INTERRUPT_FLAG_DIRECT_DAMAGE               = 0x01000000,   // 24   removed by any direct damage
+    AURA_INTERRUPT_FLAG_LANDING                     = 0x02000000,   // 25   removed by hitting the ground
 };
 
 enum SpellModOp
@@ -108,7 +109,7 @@ enum SpellModOp
     SPELLMOD_CASTING_TIME           = 10,
     SPELLMOD_COOLDOWN               = 11,
     SPELLMOD_EFFECT2                = 12,
-    // spellmod 13 unused
+    SPELLMOD_IGNORE_ARMOR           = 13,
     SPELLMOD_COST                   = 14,
     SPELLMOD_CRIT_DAMAGE_BONUS      = 15,
     SPELLMOD_RESIST_MISS_CHANCE     = 16,
@@ -123,7 +124,9 @@ enum SpellModOp
     // spellmod 25 unused
     SPELLMOD_FREQUENCY_OF_SUCCESS   = 26,                   // Only used with SPELL_AURA_ADD_PCT_MODIFIER and affects used on proc spells
     SPELLMOD_MULTIPLE_VALUE         = 27,
-    SPELLMOD_RESIST_DISPEL_CHANCE   = 28
+    SPELLMOD_RESIST_DISPEL_CHANCE   = 28,
+    SPELLMOD_UNK29                  = 29,                   // used by single test spell 45365
+    SPELLMOD_COST_ON_HIT_FAIL       = 30
 };
 
 #define MAX_SPELLMOD 32
@@ -426,6 +429,10 @@ enum UnitState
     UNIT_STAT_FLEEING         = 0x00020000,                 // FleeMovementGenerator/TimedFleeingMovementGenerator active/onstack
     UNIT_STAT_FLEEING_MOVE    = 0x00040000,
     // More room for other MMGens
+    // custom MMGen (may be removed)
+    UNIT_STAT_ON_VEHICLE      = 0x00080000,                 // Unit is on vehicle
+
+    UNIT_STAT_ROTATING        = 0x00100000,
 
     // High-Level states (usually only with Creatures)
     UNIT_STAT_NO_COMBAT_MOVEMENT    = 0x01000000,           // Combat Movement for MoveChase stopped
@@ -1028,14 +1035,26 @@ class GlobalCooldownMgr                                     // Shared by Player 
         void AddGlobalCooldown(SpellEntry const* spellInfo, uint32 gcd);
         void CancelGlobalCooldown(SpellEntry const* spellInfo);
 
+        uint32 GetGlobalCooldown(SpellEntry const* spellInfo) const;
+
     private:
         GlobalCooldownList m_GlobalCooldowns;
+};
+
+enum CharmStateType
+{
+    CHARM_STATE_REACT    = 0,
+    CHARM_STATE_COMMAND  = 1,
+    CHARM_STATE_ACTIVITY = 2,
+    CHARM_STATE_ACTION   = 3,
 };
 
 enum ActiveStates
 {
     ACT_PASSIVE  = 0x01,                                    // 0x01 - passive
+    ACT_CASTABLE = 0x80,                                    // 0x80 - castable
     ACT_DISABLED = 0x81,                                    // 0x80 - castable
+    ACT_ACTIVE   = 0xC0,                                    // 0x40 | 0x80 - auto cast + castable
     ACT_ENABLED  = 0xC1,                                    // 0x40 | 0x80 - auto cast + castable
     ACT_COMMAND  = 0x07,                                    // 0x01 | 0x02 | 0x04
     ACT_REACTION = 0x06,                                    // 0x02 | 0x04
@@ -1055,6 +1074,12 @@ enum CommandStates
     COMMAND_FOLLOW  = 1,
     COMMAND_ATTACK  = 2,
     COMMAND_ABANDON = 3
+};
+
+enum ActionStates
+{
+    ACTIONS_ENABLE  = 0x00,
+    ACTIONS_DISABLE = 0x08
 };
 
 #define UNIT_ACTION_BUTTON_ACTION(X) (uint32(X) & 0x00FFFFFF)
@@ -1107,50 +1132,53 @@ enum ActionBarIndex
 
 struct CharmInfo
 {
-    public:
-        explicit CharmInfo(Unit* unit);
-        uint32 GetPetNumber() const { return m_petnumber; }
-        void SetPetNumber(uint32 petnumber, bool statwindow);
+public:
+    explicit CharmInfo(Unit* unit);
+    uint32 GetPetNumber() const { return m_petnumber; }
+    void SetPetNumber(uint32 petnumber, bool statwindow);
 
-        void SetCommandState(CommandStates st) { m_CommandState = st; }
-        CommandStates GetCommandState() { return m_CommandState; }
-        bool HasCommandState(CommandStates state) { return (m_CommandState == state); }
-        void SetReactState(ReactStates st) { m_reactState = st; }
-        ReactStates GetReactState() { return m_reactState; }
-        bool HasReactState(ReactStates state) { return (m_reactState == state); }
+    bool HasCommandState(CommandStates state) { return HasState(CHARM_STATE_COMMAND, state); }
+    bool HasReactState(ReactStates state) { return HasState(CHARM_STATE_REACT, state); }
+    void SetReactState(ReactStates state) { SetState(CHARM_STATE_REACT, state); }
 
-        void InitVehicleCreateSpells();
-        void InitPossessCreateSpells();
-        void InitCharmCreateSpells();
-        void InitPetActionBar();
-        void InitEmptyActionBar();
+    uint32 GetState() const { return m_State; };
+    void   SetState(uint32 state) { m_State = state; };
 
-        // return true if successful
-        bool AddSpellToActionBar(uint32 spellid, ActiveStates newstate = ACT_DECIDE);
-        bool RemoveSpellFromActionBar(uint32 spell_id);
-        void LoadPetActionBar(const std::string& data);
-        void BuildActionBar(WorldPacket* data);
-        void SetSpellAutocast(uint32 spell_id, bool state);
-        void SetActionBar(uint8 index, uint32 spellOrAction, ActiveStates type)
-        {
-            PetActionBar[index].SetActionAndType(spellOrAction, type);
-        }
-        UnitActionBarEntry const* GetActionBarEntry(uint8 index) const { return &(PetActionBar[index]); }
+    uint8  GetState(CharmStateType type);
+    bool   HasState(CharmStateType type, uint8 value);
+    void   SetState(CharmStateType type, uint8 value);
 
-        void ToggleCreatureAutocast(uint32 spellid, bool apply);
+    void InitPossessCreateSpells();
+    void InitVehicleCreateSpells(uint8 seatId = 0);
+    void InitCharmCreateSpells();
+    void InitPetActionBar();
+    void InitEmptyActionBar();
+    //return true if successful
+    bool AddSpellToActionBar(uint32 spellid, ActiveStates newstate = ACT_DECIDE);
+    bool RemoveSpellFromActionBar(uint32 spell_id);
+    void LoadPetActionBar(const std::string& data);
+    void BuildActionBar(WorldPacket* data);
+    void SetSpellAutocast(uint32 spell_id, bool state);
+    void SetActionBar(uint8 index, uint32 spellOrAction, ActiveStates type)
+    {
+        PetActionBar[index].SetActionAndType(spellOrAction, type);
+    }
 
-        CharmSpellEntry* GetCharmSpell(uint8 index) { return &(m_charmspells[index]); }
+    UnitActionBarEntry const* GetActionBarEntry(uint8 index) const { return &(PetActionBar[index]); }
 
-        GlobalCooldownMgr& GetGlobalCooldownMgr() { return m_GlobalCooldownMgr; }
+    void ToggleCreatureAutocast(uint32 spellid, bool apply);
 
-    private:
-        Unit* m_unit;
-        UnitActionBarEntry PetActionBar[MAX_UNIT_ACTION_BAR_INDEX];
-        CharmSpellEntry m_charmspells[CREATURE_MAX_SPELLS];
-        CommandStates   m_CommandState;
-        ReactStates     m_reactState;
-        uint32          m_petnumber;
-        GlobalCooldownMgr m_GlobalCooldownMgr;
+    CharmSpellEntry* GetCharmSpell(uint8 index) { return &(m_charmspells[index]); }
+
+    GlobalCooldownMgr& GetGlobalCooldownMgr() { return m_GlobalCooldownMgr; }
+
+private:
+    Unit* m_unit;
+    UnitActionBarEntry PetActionBar[MAX_UNIT_ACTION_BAR_INDEX];
+    CharmSpellEntry m_charmspells[CREATURE_MAX_SPELLS];
+    uint32          m_State;                // 1st byte - ReactState, 2nd byte - CommandStates, 3d byte - unknown (Activity state), 4d byte - Action state
+    uint32          m_petnumber;
+    GlobalCooldownMgr m_GlobalCooldownMgr;
 };
 
 // used in CallForAllControlledUnits/CheckAllControlledUnits
@@ -1183,6 +1211,24 @@ enum IgnoreUnitState
     IGNORE_UNIT_TARGET_NON_FROZEN = 126,                    // ignore absent of frozen state
 };
 
+struct SpellCooldown
+{
+    time_t end;
+    uint16 itemid;
+};
+
+typedef std::map<uint32, SpellCooldown> SpellCooldowns;
+
+/// Spell cooldown flags sent in SMSG_SPELL_COOLDOWN
+enum SpellCooldownFlags
+{
+    SPELL_COOLDOWN_FLAG_NONE                    = 0x0,
+    SPELL_COOLDOWN_FLAG_INCLUDE_GCD             = 0x1,  /// < Starts GCD in addition to normal cooldown specified in the packet
+    SPELL_COOLDOWN_FLAG_INCLUDE_EVENT_COOLDOWNS = 0x2   /// < Starts GCD for spells that should start their cooldown on events, requires SPELL_COOLDOWN_FLAG_INCLUDE_GCD set
+};
+
+typedef UNORDERED_MAP<uint32, uint32> PacketCooldowns;
+
 // delay time next attack to prevent client attack animation problems
 #define ATTACK_DISPLAY_DELAY 200
 #define MAX_PLAYER_STEALTH_DETECT_RANGE 45.0f               // max distance for detection targets by player
@@ -1214,7 +1260,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         typedef std::list<SpellAuraHolder*> SpellAuraHolderList;
         typedef std::list<Aura*> AuraList;
         typedef std::list<DiminishingReturn> Diminishing;
-        typedef std::set<uint32 /*playerGuidLow*/> ComboPointHolderSet;
+        typedef std::set<ObjectGuid> ComboPointHolderSet;
         typedef std::map<uint8 /*slot*/, uint32 /*spellId*/> VisibleAuraMap;
         typedef std::map<SpellEntry const*, ObjectGuid /*targetGuid*/> TrackedAuraTargetMap;
         typedef UNORDERED_SET<uint32> SpellIdSet;
@@ -1399,6 +1445,8 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         bool isAttackingPlayer() const;                     //< Returns if this unit is attacking a player (or this unit's minions/pets are attacking a player)
         bool CanAttackByItself() const;                     //< Used to check if a vehicle is allowed attack other units by itself
+
+        virtual bool IsInEvadeMode() const { return false; };
 
         Unit* getVictim() const { return m_attackingGuid ? IsInWorld() ? GetMap()->GetUnit(m_attackingGuid) : NULL : NULL; }
         void CombatStop(bool includingCast = false);        //< Stop this unit from combat, if includingCast==true, also interrupt casting
@@ -1624,14 +1672,14 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         }
         bool HasAuraOfDifficulty(uint32 spellId) const;
 
-        virtual bool HasSpell(uint32 /*spellID*/) const { return false; }
+        bool virtual HasSpell(uint32 /*spellID*/) const { return false; }
 
         bool HasStealthAura()      const { return HasAuraType(SPELL_AURA_MOD_STEALTH); }
         bool HasInvisibilityAura() const { return HasAuraType(SPELL_AURA_MOD_INVISIBILITY); }
         bool isFeared()  const { return HasAuraType(SPELL_AURA_MOD_FEAR); }
         bool isInRoots() const { return HasAuraType(SPELL_AURA_MOD_ROOT); }
         bool IsPolymorphed() const;
-
+        bool IsCrowdControlled() const;
         bool isFrozen() const;
         bool IsIgnoreUnitState(SpellEntry const* spell, IgnoreUnitState ignoreState);
 
@@ -1640,7 +1688,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         virtual bool IsInWater() const;
         virtual bool IsUnderWater() const;
-        bool isInAccessablePlaceFor(Creature const* c) const;
+        bool isInAccessablePlaceFor(Unit const* unit) const;
 
         void SendHealSpellLog(Unit* pVictim, uint32 SpellID, uint32 Damage, uint32 OverHeal, bool critical = false, uint32 absorb = 0);
         void SendEnergizeSpellLog(Unit* pVictim, uint32 SpellID, uint32 Damage, Powers powertype);
@@ -1734,6 +1782,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         Pet* GetPet() const;
         Unit* GetCharmer() const;
         Unit* GetCharm() const;
+        Unit* GetCreator() const;
         void Uncharm();
         Unit* GetCharmerOrOwner() const { return GetCharmerGuid() ? GetCharmer() : GetOwner(); }
         Unit* GetCharmerOrOwnerOrSelf()
@@ -1750,16 +1799,24 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         void SetPet(Pet* pet);
         void SetCharm(Unit* pet);
 
+        void AddPetToList(Pet* pet);
+        void RemovePetFromList(Pet* pet);
+        GuidSet const& GetPets() const { return m_groupPets; }
+
         void AddGuardian(Pet* pet);
         void RemoveGuardian(Pet* pet);
         void RemoveGuardians();
         Pet* FindGuardianWithEntry(uint32 entry);
+        GuidSet const& GetGuardians() const { return m_guardianPets; }
         Pet* GetProtectorPet();                             // expected single case in guardian list
 
         bool isCharmed() const { return !GetCharmerGuid().IsEmpty(); }
 
         CharmInfo* GetCharmInfo() { return m_charmInfo; }
+        uint8 GetCharmState(CharmStateType type) const { return m_charmInfo ? m_charmInfo->GetState(type) : 0; }
         CharmInfo* InitCharmInfo(Unit* charm);
+
+        void SendCharmState();
 
         ObjectGuid const& GetTotemGuid(TotemSlot slot) const { return m_TotemSlot[slot]; }
         Totem* GetTotem(TotemSlot slot) const;
@@ -2182,15 +2239,24 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         void SetConfused(bool apply, ObjectGuid casterGuid = ObjectGuid(), uint32 spellID = 0);
         void SetFeignDeath(bool apply, ObjectGuid casterGuid = ObjectGuid(), uint32 spellID = 0);
 
-        void AddComboPointHolder(uint32 lowguid) { m_ComboPointHolders.insert(lowguid); }
-        void RemoveComboPointHolder(uint32 lowguid) { m_ComboPointHolders.erase(lowguid); }
+        void AddComboPointHolder(ObjectGuid guid) { m_ComboPointHolders.insert(guid); }
+        void RemoveComboPointHolder(ObjectGuid guid) { m_ComboPointHolders.erase(guid); }
         void ClearComboPointHolders();
+
+        uint8 GetComboPoints() { return m_comboPoints; }
+        ObjectGuid const& GetComboTargetGuid() const { return m_comboTargetGuid; }
+
+        void AddComboPoints(Unit* target, int8 count);
+        void ClearComboPoints();
 
         ///----------Pet responses methods-----------------
         void SendPetActionFeedback(uint8 msg);
         void SendPetTalk(uint32 pettalk);
         void SendPetAIReaction();
         ///----------End of Pet responses methods----------
+        void DoPetAction(Player* owner, uint8 flag, uint32 spellid, ObjectGuid petGuid, ObjectGuid targetGuid);
+        void DoPetCastSpell(Player *owner, uint8 cast_count, SpellCastTargets* targets, SpellEntry const* spellInfo);
+        void DoPetCastSpell(Unit* target, uint32 spellId);
 
         void propagateSpeedChange() { GetMotionMaster()->propagateSpeedChange(); }
 
@@ -2223,6 +2289,25 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         virtual bool CanFly() const = 0;
 
         void KillSelf(uint32 keepHealthPoints = 0); // used instead ForcedDespawn() when not need despawn unit
+
+        // Cooldown System
+        static uint32 const infinityCooldownDelay = MONTH;  // used for set "infinity cooldowns" for spells and check
+        static uint32 const infinityCooldownDelayCheck = MONTH / 2;
+        bool HasSpellCooldown(SpellEntry const* spellInfo) const;
+        bool HasSpellCooldown(uint32 spellId) const;
+        time_t GetSpellCooldownDelay(SpellEntry const* spellInfo) const;
+        SpellCooldowns const* GetSpellCooldownMap() const { return &m_spellCooldowns; }
+
+        void RemoveOutdatedSpellCooldowns();
+
+        void AddSpellCooldown(uint32 spell_id, uint32 itemid, time_t end_time);
+        void AddSpellAndCategoryCooldowns(SpellEntry const* spellInfo, uint32 itemId = 0, bool infinityCooldown = false);
+        void RemoveSpellCooldown(uint32 spell_id, bool update = false);
+        void RemoveAllSpellCooldown();
+        void RemoveSpellCategoryCooldown(uint32 cat, bool update = false);
+
+        void BuildCooldownPacket(WorldPacket& data, uint8 flags, uint32 spellId, uint32 cooldown);
+        void BuildCooldownPacket(WorldPacket& data, uint8 flags, PacketCooldowns const& cooldowns);
 
     protected:
         explicit Unit();
@@ -2311,12 +2396,17 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         FollowerRefManager m_FollowingRefManager;
 
         ComboPointHolderSet m_ComboPointHolders;
+        ObjectGuid m_comboTargetGuid;
+        int8 m_comboPoints;
 
+        GuidSet m_groupPets;
         GuidSet m_guardianPets;
 
         ObjectGuid m_TotemSlot[MAX_TOTEM_SLOT];
 
         ObjectGuid m_fixateTargetGuid;                      //< Stores the Guid of a fixated target
+
+        SpellCooldowns m_spellCooldowns;
 
     private:                                                // Error traps for some wrong args using
         // this will catch and prevent build for any cases when all optional args skipped and instead triggered used non boolean type
@@ -2339,44 +2429,69 @@ template<typename Func>
 void Unit::CallForAllControlledUnits(Func const& func, uint32 controlledMask)
 {
     if (controlledMask & CONTROLLED_PET)
-        if (Pet* pet = GetPet())
-            func(pet);
+    {
+        if (!m_groupPets.empty())
+        {
+            GuidSet groupPetsCopy = GetPets();  // Original list may be modified in this function
+            for (GuidSet::const_iterator itr = groupPetsCopy.begin(); itr != groupPetsCopy.end(); ++itr)
+            {
+                if (Pet* pet = _GetPet(*itr))
+                    func(pet);
+            }
+        }
+    }
 
     if (controlledMask & CONTROLLED_MINIPET)
-        if (Pet* mini = GetMiniPet())
+    {
+        if (Unit* mini = (Unit*)GetMiniPet())
             func(mini);
+    }
 
     if (controlledMask & CONTROLLED_GUARDIANS)
     {
         for (GuidSet::const_iterator itr = m_guardianPets.begin(); itr != m_guardianPets.end();)
+        {
             if (Pet* guardian = _GetPet(*(itr++)))
                 func(guardian);
+        }
+    }
+
+    if (controlledMask & CONTROLLED_CHARM)
+    {
+        if (Unit* charm = GetCharm())
+            func(charm);
     }
 
     if (controlledMask & CONTROLLED_TOTEMS)
     {
         for (int i = 0; i < MAX_TOTEM_SLOT; ++i)
+        {
             if (Unit* totem = _GetTotem(TotemSlot(i)))
                 func(totem);
+        }
     }
-
-    if (controlledMask & CONTROLLED_CHARM)
-        if (Unit* charm = GetCharm())
-            func(charm);
 }
 
 template<typename Func>
 bool Unit::CheckAllControlledUnits(Func const& func, uint32 controlledMask) const
 {
     if (controlledMask & CONTROLLED_PET)
-        if (Pet const* pet = GetPet())
-            if (func(pet))
-                return true;
+    {
+        if (!m_groupPets.empty())
+        {
+            for (GuidSet::const_iterator itr = m_groupPets.begin(); itr != m_groupPets.end();)
+                if (Pet const* pet = _GetPet(*(itr++)))
+                    if (func(pet))
+                        return true;
+        }
+    }
 
     if (controlledMask & CONTROLLED_MINIPET)
-        if (Pet const* mini = GetMiniPet())
+    {
+        if (Unit* mini = (Unit*)GetMiniPet())
             if (func(mini))
                 return true;
+    }
 
     if (controlledMask & CONTROLLED_GUARDIANS)
     {
@@ -2386,6 +2501,13 @@ bool Unit::CheckAllControlledUnits(Func const& func, uint32 controlledMask) cons
                     return true;
     }
 
+    if (controlledMask & CONTROLLED_CHARM)
+    {
+        if (Unit const* charm = GetCharm())
+            if (func(charm))
+                return true;
+    }
+
     if (controlledMask & CONTROLLED_TOTEMS)
     {
         for (int i = 0; i < MAX_TOTEM_SLOT; ++i)
@@ -2393,11 +2515,6 @@ bool Unit::CheckAllControlledUnits(Func const& func, uint32 controlledMask) cons
                 if (func(totem))
                     return true;
     }
-
-    if (controlledMask & CONTROLLED_CHARM)
-        if (Unit const* charm = GetCharm())
-            if (func(charm))
-                return true;
 
     return false;
 }

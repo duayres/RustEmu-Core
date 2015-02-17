@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,18 +22,32 @@
 #include "Creature.h"
 #include "ObjectAccessor.h"
 
+#define DEFAULT_DESPAWN_DELAY 5000
+
+enum TSUpdateActions
+{
+    TSUA_NONE                 = 0,
+    TSUA_UNSUMMON             = 1,
+    TSUA_RESET_TIMER          = 2,
+    TSUA_CHECK_TIMER          = 4,
+    TSUA_CHECK_UNIQUENESS     = 8
+};
+
 class TemporarySummon : public Creature
 {
     public:
         explicit TemporarySummon(ObjectGuid summoner = ObjectGuid());
-        virtual ~TemporarySummon() {};
+        virtual ~TemporarySummon(){};
 
         void Update(uint32 update_diff, uint32 time) override;
         void Summon(TempSummonType type, uint32 lifetime);
-        void MANGOS_DLL_SPEC UnSummon();
+        void MANGOS_DLL_SPEC UnSummon(uint32 delay = 0);
         void SaveToDB();
         ObjectGuid const& GetSummonerGuid() const { return m_summoner ; }
         Unit* GetSummoner() const { return ObjectAccessor::GetUnit(*this, m_summoner); }
+        TempSummonType GetTempSummonType() const { return m_type; };
+        bool IsDespawned() const override;
+
     private:
         void SaveToDB(uint32, uint8, uint32) override       // overwrited of Creature::SaveToDB     - don't must be called
         {
@@ -48,21 +62,22 @@ class TemporarySummon : public Creature
         uint32 m_timer;
         uint32 m_lifetime;
         ObjectGuid m_summoner;
+        bool       m_isActive;
 };
 
 class TemporarySummonWaypoint : public TemporarySummon
 {
-    public:
-        explicit TemporarySummonWaypoint(ObjectGuid summoner, uint32 waypoint_id, int32 path_id, uint32 pathOrigin);
+public:
+    explicit TemporarySummonWaypoint(ObjectGuid summoner, uint32 waypoint_id, int32 path_id, uint32 pathOrigin);
 
-        uint32 GetWaypointId() const { return m_waypoint_id; }
-        int32 GetPathId() const { return m_path_id; }
-        uint32 GetPathOrigin() const { return m_pathOrigin; }
+    uint32 GetWaypointId() const { return m_waypoint_id; }
+    int32 GetPathId() const { return m_path_id; }
+    uint32 GetPathOrigin() const { return m_pathOrigin; }
 
-    private:
-        uint32 m_waypoint_id;
-        int32 m_path_id;
-        uint32 m_pathOrigin;
+private:
+    uint32 m_waypoint_id;
+    int32 m_path_id;
+    uint32 m_pathOrigin;
 };
 
 #endif

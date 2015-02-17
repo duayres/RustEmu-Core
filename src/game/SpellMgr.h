@@ -784,6 +784,20 @@ inline bool IsSpellAllowDeadTarget(SpellEntry const* spellInfo)
 
 bool IsSpellAffectedBySpellMods(SpellEntry const* spellInfo);
 
+enum SpellPreferredTargetType
+{
+    SPELL_PREFERRED_TARGET_VICTIM,
+    SPELL_PREFERRED_TARGET_SELF,
+    SPELL_PREFERRED_TARGET_ENEMY,
+    SPELL_PREFERRED_TARGET_FRIEND,
+    SPELL_PREFERRED_TARGET_AREA,
+    SPELL_PREFERRED_TARGET_OWNER,
+    SPELL_PREFERRED_TARGET_RANDOM,
+    SPELL_PREFERRED_TARGET_MAX,
+};
+
+SpellPreferredTargetType GetPreferredTargetForSpell(SpellEntry const* spellInfo);
+
 // Diminishing Returns interaction with spells
 DiminishingGroup GetDiminishingReturnsGroupForSpell(SpellEntry const* spellproto, bool triggered);
 bool IsDiminishingReturnsGroupDurationLimited(DiminishingGroup group);

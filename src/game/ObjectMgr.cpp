@@ -2999,6 +2999,67 @@ PetScalingDataList const* ObjectMgr::GetPetScalingData(uint32 creature_id) const
         return itr->second;
 }
 
+void ObjectMgr::LoadCreatureSpells()
+{
+    // Loading creature spells
+    //                                                    0         1        2         3           4        5
+    QueryResult* result = WorldDatabase.Query("SELECT `guid`, `spell`, `index`, `active`, `disabled`, `flags` FROM `creature_spell`");
+
+    uint32 count = 0;
+
+    if (!result)
+    {
+        BarGoLink bar(1);
+        bar.step();
+                
+        sLog.outErrorDb("Error loading creature_spell table or table is empty.");
+        sLog.outString();
+        return;
+    }
+
+    BarGoLink bar((int)result->GetRowCount());
+
+    do
+    {
+        Field* fields = result->Fetch();
+
+        uint32 creature_id = fields[0].GetUInt32();
+
+        uint8 activeState = fields[3].GetUInt8();
+        CreatureSpellsList* pCreatureSpells = &m_creatureSpellStorage[activeState][creature_id];
+
+        if (!pCreatureSpells)
+        {
+            m_creatureSpellStorage[activeState].insert(std::make_pair(creature_id, CreatureSpellsList()));
+            pCreatureSpells = &m_creatureSpellStorage[activeState][creature_id];
+            MANGOS_ASSERT(pCreatureSpells);
+        }
+
+        uint8 index = fields[2].GetUInt8();
+        CreatureSpellEntry creatureSpellEntry;
+
+        creatureSpellEntry.spell = fields[1].GetUInt32();
+        creatureSpellEntry.disabled = fields[4].GetBool();
+        creatureSpellEntry.flags = fields[5].GetUInt32();
+
+        pCreatureSpells->insert(std::make_pair(index, creatureSpellEntry));
+        ++count;
+    } while (result->NextRow());
+
+    delete result;    
+    sLog.outString(">> Loaded %u creature spell definitions", count);
+    sLog.outString();
+}
+
+CreatureSpellsList const* ObjectMgr::GetCreatureSpells(uint32 creature_id, uint8 activeState)
+{
+    CreatureSpellStorage::const_iterator itr = m_creatureSpellStorage[activeState].find(creature_id);
+    if (itr == m_creatureSpellStorage[activeState].end())
+        return NULL;
+    else
+        return &itr->second;
+}
+
 void ObjectMgr::LoadPlayerInfo()
 {
     // Load playercreate

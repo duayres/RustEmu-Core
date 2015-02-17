@@ -2197,6 +2197,33 @@ void GameObject::TickCapturePoint()
         StartEvents_Event(GetMap(), eventId, this, this, true, *capturingPlayers.begin());
 }
 
+bool GameObject::IsInRange(float x, float y, float z, float radius) const
+{
+    GameObjectDisplayInfoEntry const *info = sGameObjectDisplayInfoStore.LookupEntry(GetUInt32Value(GAMEOBJECT_DISPLAYID));
+    if (!info)
+        return IsWithinDist3d(x, y, z, radius);
+
+    float dx = x - GetPositionX();
+    float dy = y - GetPositionY();
+    float dz = z - GetPositionZ();
+    float dist = sqrt(dx*dx + dy*dy);
+
+    if (dist <= CONTACT_DISTANCE)   // prevent division by 0
+        return true;
+
+    float sinA = sin(GetOrientation());
+    float cosA = cos(GetOrientation());
+    float sinB = dx / dist;
+    float cosB = dy / dist;
+
+    dx = dist * (cosA * cosB + sinA * sinB);
+    dy = dist * (cosA * sinB - sinA * cosB);
+
+    return dx < info->geoBoxMaxX + radius && dx > info->geoBoxMinX - radius
+        && dy < info->geoBoxMaxY + radius && dy > info->geoBoxMinY - radius
+        && dz < info->geoBoxMaxZ + radius && dz > info->geoBoxMinZ - radius;
+}
+
 // ////////////////////////////////////////////////////////////////////////////////////////////////
 //                              Destructible GO handling
 // ////////////////////////////////////////////////////////////////////////////////////////////////

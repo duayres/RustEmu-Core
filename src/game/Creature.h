@@ -267,6 +267,20 @@ struct CreatureModelRace
     uint32 modelid_racial;                                  // Explicit modelid. Used if creature_template entry is not defined
 };
 
+struct CreatureSpellEntry
+{
+    CreatureSpellEntry() : spell(0), flags(0), disabled(0) {};
+
+    uint32 spell;
+    int32  flags;
+    bool   disabled;
+};
+
+#define MAX_CREATURE_SPELL_LISTS 8
+
+typedef std::map<uint8 /* index */, CreatureSpellEntry> CreatureSpellsList;
+typedef UNORDERED_MAP<uint32 /*creature_id*/, CreatureSpellsList> CreatureSpellStorage;
+
 // GCC have alternative #pragma pack() syntax and old gcc version not support pack(pop), also any gcc version not support it at some platform
 #if defined( __GNUC__ )
 #pragma pack()
@@ -422,8 +436,6 @@ struct TrainerSpellData
     void Clear() { spellList.clear(); }
 };
 
-typedef std::map<uint32, time_t> CreatureSpellCooldowns;
-
 // max different by z coordinate for creature aggro reaction
 #define CREATURE_Z_ATTACK_RANGE 3
 
@@ -518,7 +530,7 @@ class MANGOS_DLL_SPEC Creature : public Unit
         bool IsTemporarySummon() const { return m_subtype == CREATURE_SUBTYPE_TEMPORARY_SUMMON; }
 
         bool IsCorpse() const { return getDeathState() ==  CORPSE; }
-        bool IsDespawned() const { return getDeathState() ==  DEAD; }
+        virtual bool IsDespawned() const { return getDeathState() == DEAD; }
         void SetCorpseDelay(uint32 delay) { m_corpseDelay = delay; }
         bool IsRacialLeader() const { return GetCreatureInfo()->RacialLeader; }
         bool IsCivilian() const { return GetCreatureInfo()->ExtraFlags & CREATURE_FLAG_EXTRA_CIVILIAN; }
@@ -562,7 +574,7 @@ class MANGOS_DLL_SPEC Creature : public Unit
 
         uint8 getRace() const override;
 
-        bool IsInEvadeMode() const;
+        bool IsInEvadeMode() const override;
 
         bool AIM_Initialize();
 
@@ -585,13 +597,8 @@ class MANGOS_DLL_SPEC Creature : public Unit
         SpellSchoolMask GetMeleeDamageSchoolMask() const override { return m_meleeDamageSchoolMask; }
         void SetMeleeDamageSchool(SpellSchools school) { m_meleeDamageSchoolMask = SpellSchoolMask(1 << school); }
 
-        void _AddCreatureSpellCooldown(uint32 spell_id, time_t end_time);
-        void _AddCreatureCategoryCooldown(uint32 category, time_t apply_time);
-        void AddCreatureSpellCooldown(uint32 spellid);
-        bool HasSpellCooldown(uint32 spell_id) const;
-        bool HasCategoryCooldown(uint32 spell_id) const;
-
-        bool HasSpell(uint32 spellID) const override;
+        bool HasSpell(uint32 spellId);
+        void ProhibitSpellSchool(SpellSchoolMask idSchoolMask, uint32 unTimeMs) override;
 
         bool UpdateEntry(uint32 entry, Team team = ALLIANCE, const CreatureData* data = NULL, GameEventCreatureData const* eventData = NULL, bool preserveHPAndPower = true);
 
@@ -659,10 +666,13 @@ class MANGOS_DLL_SPEC Creature : public Unit
         SpellEntry const* ReachWithSpellCure(Unit* pVictim);
 
         uint32 m_spells[CREATURE_MAX_SPELLS];
-        CreatureSpellCooldowns m_CreatureSpellCooldowns;
-        CreatureSpellCooldowns m_CreatureCategoryCooldowns;
+
+        uint32 GetSpell(uint8 index, uint8 activeState = 0);
+        uint8  GetSpellMaxIndex(uint8 activeState = 0);
 
         float GetAttackDistance(Unit const* pl) const;
+
+        float GetReachDistance(Unit const* pl) const;
 
         void SendAIReaction(AiReaction reactionType);
 
@@ -714,6 +724,8 @@ class MANGOS_DLL_SPEC Creature : public Unit
         Unit* SelectAttackingTarget(AttackingTarget target, uint32 position, uint32 uiSpellEntry, uint32 selectFlags = 0) const;
         Unit* SelectAttackingTarget(AttackingTarget target, uint32 position, SpellEntry const* pSpellInfo = NULL, uint32 selectFlags = 0) const;
 
+        virtual Unit* SelectPreferredTargetForSpell(SpellEntry const* spellInfo);
+
         bool HasQuest(uint32 quest_id) const override;
         bool HasInvolvedQuest(uint32 quest_id)  const override;
 
@@ -735,6 +747,7 @@ class MANGOS_DLL_SPEC Creature : public Unit
         void SetRespawnCoord(CreatureCreatePos const& pos) { m_respawnPos = pos.m_pos; }
         void SetRespawnCoord(float x, float y, float z, float ori) { m_respawnPos.x = x; m_respawnPos.y = y; m_respawnPos.z = z; m_respawnPos.o = ori; }
         void GetRespawnCoord(float& x, float& y, float& z, float* ori = NULL, float* dist = NULL) const;
+        void SetSummonPoint(CreatureCreatePos const& pos) { m_respawnPos = pos.m_pos; }
         void ResetRespawnCoord();
 
         void SetDeadByDefault(bool death_state) { m_isDeadByDefault = death_state; }
@@ -744,6 +757,9 @@ class MANGOS_DLL_SPEC Creature : public Unit
         uint32 GetTemporaryFactionFlags() { return m_temporaryFactionFlags; }
 
         void SendAreaSpiritHealerQueryOpcode(Player* pl);
+
+        void LockAI(bool lock) { m_AI_locked = lock; };
+        bool IsAILocked() const { return m_AI_locked; };
 
         void SetVirtualItem(VirtualItemSlot slot, uint32 item_id) { SetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID + slot, item_id); }
 

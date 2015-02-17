@@ -541,27 +541,6 @@ namespace MaNGOS
     */
 
     // WorldObject check classes
-    class RaiseDeadObjectCheck
-    {
-        public:
-            RaiseDeadObjectCheck(Player const* fobj, float range) : i_fobj(fobj), i_range(range) {}
-            WorldObject const& GetFocusObject() const { return *i_fobj; }
-            bool operator()(Creature* u)
-            {
-                if (i_fobj->isHonorOrXPTarget(u) ||
-                        u->getDeathState() != CORPSE || u->IsDeadByDefault() || u->IsTaxiFlying() ||
-                        (u->GetCreatureTypeMask() & (1 << (CREATURE_TYPE_HUMANOID - 1))) == 0 ||
-                        (u->GetDisplayId() != u->GetNativeDisplayId()))
-                    return false;
-
-                return i_fobj->IsWithinDistInMap(u, i_range);
-            }
-            template<class NOT_INTERESTED> bool operator()(NOT_INTERESTED*) { return false; }
-        private:
-            Player const* i_fobj;
-            float i_range;
-    };
-
     class NearestCorpseInObjectRangeCheck
     {
     public:
@@ -628,31 +607,100 @@ namespace MaNGOS
             float i_range;
     };
 
+    class RaiseDeadObjectCheck
+    {
+    public:
+        RaiseDeadObjectCheck(WorldObject const* fobj, float range, uint32 corpseTypeMask) : i_fobj(fobj), i_range(range), i_typeMask(corpseTypeMask) {}
+        WorldObject const& GetFocusObject() const { return *i_fobj; }
+        bool operator()(Player* u)
+        {
+            if (!u->IsInWorld() || u->isAlive() || u->IsTaxiFlying())
+                return false;
+
+            if (i_fobj->IsWithinDistInMap(u, i_range))
+            {
+                i_range = i_fobj->GetDistance(u);         // use found unit range as new range limit for next check
+                return true;
+            }
+            return false;
+        }
+        bool operator()(Corpse* u);
+        bool operator()(Creature* u)
+        {
+            if (!u->IsInWorld() || u->isAlive() || u->IsDeadByDefault() ||
+                ((i_typeMask && !(u->GetCreatureTypeMask() & i_typeMask)) ||
+                (i_typeMask == CREATURE_TYPEMASK_NONE && !(u->GetCreatureTypeMask() & CREATURE_TYPEMASK_HUMANOID_OR_UNDEAD))))
+                return false;
+
+            if (i_fobj->IsWithinDistInMap(u, i_range))
+            {
+                i_range = i_fobj->GetDistance(u);         // use found unit range as new range limit for next check
+                return true;
+            }
+            return false;
+        }
+        template<class NOT_INTERESTED> bool operator()(NOT_INTERESTED*) { return false; }
+    private:
+        WorldObject const* i_fobj;
+        float i_range;
+        uint32 i_typeMask;
+    };
+
+    class RaiseAllyObjectCheck
+    {
+    public:
+        RaiseAllyObjectCheck(WorldObject const* fobj, float range, uint32 corpseTypeMask = 0) : i_fobj(fobj), i_range(range) {}
+        WorldObject const& GetFocusObject() const { return *i_fobj; }
+        bool operator()(Player* u)
+        {
+            if (u->isAlive() || u->IsTaxiFlying() || !i_fobj->IsFriendlyTo(u))
+                return false;
+
+            return i_fobj->IsWithinDistInMap(u, i_range);
+        }
+        template<class NOT_INTERESTED> bool operator()(NOT_INTERESTED*) { return false; }
+    private:
+        WorldObject const* i_fobj;
+        float i_range;
+    };
+
     class CannibalizeObjectCheck
     {
-        public:
-            CannibalizeObjectCheck(WorldObject const* fobj, float range) : i_fobj(fobj), i_range(range) {}
-            WorldObject const& GetFocusObject() const { return *i_fobj; }
-            bool operator()(Player* u)
-            {
-                if (i_fobj->IsFriendlyTo(u) || u->isAlive() || u->IsTaxiFlying())
-                    return false;
+    public:
+        CannibalizeObjectCheck(WorldObject const* fobj, float range, uint32 corpseTypeMask) : i_fobj(fobj), i_range(range), i_typeMask(corpseTypeMask) {}
+        WorldObject const& GetFocusObject() const { return *i_fobj; }
+        bool operator()(Player* u)
+        {
+            if (!u->IsInWorld() || i_fobj->IsFriendlyTo(u) || u->isAlive() || u->IsTaxiFlying() ||
+                u->GetObjectGuid() == i_fobj->GetObjectGuid())
+                return false;
 
-                return i_fobj->IsWithinDistInMap(u, i_range);
-            }
-            bool operator()(Corpse* u);
-            bool operator()(Creature* u)
+            if (i_fobj->IsWithinDistInMap(u, i_range))
             {
-                if (i_fobj->IsFriendlyTo(u) || u->isAlive() || u->IsTaxiFlying() ||
-                        (u->GetCreatureTypeMask() & CREATURE_TYPEMASK_HUMANOID_OR_UNDEAD) == 0)
-                    return false;
-
-                return i_fobj->IsWithinDistInMap(u, i_range);
+                i_range = i_fobj->GetDistance(u);         // use found unit range as new range limit for next check
+                return true;
             }
-            template<class NOT_INTERESTED> bool operator()(NOT_INTERESTED*) { return false; }
-        private:
-            WorldObject const* i_fobj;
-            float i_range;
+            return false;
+        }
+        bool operator()(Corpse* u);
+        bool operator()(Creature* u)
+        {
+            if (!u->IsInWorld() || i_fobj->IsFriendlyTo(u) || u->isAlive() || u->GetObjectGuid() == i_fobj->GetObjectGuid() ||
+                !(u->GetCreatureTypeMask() & i_typeMask))
+                return false;
+
+            if (i_fobj->IsWithinDistInMap(u, i_range))
+            {
+                i_range = i_fobj->GetDistance(u);         // use found unit range as new range limit for next check
+                return true;
+            }
+            return false;
+        }
+        template<class NOT_INTERESTED> bool operator()(NOT_INTERESTED*) { return false; }
+    private:
+        WorldObject const* i_fobj;
+        float i_range;
+        uint32 i_typeMask;
     };
 
     // WorldObject do classes
@@ -1215,6 +1263,57 @@ namespace MaNGOS
 
             // prevent clone this object
             AllCreaturesOfEntryInRangeCheck(AllCreaturesOfEntryInRangeCheck const&);
+    };
+
+    class AllIdenticalObjectsInRangeCheck
+    {
+    public:
+        AllIdenticalObjectsInRangeCheck(const WorldObject* pObject, float fMaxRange) : m_pObject(pObject), m_fRange(fMaxRange) {}
+        WorldObject const& GetFocusObject() const { return *m_pObject; }
+        bool operator() (WorldObject* pObject)
+        {
+            if (pObject->GetObjectGuid() == m_pObject->GetObjectGuid())
+                return false;
+
+            if (!pObject->GetObjectGuid().HasEntry() || !m_pObject->GetObjectGuid().HasEntry())
+                return false;
+
+            if (pObject->GetObjectGuid().GetEntry() != m_pObject->GetObjectGuid().GetEntry())
+                return false;
+
+            if (m_pObject->IsWithinDist(pObject, m_fRange, false))
+                return true;
+
+            return false;
+        }
+
+    private:
+        const WorldObject* m_pObject;
+        float m_fRange;
+
+        // prevent clone this object
+        AllIdenticalObjectsInRangeCheck(AllIdenticalObjectsInRangeCheck const&);
+    };
+
+    class GameObjectInRangeCheck
+    {
+    public:
+        GameObjectInRangeCheck(WorldObject const* _obj, float _x, float _y, float _z, float _range) :
+            i_obj(_obj), x(_x), y(_y), z(_z), range(_range) {}
+
+        WorldObject const& GetFocusObject() const { return *i_obj; }
+
+        bool operator() (GameObject* go)
+        {
+            return go->IsInRange(x, y, z, range);
+        }
+
+    private:
+        WorldObject const* i_obj;
+        float x, y, z, range;
+
+        // prevent cloning this object
+        GameObjectInRangeCheck(GameObjectInRangeCheck const&);
     };
 
     class AllGameObjectsWithEntryInRange

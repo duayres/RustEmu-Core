@@ -4188,7 +4188,7 @@ void Aura::HandleModPossess(bool apply, bool Real)
     if (!Real)
         return;
 
-    Unit* target = GetTarget();
+    Unit *target = GetTarget();
 
     // not possess yourself
     if (GetCasterGuid() == target->GetObjectGuid())
@@ -4221,11 +4221,11 @@ void Aura::HandleModPossess(bool apply, bool Real)
         target->DeleteThreatList();
         target->getHostileRefManager().deleteReferences();
 
-        if (CharmInfo* charmInfo = target->InitCharmInfo(target))
+        if (CharmInfo *charmInfo = target->InitCharmInfo(target))
         {
+            charmInfo->SetState(CHARM_STATE_REACT, REACT_PASSIVE);
+            charmInfo->SetState(CHARM_STATE_COMMAND, COMMAND_STAY);
             charmInfo->InitPossessCreateSpells();
-            charmInfo->SetReactState(REACT_PASSIVE);
-            charmInfo->SetCommandState(COMMAND_STAY);
         }
 
         p_caster->PossessSpellInitialize();
@@ -4238,6 +4238,7 @@ void Aura::HandleModPossess(bool apply, bool Real)
         {
             ((Player*)target)->SetClientControl(target, 0);
         }
+
     }
     else
     {
@@ -4273,7 +4274,7 @@ void Aura::HandleModPossess(bool apply, bool Real)
         }
         else if (target->GetTypeId() == TYPEID_UNIT)
         {
-            CreatureInfo const* cinfo = ((Creature*)target)->GetCreatureInfo();
+            CreatureInfo const *cinfo = ((Creature*)target)->GetCreatureInfo();
             target->setFaction(cinfo->FactionAlliance);
         }
 
@@ -4299,7 +4300,6 @@ void Aura::HandleModPossessPet(bool apply, bool Real)
         return;
 
     Pet* pet = (Pet*)target;
-
     Player* p_caster = (Player*)caster;
     Camera& camera = p_caster->GetCamera();
 
@@ -4359,7 +4359,7 @@ void Aura::HandleAuraModPetTalentsPoints(bool /*Apply*/, bool Real)
         return;
 
     // Recalculate pet talent points
-    if (Pet* pet = GetTarget()->GetPet())
+    if (Pet *pet = GetTarget()->GetPet())
         pet->InitTalentForLevel();
 }
 
@@ -4368,7 +4368,7 @@ void Aura::HandleModCharm(bool apply, bool Real)
     if (!Real)
         return;
 
-    Unit* target = GetTarget();
+    Unit *target = GetTarget();
 
     // not charm yourself
     if (GetCasterGuid() == target->GetObjectGuid())
@@ -4396,29 +4396,29 @@ void Aura::HandleModCharm(bool apply, bool Real)
         if (target->GetTypeId() == TYPEID_UNIT)
         {
             ((Creature*)target)->AIM_Initialize();
-            CharmInfo* charmInfo = target->InitCharmInfo(target);
+            CharmInfo *charmInfo = target->InitCharmInfo(target);
+            charmInfo->SetState(CHARM_STATE_REACT, REACT_DEFENSIVE);
             charmInfo->InitCharmCreateSpells();
-            charmInfo->SetReactState(REACT_DEFENSIVE);
 
             if (caster->GetTypeId() == TYPEID_PLAYER && caster->getClass() == CLASS_WARLOCK)
             {
-                CreatureInfo const* cinfo = ((Creature*)target)->GetCreatureInfo();
+                CreatureInfo const *cinfo = ((Creature*)target)->GetCreatureInfo();
                 if (cinfo && cinfo->CreatureType == CREATURE_TYPE_DEMON)
                 {
                     // creature with pet number expected have class set
                     if (target->GetByteValue(UNIT_FIELD_BYTES_0, 1) == 0)
                     {
                         if (cinfo->UnitClass == 0)
-                            sLog.outErrorDb("Creature (Entry: %u) have UnitClass = 0 but used in charmed spell, that will be result client crash.", cinfo->Entry);
+                            sLog.outErrorDb("Creature (Entry: %u) have unit_class = 0 but used in charmed spell, that will be result client crash.", cinfo->Entry);
                         else
-                            sLog.outError("Creature (Entry: %u) have UnitClass = %u but at charming have class 0!!! that will be result client crash.", cinfo->Entry, cinfo->UnitClass);
+                            sLog.outError("Creature (Entry: %u) have unit_class = %u but at charming have class 0!!! that will be result client crash.", cinfo->Entry, cinfo->UnitClass);
 
                         target->SetByteValue(UNIT_FIELD_BYTES_0, 1, CLASS_MAGE);
                     }
 
-                    // just to enable stat window
+                    //just to enable stat window
                     charmInfo->SetPetNumber(sObjectMgr.GeneratePetNumber(), true);
-                    // if charmed two demons the same session, the 2nd gets the 1st one's name
+                    //if charmed two demons the same session, the 2nd gets the 1st one's name
                     target->SetUInt32Value(UNIT_FIELD_PET_NAME_TIMESTAMP, uint32(time(NULL)));
                 }
             }
@@ -4435,17 +4435,17 @@ void Aura::HandleModCharm(bool apply, bool Real)
             ((Player*)target)->setFactionForRace(target->getRace());
         else
         {
-            CreatureInfo const* cinfo = ((Creature*)target)->GetCreatureInfo();
+            CreatureInfo const *cinfo = ((Creature*)target)->GetCreatureInfo();
 
             // restore faction
             if (((Creature*)target)->IsPet())
             {
-                if (Unit* owner = target->GetOwner())
+                if (Unit* owner = ((Pet*)target)->GetOwner())
                     target->setFaction(owner->getFaction());
                 else if (cinfo)
                     target->setFaction(cinfo->FactionAlliance);
             }
-            else if (cinfo)                             // normal creature
+            else if (cinfo)                              // normal creature
                 target->setFaction(cinfo->FactionAlliance);
 
             // restore UNIT_FIELD_BYTES_0
@@ -5254,8 +5254,8 @@ void Aura::HandleModMechanicImmunity(bool apply, bool /*Real*/)
         }
     }
     // Heroic Fury (Intercept cooldown remove)
-    else if (apply && GetSpellProto()->Id == 60970 && target->GetTypeId() == TYPEID_PLAYER)
-        ((Player*)target)->RemoveSpellCooldown(20252, true);
+    else if (apply && GetSpellProto()->Id == 60970)
+        target->RemoveSpellCooldown(20252, true);
 }
 
 void Aura::HandleModMechanicImmunityMask(bool apply, bool /*Real*/)
@@ -5689,7 +5689,7 @@ void Aura::HandlePeriodicDamage(bool apply, bool Real)
                     break;
 
                 // 0.01*$AP*cp
-                uint8 cp = ((Player*)caster)->GetComboPoints();
+                uint8 cp = caster->GetComboPoints();
 
                 // Idol of Feral Shadows. Cant be handled as SpellMod in SpellAura:Dummy due its dependency from CPs
                 Unit::AuraList const& dummyAuras = caster->GetAurasByType(SPELL_AURA_DUMMY);
@@ -5732,7 +5732,7 @@ void Aura::HandlePeriodicDamage(bool apply, bool Real)
                 //4 points: ${($m1+$b1*4+0.03428571*$AP)*7} damage over 14 secs
                 //5 points: ${($m1+$b1*5+0.0375*$AP)*8} damage over 16 secs
                 float AP_per_combo[6] = { 0.0f, 0.015f, 0.024f, 0.03f, 0.03428571f, 0.0375f };
-                uint8 cp = ((Player*)caster)->GetComboPoints();
+                uint8 cp = caster->GetComboPoints();
                 if (cp > 5) cp = 5;
                 m_modifier.m_amount += int32(caster->GetTotalAttackPowerValue(BASE_ATTACK) * AP_per_combo[cp]);
             }
@@ -7307,10 +7307,7 @@ void Aura::HandleAuraRetainComboPoints(bool apply, bool Real)
     if (!Real)
         return;
 
-    if (GetTarget()->GetTypeId() != TYPEID_PLAYER)
-        return;
-
-    Player* target = (Player*)GetTarget();
+    Unit* target = GetTarget();
 
     // combo points was added in SPELL_EFFECT_ADD_COMBO_POINTS handler
     // remove only if aura expire by time (in case combo points amount change aura removed without combo points lost)
@@ -9454,7 +9451,7 @@ void SpellAuraHolder::_AddSpellAuraHolder()
         if (m_spellProto->HasAttribute(SPELL_ATTR_DISABLED_WHILE_ACTIVE))
         {
             Item* castItem = m_castItemGuid ? ((Player*)caster)->GetItemByGuid(m_castItemGuid) : NULL;
-            ((Player*)caster)->AddSpellAndCategoryCooldowns(m_spellProto, castItem ? castItem->GetEntry() : 0, NULL, true);
+            caster->AddSpellAndCategoryCooldowns(m_spellProto, castItem ? castItem->GetEntry() : 0, true);
         }
     }
 

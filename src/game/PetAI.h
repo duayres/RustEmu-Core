@@ -1,5 +1,6 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2010 MaNGOS <http://getmangos.com/>
+ * Copyright (C) 2011-2013 /dev/rsa for MangosR2 <http://github.com/MangosR2>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,13 +27,49 @@
 class Creature;
 class Spell;
 
+enum PetAIType
+{
+    PET_AI_PASSIVE,
+    PET_AI_MELEE,
+    PET_AI_RANGED,
+    PET_AI_RANGED_NOAMMO,
+    PET_AI_HEALER,
+    PET_AI_SLACKER,
+    PET_AI_MAX
+};
+
+enum PetAutoSpellType
+{
+    PET_SPELL_PASSIVE,
+    PET_SPELL_NONCOMBAT,
+    PET_SPELL_BUFF,
+    PET_SPELL_DEBUFF,
+    PET_SPELL_FREEACTION,
+    PET_SPELL_ATTACKSTART,
+    PET_SPELL_THREAT,
+    PET_SPELL_MELEE,
+    PET_SPELL_RANGED,
+    PET_SPELL_DEFENCE,
+    PET_SPELL_SPECIAL,
+    PET_SPELL_HEAL,
+    PET_SPELL_MAX
+};
+
+enum
+{
+    ALLIES_UPDATE_TIME = 10 * IN_MILLISECONDS
+};
+
 class PetAI : public CreatureAI
 {
     public:
 
         explicit PetAI(Creature* c);
 
+        void Reset();
+
         void MoveInLineOfSight(Unit*) override;
+        void MovementInform(uint32, uint32) override;
         void AttackStart(Unit*) override;
         void EnterEvadeMode() override;
         void AttackedBy(Unit*) override;
@@ -41,17 +78,38 @@ class PetAI : public CreatureAI
         void UpdateAI(const uint32) override;
         static int Permissible(const Creature*);
 
+        bool UpdateAIType();
+        void MoveToVictim(Unit* unit);
+        bool IsInCombat();
+
+        GuidSet const& GetAllyGuids() { return m_AllySet; };
+
+        bool  SetPrimaryTarget(ObjectGuid const& guid);
+        Unit* GetPrimaryTarget();
+
     private:
         bool _isVisible(Unit*) const;
         bool _needToStop(void) const;
         void _stopAttack(void);
 
         void UpdateAllies();
+        SpellCastResult CanAutoCast(Unit* target, SpellEntry const* spellInfo);
+        uint32 GetSpellType(PetAutoSpellType type);
 
-        TimeTracker i_tracker;
         bool inCombat;
 
         GuidSet m_AllySet;
-        uint32 m_updateAlliesTimer;
+        ObjectGuid m_primaryTargetGuid;
+
+        IntervalTimer   m_updateAlliesTimer;
+        IntervalTimer   m_attackDistanceRecheckTimer;
+
+        PetAIType         m_AIType;
+        PetAIType         m_savedAIType;
+        float             m_attackDistance;
+        float             m_fMaxRadiusToOwner;
+        ObjectGuid        m_savedTargetGuid;
+        Unit::SpellIdSet  m_spellType[PET_SPELL_MAX]; // Classified autospell storage
 };
+
 #endif
