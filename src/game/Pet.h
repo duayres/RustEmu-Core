@@ -50,12 +50,12 @@ enum PetSaveMode
 // There might be a lot more
 enum PetModeFlags
 {
-    PET_MODE_UNKNOWN_0         = 0x0000001,
-    PET_MODE_UNKNOWN_2         = 0x0000100,
-    PET_MODE_DISABLE_ACTIONS   = 0x8000000,
+    PET_MODE_UNKNOWN_0 = 0x0000001,
+    PET_MODE_UNKNOWN_2 = 0x0000100,
+    PET_MODE_DISABLE_ACTIONS = 0x8000000,
 
     // autoset in client at summon
-    PET_MODE_DEFAULT           = PET_MODE_UNKNOWN_0 | PET_MODE_UNKNOWN_2,
+    PET_MODE_DEFAULT = PET_MODE_UNKNOWN_0 | PET_MODE_UNKNOWN_2,
 };
 
 enum HappinessState
@@ -181,11 +181,11 @@ class MANGOS_DLL_SPEC Pet : public Creature
         void Unsummon(PetSaveMode mode, Unit* owner = NULL);
         static void DeleteFromDB(uint32 guidlow, bool separate_transaction = true);
 
-        void SetDeathState(DeathState s) override;              // overwrite virtual Creature::SetDeathState and Unit::SetDeathState
+        void SetDeathState(DeathState s);                   // overwrite virtual Creature::SetDeathState and Unit::SetDeathState
         void Update(uint32 update_diff, uint32 diff) override;  // overwrite virtual Creature::Update and Unit::Update
 
         uint8 GetPetAutoSpellSize() const { return m_autospells.size(); }
-        uint32 GetPetAutoSpellOnPos(uint8 pos) const override
+        uint32 GetPetAutoSpellOnPos(uint8 pos) const
         {
             if (pos >= m_autospells.size())
                 return 0;
@@ -194,17 +194,6 @@ class MANGOS_DLL_SPEC Pet : public Creature
         }
 
         Unit* SelectPreferredTargetForSpell(SpellEntry const* spellInfo);
-
-        bool CanSwim() const
-        {
-            Unit const* owner = GetOwner();
-            if (owner)
-                return owner->GetTypeId() == TYPEID_PLAYER ? true : ((Creature const*)owner)->CanSwim();
-            else
-                return Creature::CanSwim();
-        }
-
-        bool CanFly() const { return false; } // pet are not able to fly. TODO: check if this is right
 
         void RegenerateAll(uint32 update_diff) override; // overwrite Creature::RegenerateAll
         void Regenerate(Powers power, uint32 diff);
@@ -217,14 +206,14 @@ class MANGOS_DLL_SPEC Pet : public Creature
         uint32 GetCurrentFoodBenefitLevel(uint32 itemlevel);
         void SetDuration(uint32 dur) { m_duration = dur; }
 
-        bool UpdateStats(Stats stat) override;
-        bool UpdateAllStats() override;
-        void UpdateResistances(uint32 school) override;
-        void UpdateArmor() override;
-        void UpdateMaxHealth() override;
-        void UpdateMaxPower(Powers power) override;
-        void UpdateAttackPowerAndDamage(bool ranged = false) override;
-        void UpdateDamagePhysical(WeaponAttackType attType) override;
+        bool UpdateStats(Stats stat);
+        bool UpdateAllStats();
+        void UpdateResistances(uint32 school);
+        void UpdateArmor();
+        void UpdateMaxHealth();
+        void UpdateMaxPower(Powers power);
+        void UpdateAttackPowerAndDamage(bool ranged = false);
+        void UpdateDamagePhysical(WeaponAttackType attType);
         void UpdateSpellPower();
         void UpdateManaRegen();
 

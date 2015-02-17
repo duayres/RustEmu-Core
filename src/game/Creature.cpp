@@ -175,12 +175,6 @@ void Creature::AddToWorld()
         SetActiveObjectState(true);
 }
 
-void Creature::RemoveFromWorld(bool remove)
-{
-    ///- Remove the creature from the accessor
-    Unit::RemoveFromWorld(remove);
-}
-
 void Creature::RemoveCorpse()
 {
     // since pool system can fail to roll unspawned object, this one can remain spawned, so must set respawn nevertheless

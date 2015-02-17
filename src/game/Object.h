@@ -478,8 +478,8 @@ class MANGOS_DLL_SPEC WorldObject : public Object
 
         void _Create(uint32 guidlow, HighGuid guidhigh, uint32 phaseMask);
 
-        void AddToWorld();
-        virtual void RemoveFromWorld(bool remove) override;
+        void AddToWorld() override;
+        void RemoveFromWorld(bool remove) override;
 
         TransportInfo* GetTransportInfo() const { return m_transportInfo; }
         bool IsBoarded() const { return m_transportInfo != NULL; }

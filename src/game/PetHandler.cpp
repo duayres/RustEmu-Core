@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -145,7 +145,7 @@ void WorldSession::SendPetNameQuery(ObjectGuid petguid, uint32 petnumber)
     Creature* pet = _player->GetMap()->GetAnyTypeCreature(petguid);
     if (!pet || !pet->GetCharmInfo() || pet->GetCharmInfo()->GetPetNumber() != petnumber)
     {
-        WorldPacket data(SMSG_PET_NAME_QUERY_RESPONSE, (4 + 1 + 4 + 1));
+        WorldPacket data(SMSG_PET_NAME_QUERY_RESPONSE, (4+1+4+1));
         data << uint32(petnumber);
         data << uint8(0);
         data << uint32(0);
@@ -163,7 +163,7 @@ void WorldSession::SendPetNameQuery(ObjectGuid petguid, uint32 petnumber)
         sObjectMgr.GetCreatureLocaleStrings(pet->GetEntry(), loc_idx, &name);
     }
 
-    WorldPacket data(SMSG_PET_NAME_QUERY_RESPONSE, (4 + 4 + strlen(name) + 1));
+    WorldPacket data(SMSG_PET_NAME_QUERY_RESPONSE, (4+4+strlen(name)+1));
     data << uint32(petnumber);
     data << name;
     data << uint32(pet->GetUInt32Value(UNIT_FIELD_PET_NAME_TIMESTAMP));
@@ -205,7 +205,7 @@ void WorldSession::HandlePetSetAction(WorldPacket& recv_data)
     }
 
     // pet can have action bar disabled
-    if (pet->IsPet() && charmInfo->HasState(CHARM_STATE_ACTION, ACTIONS_DISABLE))
+    if (pet->IsPet() && charmInfo->HasState(CHARM_STATE_ACTION,ACTIONS_DISABLE))
         return;
 
     // if pet is chained - used first pet action bar
@@ -318,7 +318,7 @@ void WorldSession::HandlePetRename(WorldPacket& recv_data)
     recv_data >> isdeclined;
 
     Pet* pet = _player->GetMap()->GetPet(petGuid);
-    // check it!
+                                                            // check it!
     if (!pet || pet->getPetType() != HUNTER_PET ||
         !pet->HasByteFlag(UNIT_FIELD_BYTES_2, 2, UNIT_CAN_BE_RENAMED) ||
         pet->GetOwnerGuid() != _player->GetObjectGuid() || !pet->GetCharmInfo())

@@ -1621,13 +1621,3 @@ bool Item::CheckSoulboundTradeExpire(Player* owner)
 
     return false;
 }
-
-void Item::AddToWorld()
-{
-    Object::AddToWorld();
-}
-
-void Item::RemoveFromWorld(bool remove)
-{
-    Object::RemoveFromWorld(remove);
-}

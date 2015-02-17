@@ -1019,8 +1019,8 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         virtual void CleanupsBeforeDelete() override;
 
-        void AddToWorld();
-        virtual void RemoveFromWorld(bool remove) override;
+        void AddToWorld() override;
+        void RemoveFromWorld(bool remove) override;
 
         bool TeleportTo(uint32 mapid, float x, float y, float z, float orientation, uint32 options = 0);
 

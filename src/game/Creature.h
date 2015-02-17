@@ -507,8 +507,7 @@ class MANGOS_DLL_SPEC Creature : public Unit
         explicit Creature(CreatureSubtype subtype = CREATURE_SUBTYPE_GENERIC);
         virtual ~Creature();
 
-        void AddToWorld();
-        virtual void RemoveFromWorld(bool remove) override;
+        void AddToWorld() override;
 
         bool Create(uint32 guidlow, CreatureCreatePos& cPos, CreatureInfo const* cinfo, Team team = TEAM_NONE, const CreatureData* data = NULL, GameEventCreatureData const* eventData = NULL);
         bool LoadCreatureAddon(bool reload);
@@ -637,7 +636,7 @@ class MANGOS_DLL_SPEC Creature : public Unit
         // overwrite WorldObject function for proper name localization
         const char* GetNameForLocaleIdx(int32 locale_idx) const override;
 
-        void SetDeathState(DeathState s) override;          // overwrite virtual Unit::SetDeathState
+        void SetDeathState(DeathState s);                   // overwrite virtual Unit::SetDeathState
 
         bool LoadFromDB(uint32 guid, Map* map);
         void SaveToDB();
@@ -735,7 +734,7 @@ class MANGOS_DLL_SPEC Creature : public Unit
         virtual uint8 GetPetAutoSpellSize() const { return CREATURE_MAX_SPELLS; }
         virtual uint32 GetPetAutoSpellOnPos(uint8 pos) const
         {
-            if (pos >= CREATURE_MAX_SPELLS || m_charmInfo->GetCharmSpell(pos)->GetType() != ACT_ENABLED)
+            if (pos >= CREATURE_MAX_SPELLS || !m_charmInfo->GetCharmSpell(pos) || m_charmInfo->GetCharmSpell(pos)->GetType() != ACT_ENABLED)
                 return 0;
             else
                 return m_charmInfo->GetCharmSpell(pos)->GetAction();
