@@ -517,7 +517,7 @@ enum SpellAttributesEx7
     SPELL_ATTR_EX7_UNK13                       = 0x00002000,// 13
     SPELL_ATTR_EX7_UNK14                       = 0x00004000,// 14
     SPELL_ATTR_EX7_UNK15                       = 0x00008000,// 15
-    SPELL_ATTR_EX7_UNK16                       = 0x00010000,// 16
+    SPELL_ATTR_EX7_CAN_RESTORE_SECONDARY_POWER = 0x00010000,// 16 These spells can replenish a powertype, which is not the current powertype.
     SPELL_ATTR_EX7_UNK17                       = 0x00020000,// 17
     SPELL_ATTR_EX7_HAS_CHARGE_EFFECT           = 0x00040000,// 18 Only spell with Charge effect (used for calculate traectory/delay)
     SPELL_ATTR_EX7_UNK19                       = 0x00080000,// 19

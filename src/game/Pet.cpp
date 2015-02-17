@@ -1315,8 +1315,8 @@ void Pet::_LoadAuras(uint32 timediff)
 
             for (int32 i = 0; i < MAX_EFFECT_INDEX; ++i)
             {
-                damage[i] = fields[i+5].GetInt32();
-                periodicTime[i] = fields[i+8].GetUInt32();
+                damage[i] = fields[i + 5].GetInt32();
+                periodicTime[i] = fields[i + 8].GetUInt32();
             }
 
             int32 maxduration = fields[11].GetInt32();
@@ -1326,13 +1326,13 @@ void Pet::_LoadAuras(uint32 timediff)
             SpellEntry const* spellproto = sSpellStore.LookupEntry(spellid);
             if (!spellproto)
             {
-                sLog.outError("Unknown spell (spellid %u), ignore.",spellid);
+                sLog.outError("Unknown spell (spellid %u), ignore.", spellid);
                 continue;
             }
 
             if (casterGuid.IsEmpty() || !casterGuid.IsUnit())
             {
-                sLog.outError("Pet::LoadAuras Unknown caster %llu, ignore.",fields[0].GetUInt64());
+                sLog.outError("Pet::LoadAuras Unknown caster %llu, ignore.", fields[0].GetUInt64());
                 continue;
             }
 
@@ -1342,7 +1342,7 @@ void Pet::_LoadAuras(uint32 timediff)
 
             if (remaintime != -1 && !IsPositiveSpell(spellproto))
             {
-                if (remaintime/IN_MILLISECONDS <= int32(timediff))
+                if (remaintime / IN_MILLISECONDS <= int32(timediff))
                     continue;
 
                 remaintime -= timediff*IN_MILLISECONDS;
@@ -1367,20 +1367,16 @@ void Pet::_LoadAuras(uint32 timediff)
                 if ((effIndexMask & (1 << i)) == 0)
                     continue;
 
-                Aura* aura = CreateAura(spellproto, SpellEffectIndex(i), NULL, holder, this);
+                Aura* aura = holder->CreateAura(spellproto, SpellEffectIndex(i), NULL, holder, (Unit*)this, NULL, NULL);
                 if (!damage[i])
                     damage[i] = aura->GetModifier()->m_amount;
 
                 aura->SetLoadedState(damage[i], periodicTime[i]);
-                holder->AddAura(aura, SpellEffectIndex(i));
             }
 
             if (!holder->IsEmptyHolder())
                 AddSpellAuraHolder(holder);
-            else
-                delete holder;
-        }
-        while (result->NextRow());
+        } while (result->NextRow());
 
         delete result;
     }
@@ -1388,8 +1384,8 @@ void Pet::_LoadAuras(uint32 timediff)
 
 void Pet::_SaveAuras()
 {
-    static SqlStatementID delAuras ;
-    static SqlStatementID insAuras ;
+    static SqlStatementID delAuras;
+    static SqlStatementID insAuras;
 
     SqlStatement stmt = CharacterDatabase.CreateStatement(delAuras, "DELETE FROM pet_aura WHERE guid = ?");
     stmt.PExecute(m_charmInfo->GetPetNumber());
@@ -1403,7 +1399,7 @@ void Pet::_SaveAuras()
         "basepoints0, basepoints1, basepoints2, periodictime0, periodictime1, periodictime2, maxduration, remaintime, effIndexMask) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
-    for(SpellAuraHolderMap::const_iterator itr = auraHolders.begin(); itr != auraHolders.end(); ++itr)
+    for (SpellAuraHolderMap::const_iterator itr = auraHolders.begin(); itr != auraHolders.end(); ++itr)
     {
         if (!itr->second || itr->second->IsDeleted())
             continue;
@@ -1413,8 +1409,8 @@ void Pet::_SaveAuras()
         {
             SpellEntry const* spellInfo = itr->second->GetSpellProto();
             if (spellInfo->EffectApplyAuraName[j] == SPELL_AURA_MOD_STEALTH ||
-                        spellInfo->Effect[j] == SPELL_EFFECT_APPLY_AREA_AURA_OWNER ||
-                        spellInfo->Effect[j] == SPELL_EFFECT_APPLY_AREA_AURA_PET )
+                spellInfo->Effect[j] == SPELL_EFFECT_APPLY_AREA_AURA_OWNER ||
+                spellInfo->Effect[j] == SPELL_EFFECT_APPLY_AREA_AURA_PET)
             {
                 save = false;
                 break;
@@ -1425,11 +1421,11 @@ void Pet::_SaveAuras()
             Unit* owner = GetOwner();
             if (owner)
             {
-                for(PetAuraSet::const_iterator itr1 = owner->m_petAuras.begin(); itr1 != owner->m_petAuras.end(); ++itr1)
+                for (PetAuraSet::const_iterator itr1 = owner->m_petAuras.begin(); itr1 != owner->m_petAuras.end(); ++itr1)
                 {
                     uint32 auraId = (*itr1)->GetAura(GetEntry());
 
-                    if(!auraId)
+                    if (!auraId)
                         continue;
                     if (auraId == itr->second->GetId())
                     {

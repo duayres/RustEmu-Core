@@ -948,11 +948,11 @@ void WorldSession::HandleRequestPartyMemberStatsOpcode(WorldPacket& recv_data)
     data << uint64(auramask);                               // placeholder
     for (uint8 i = 0; i < MAX_AURAS; ++i)
     {
-        if (uint32 aura = player->GetVisibleAura(i))
+        if (SpellAuraHolder* holder = player->GetVisibleAura(i))
         {
             auramask |= (uint64(1) << i);
-            data << uint32(aura);
-            data << uint8(1);
+            data << uint32(holder->GetId());
+            data << uint8(holder->GetAuraFlags());
         }
     }
     data.put<uint64>(maskPos, auramask);                    // GROUP_UPDATE_FLAG_AURAS
@@ -974,11 +974,11 @@ void WorldSession::HandleRequestPartyMemberStatsOpcode(WorldPacket& recv_data)
         data << uint64(petAuraMask);                        // placeholder
         for (uint8 i = 0; i < MAX_AURAS; ++i)
         {
-            if (uint32 petaura = pet->GetVisibleAura(i))
+            if (SpellAuraHolder* holder = pet->GetVisibleAura(i))
             {
                 petAuraMask |= (uint64(1) << i);
-                data << uint32(petaura);
-                data << uint8(1);
+                data << uint32(holder->GetId());
+                data << uint8(holder->GetAuraFlags());
             }
         }
         data.put<uint64>(petMaskPos, petAuraMask);          // GROUP_UPDATE_FLAG_PET_AURAS

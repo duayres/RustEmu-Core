@@ -38,17 +38,6 @@ DynamicObject::DynamicObject() : WorldObject()
     m_valuesCount = DYNAMICOBJECT_END;
 }
 
-void DynamicObject::AddToWorld()
-{
-    ///- Register the dynamicObject for guid lookup
-    WorldObject::AddToWorld();
-}
-
-void DynamicObject::RemoveFromWorld(bool remove)
-{
-    WorldObject::RemoveFromWorld(remove);
-}
-
 bool DynamicObject::Create(uint32 guidlow, Unit* caster, uint32 spellId, SpellEffectIndex effIndex, float x, float y, float z, int32 duration, float radius, DynamicObjectType type)
 {
     WorldObject::_Create(guidlow, HIGHGUID_DYNAMICOBJECT, caster->GetPhaseMask());
@@ -67,9 +56,9 @@ bool DynamicObject::Create(uint32 guidlow, Unit* caster, uint32 spellId, SpellEf
     SetGuidValue(DYNAMICOBJECT_CASTER, caster->GetObjectGuid());
 
     /* Bytes field, so it's really 4 bit fields. These flags are unknown, but we do know that 0x00000001 is set for most.
-       Farsight for example, does not have this flag, instead it has 0x80000002.
-       Flags are set dynamically with some conditions, so one spell may have different flags set, depending on those conditions.
-       The size of the visual may be controlled to some degree with these flags.
+    Farsight for example, does not have this flag, instead it has 0x80000002.
+    Flags are set dynamically with some conditions, so one spell may have different flags set, depending on those conditions.
+    The size of the visual may be controlled to some degree with these flags.
 
     uint32 bytes = 0x00000000;
     bytes |= 0x01;
@@ -132,7 +121,7 @@ void DynamicObject::Update(uint32 /*update_diff*/, uint32 p_time)
 
     if (deleteThis)
     {
-        caster->RemoveDynObjectWithGUID(GetObjectGuid());
+        caster->RemoveDynObjectWithGuid(GetObjectGuid());
         Delete();
     }
 }
@@ -152,7 +141,7 @@ void DynamicObject::Delay(int32 delaytime)
         if (target)
         {
             SpellAuraHolder* holder = target->GetSpellAuraHolder(m_spellId, GetCasterGuid());
-            if (!holder)
+            if (!holder || holder->IsDeleted())
             {
                 ++iter;
                 continue;
@@ -161,7 +150,7 @@ void DynamicObject::Delay(int32 delaytime)
             bool foundAura = false;
             for (int32 i = m_effIndex + 1; i < MAX_EFFECT_INDEX; ++i)
             {
-                if ((holder->GetSpellProto()->Effect[i] == SPELL_EFFECT_PERSISTENT_AREA_AURA || holder->GetSpellProto()->Effect[i] == SPELL_EFFECT_ADD_FARSIGHT) && holder->m_auras[i])
+                if ((holder->GetSpellProto()->Effect[i] == SPELL_EFFECT_PERSISTENT_AREA_AURA || holder->GetSpellProto()->Effect[i] == SPELL_EFFECT_ADD_FARSIGHT) && holder->GetAuraByEffectIndex(SpellEffectIndex(i)))
                 {
                     foundAura = true;
                     break;

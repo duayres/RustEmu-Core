@@ -2111,67 +2111,62 @@ void Player::Regenerate(Powers power, uint32 diff)
 
     switch (power)
     {
-        case POWER_MANA:
-        {
-            if (HasAuraType(SPELL_AURA_STOP_NATURAL_MANA_REGEN))
-                break;
-            bool recentCast = IsUnderLastManaUseEffect();
-            float ManaIncreaseRate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_MANA);
-            if (recentCast)
-            {
-                // Mangos Updates Mana in intervals of 2s, which is correct
-                addvalue = GetFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER) *  ManaIncreaseRate * 2.00f;
-            }
-            else
-            {
-                addvalue = GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER) * ManaIncreaseRate * 2.00f;
-            }
-        }   break;
-        case POWER_RAGE:                                    // Regenerate rage
-        {
-            float RageDecreaseRate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_RAGE_LOSS);
-            addvalue = 20 * RageDecreaseRate;               // 2 rage by tick (= 2 seconds => 1 rage/sec)
-        }   break;
-        case POWER_ENERGY:                                  // Regenerate energy
-        {
-            float EnergyRate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_ENERGY);
-            addvalue = 20 * EnergyRate;
+    case POWER_MANA:
+    {
+        if (HasAuraType(SPELL_AURA_STOP_NATURAL_MANA_REGEN))
             break;
+
+        float ManaIncreaseRate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_MANA);
+        if (IsUnderLastManaUseEffect())
+        {
+            // Mangos Updates Mana in intervals of 2s, which is correct
+            addvalue = GetFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER) *  ManaIncreaseRate * (float)REGEN_TIME_FULL / IN_MILLISECONDS;
         }
-        case POWER_RUNIC_POWER:
+        else
         {
-            float RunicPowerDecreaseRate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_RUNICPOWER_LOSS);
-            addvalue = 30 * RunicPowerDecreaseRate;         // 3 RunicPower by tick
-        }   break;
-        case POWER_RUNE:
-        {
-            if (getClass() != CLASS_DEATH_KNIGHT)
-                break;
+            addvalue = GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER) * ManaIncreaseRate * (float)REGEN_TIME_FULL / IN_MILLISECONDS;
+        }
+        break;
+    }
+    case POWER_RAGE:                                    // Regenerate rage
+    {
+        float RageDecreaseRate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_RAGE_LOSS);
+        addvalue = 20 * RageDecreaseRate;               // 2 rage by tick (= 2 seconds => 1 rage/sec)
+        break;
+    }
+    case POWER_ENERGY:                                  // Regenerate energy
+    {
+        float EnergyRate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_ENERGY);
+        addvalue = 20 * EnergyRate;
+        break;
+    }
+    case POWER_RUNIC_POWER:
+    {
+        float RunicPowerDecreaseRate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_RUNICPOWER_LOSS);
+        addvalue = 30 * RunicPowerDecreaseRate;         // 3 RunicPower by tick
+        break;
+    }
+    case POWER_RUNE:
+    {
+        if (getClass() != CLASS_DEATH_KNIGHT)
+            break;
 
-            for (uint32 rune = 0; rune < MAX_RUNES; ++rune)
+        for (uint32 rune = 0; rune < MAX_RUNES; ++rune)
+        {
+            if (uint16 cd = GetRuneCooldown(rune))       // if we have cooldown, reduce it...
             {
-                if (uint16 cd = GetRuneCooldown(rune))       // if we have cooldown, reduce it...
+                uint32 cd_diff = diff;
+                AuraList const& ModPowerRegenPCTAuras = GetAurasByType(SPELL_AURA_MOD_POWER_REGEN_PERCENT);
+                for (AuraList::const_iterator i = ModPowerRegenPCTAuras.begin(); i != ModPowerRegenPCTAuras.end(); ++i)
                 {
-                    uint32 cd_diff = diff;
-                    AuraList const& ModPowerRegenPCTAuras = GetAurasByType(SPELL_AURA_MOD_POWER_REGEN_PERCENT);
-                    for (AuraList::const_iterator i = ModPowerRegenPCTAuras.begin(); i != ModPowerRegenPCTAuras.end(); ++i)
-                    {
-                        if ((*i)->GetModifier()->m_miscvalue == int32(power) && (*i)->GetMiscBValue() == GetCurrentRune(rune))
-                            cd_diff = cd_diff * ((*i)->GetModifier()->m_amount + 100) / 100;
-                    }
-
-                    SetRuneCooldown(rune, (cd < cd_diff) ? 0 : cd - cd_diff);
-
-                    // check if we don't have cooldown, need convert and that our rune wasn't already converted
-                    if (cd < cd_diff && m_runes->IsRuneNeedsConvert(rune) && GetBaseRune(rune) == GetCurrentRune(rune))
-                    {
-                        // currently all delayed rune converts happen with rune death
-                        // ConvertedBy was initialized at proc
-                        ConvertRune(rune, RUNE_DEATH);
-                        SetNeedConvertRune(rune, false);
-                    }
+                    if ((*i)->GetModifier()->m_miscvalue == int32(power) && (*i)->GetMiscValueB() == GetCurrentRune(rune))
+                        cd_diff = cd_diff * ((*i)->GetModifier()->m_amount + 100) / 100;
                 }
-                else if (m_runes->IsRuneNeedsConvert(rune) && GetBaseRune(rune) == GetCurrentRune(rune))
+
+                SetRuneCooldown(rune, (cd < cd_diff) ? 0 : cd - cd_diff);
+
+                // check if we don't have cooldown, need convert and that our rune wasn't already converted
+                if (cd < cd_diff && m_runes->IsRuneNeedsConvert(rune) && GetBaseRune(rune) == GetCurrentRune(rune))
                 {
                     // currently all delayed rune converts happen with rune death
                     // ConvertedBy was initialized at proc
@@ -2179,39 +2174,50 @@ void Player::Regenerate(Powers power, uint32 diff)
                     SetNeedConvertRune(rune, false);
                 }
             }
-            break;
+            else if (m_runes->IsRuneNeedsConvert(rune) && GetBaseRune(rune) == GetCurrentRune(rune))
+            {
+                // currently all delayed rune converts happen with rune death
+                // ConvertedBy was initialized at proc
+                ConvertRune(rune, RUNE_DEATH);
+                SetNeedConvertRune(rune, false);
+            }
         }
-        case POWER_FOCUS:
-        case POWER_HAPPINESS:
-        case POWER_HEALTH:
-            break;
+        break;
+    }
+    case POWER_FOCUS:
+    case POWER_HAPPINESS:
+    case POWER_HEALTH:
+    default:
+        break;
     }
 
     // Mana regen calculated in Player::UpdateManaRegen()
     // Exist only for POWER_MANA, POWER_ENERGY, POWER_FOCUS auras
-    if (power != POWER_MANA)
+    if (power != POWER_MANA && power != POWER_RUNE)
     {
         AuraList const& ModPowerRegenPCTAuras = GetAurasByType(SPELL_AURA_MOD_POWER_REGEN_PERCENT);
         for (AuraList::const_iterator i = ModPowerRegenPCTAuras.begin(); i != ModPowerRegenPCTAuras.end(); ++i)
+        {
             if ((*i)->GetModifier()->m_miscvalue == int32(power))
-                addvalue *= ((*i)->GetModifier()->m_amount + 100) / 100.0f;
+                addvalue *= float((*i)->GetModifier()->m_amount + 100) / 100.0f;
+        }
     }
 
     // addvalue computed on a 2sec basis. => update to diff time
-    addvalue *= float(diff) / REGEN_TIME_FULL;
+    uint32 uiAddValue = addvalue != 0.0f ? ceil(fabs(addvalue * float(diff) / float(REGEN_TIME_FULL))) : 0;
 
     if (power != POWER_RAGE && power != POWER_RUNIC_POWER)
     {
-        curValue += uint32(addvalue);
+        curValue += uiAddValue;
         if (curValue > maxValue)
             curValue = maxValue;
     }
     else
     {
-        if (curValue <= uint32(addvalue))
+        if (curValue <= uiAddValue)
             curValue = 0;
         else
-            curValue -= uint32(addvalue);
+            curValue -= uiAddValue;
     }
     SetPower(power, curValue);
 }
@@ -5255,7 +5261,7 @@ void Player::UpdateRating(CombatRating cr)
     AuraList const& modRatingFromStat = GetAurasByType(SPELL_AURA_MOD_RATING_FROM_STAT);
     for (AuraList::const_iterator i = modRatingFromStat.begin(); i != modRatingFromStat.end(); ++i)
         if ((*i)->GetMiscValue() & (1 << cr))
-            amount += int32(GetStat(Stats((*i)->GetMiscBValue())) * (*i)->GetModifier()->m_amount / 100.0f);
+            amount += int32(GetStat(Stats((*i)->GetMiscValueB())) * (*i)->GetModifier()->m_amount / 100.0f);
     if (amount < 0)
         amount = 0;
     SetUInt32Value(PLAYER_FIELD_COMBAT_RATING_1 + cr, uint32(amount));
@@ -5776,14 +5782,14 @@ void Player::SetSkill(uint16 id, uint16 currVal, uint16 maxVal, uint16 step /*=0
                 SetUInt32Value(PLAYER_SKILL_BONUS_INDEX(i), 0);
 
                 // temporary bonuses
-                AuraList const& mModSkill = GetAurasByType(SPELL_AURA_MOD_SKILL);
-                for (AuraList::const_iterator j = mModSkill.begin(); j != mModSkill.end(); ++j)
+                AuraList& mModSkill = GetAurasByType(SPELL_AURA_MOD_SKILL);
+                for (AuraList::iterator j = mModSkill.begin(); j != mModSkill.end(); ++j)
                     if ((*j)->GetModifier()->m_miscvalue == int32(id))
                         (*j)->ApplyModifier(true);
 
                 // permanent bonuses
-                AuraList const& mModSkillTalent = GetAurasByType(SPELL_AURA_MOD_SKILL_TALENT);
-                for (AuraList::const_iterator j = mModSkillTalent.begin(); j != mModSkillTalent.end(); ++j)
+                AuraList& mModSkillTalent = GetAurasByType(SPELL_AURA_MOD_SKILL_TALENT);
+                for (AuraList::iterator j = mModSkillTalent.begin(); j != mModSkillTalent.end(); ++j)
                     if ((*j)->GetModifier()->m_miscvalue == int32(id))
                         (*j)->ApplyModifier(true);
 
@@ -7430,17 +7436,17 @@ void Player::_ApplyItemBonuses(ItemPrototype const* proto, uint8 slot, bool appl
 
 void Player::_ApplyWeaponDependentAuraMods(Item* item, WeaponAttackType attackType, bool apply)
 {
-    AuraList const& auraCritList = GetAurasByType(SPELL_AURA_MOD_CRIT_PERCENT);
-    for (AuraList::const_iterator itr = auraCritList.begin(); itr != auraCritList.end(); ++itr)
-        _ApplyWeaponDependentAuraCritMod(item, attackType, *itr, apply);
+    AuraList& auraCritList = GetAurasByType(SPELL_AURA_MOD_CRIT_PERCENT);
+    for (AuraList::iterator itr = auraCritList.begin(); itr != auraCritList.end(); ++itr)
+        _ApplyWeaponDependentAuraCritMod(item, attackType, (*itr)(), apply);
 
-    AuraList const& auraDamageFlatList = GetAurasByType(SPELL_AURA_MOD_DAMAGE_DONE);
-    for (AuraList::const_iterator itr = auraDamageFlatList.begin(); itr != auraDamageFlatList.end(); ++itr)
-        _ApplyWeaponDependentAuraDamageMod(item, attackType, *itr, apply);
+    AuraList& auraDamageFlatList = GetAurasByType(SPELL_AURA_MOD_DAMAGE_DONE);
+    for (AuraList::iterator itr = auraDamageFlatList.begin(); itr != auraDamageFlatList.end(); ++itr)
+        _ApplyWeaponDependentAuraDamageMod(item, attackType, (*itr)(), apply);
 
-    AuraList const& auraDamagePCTList = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
-    for (AuraList::const_iterator itr = auraDamagePCTList.begin(); itr != auraDamagePCTList.end(); ++itr)
-        _ApplyWeaponDependentAuraDamageMod(item, attackType, *itr, apply);
+    AuraList& auraDamagePCTList = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
+    for (AuraList::iterator itr = auraDamagePCTList.begin(); itr != auraDamagePCTList.end(); ++itr)
+        _ApplyWeaponDependentAuraDamageMod(item, attackType, (*itr)(), apply);
 }
 
 void Player::_ApplyWeaponDependentAuraCritMod(Item* item, WeaponAttackType attackType, Aura* aura, bool apply)
@@ -16085,9 +16091,9 @@ void Player::_LoadActions(QueryResult* result)
 
 void Player::_LoadAuras(QueryResult* result, uint32 timediff)
 {
-    // RemoveAllAuras(); -- some spells casted before aura load, for example in LoadSkills, aura list explicitly cleaned early
+    //RemoveAllAuras(); -- some spells casted before aura load, for example in LoadSkills, aura list explicitly cleaned early
 
-    // QueryResult *result = CharacterDatabase.PQuery("SELECT caster_guid,item_guid,spell,stackcount,remaincharges,basepoints0,basepoints1,basepoints2,periodictime0,periodictime1,periodictime2,maxduration,remaintime,effIndexMask FROM character_aura WHERE guid = '%u'",GetGUIDLow());
+    //QueryResult *result = CharacterDatabase.PQuery("SELECT caster_guid,item_guid,spell,stackcount,remaincharges,basepoints0,basepoints1,basepoints2,periodictime0,periodictime1,periodictime2,maxduration,remaintime,effIndexMask FROM character_aura WHERE guid = '%u'",GetGUIDLow());
 
     if (result)
     {
@@ -16119,12 +16125,18 @@ void Player::_LoadAuras(QueryResult* result, uint32 timediff)
                 continue;
             }
 
+            if (caster_guid.IsEmpty() || !caster_guid.IsUnit())
+            {
+                sLog.outError("Player::LoadAuras Unknown caster %lu, ignore.", fields[0].GetUInt64());
+                continue;
+            }
+
             if (remaintime != -1 && !IsPositiveSpell(spellproto))
             {
                 if (remaintime / IN_MILLISECONDS <= int32(timediff))
                     continue;
 
-                remaintime -= timediff * IN_MILLISECONDS;
+                remaintime -= timediff*IN_MILLISECONDS;
             }
 
             // prevent wrong values of remaincharges
@@ -16146,12 +16158,12 @@ void Player::_LoadAuras(QueryResult* result, uint32 timediff)
                 if ((effIndexMask & (1 << i)) == 0)
                     continue;
 
-                Aura* aura = CreateAura(spellproto, SpellEffectIndex(i), NULL, holder, this);
+                Aura* aura = holder->CreateAura(spellproto, SpellEffectIndex(i), NULL, holder, this, NULL, NULL);
+
                 if (!damage[i])
                     damage[i] = aura->GetModifier()->m_amount;
 
                 aura->SetLoadedState(damage[i], periodicTime[i]);
-                holder->AddAura(aura, SpellEffectIndex(i));
             }
 
             if (!holder->IsEmptyHolder())
@@ -16163,10 +16175,7 @@ void Player::_LoadAuras(QueryResult* result, uint32 timediff)
                 AddSpellAuraHolder(holder);
                 DETAIL_LOG("Added auras from spellid %u", spellproto->Id);
             }
-            else
-                delete holder;
-        }
-        while (result->NextRow());
+        } while (result->NextRow());
         delete result;
     }
 
@@ -18686,25 +18695,23 @@ void Player::AddSpellMod(Aura* aura, bool apply)
     Modifier const* mod = aura->GetModifier();
     Opcodes opcode = (mod->m_auraname == SPELL_AURA_ADD_FLAT_MODIFIER) ? SMSG_SET_FLAT_SPELL_MODIFIER : SMSG_SET_PCT_SPELL_MODIFIER;
 
-    for (int eff = 0; eff < 96; ++eff)
+    for (uint8 eff = 0; eff < 96; ++eff)
     {
-        uint64 _mask = 0;
-        uint32 _mask2 = 0;
-
-        if (eff < 64)
-            _mask = uint64(1) << (eff - 0);
-        else
-            _mask2 = uint32(1) << (eff - 64);
-
-        if (aura->GetAuraSpellClassMask().IsFitToFamilyMask(_mask, _mask2))
+        if (aura->GetAuraSpellClassMask().test(eff))
         {
             int32 val = 0;
             for (AuraList::const_iterator itr = m_spellMods[mod->m_miscvalue].begin(); itr != m_spellMods[mod->m_miscvalue].end(); ++itr)
             {
-                if ((*itr)->GetModifier()->m_auraname == mod->m_auraname && ((*itr)->GetAuraSpellClassMask().IsFitToFamilyMask(_mask, _mask2)))
+                if (itr->IsEmpty())
+                    continue;
+
+                if ((*itr)->GetModifier()->m_auraname == mod->m_auraname && ((*itr)->GetAuraSpellClassMask().test(eff)))
                     val += (*itr)->GetModifier()->m_amount;
             }
-            val += apply ? mod->m_amount : -(mod->m_amount);
+
+            // Not need manually remove m_amount from total value - his already removed from calculation due to removed from SpellAuraHolder (IsEmpty() method)
+            val += apply ? mod->m_amount : 0;
+
             WorldPacket data(opcode, (1 + 1 + 4));
             data << uint8(eff);
             data << uint8(mod->m_miscvalue);
@@ -18719,7 +18726,7 @@ void Player::AddSpellMod(Aura* aura, bool apply)
         m_spellMods[mod->m_miscvalue].remove(aura);
 }
 
-template <class T> T Player::ApplySpellMod(uint32 spellId, SpellModOp op, T& basevalue, Spell const* /*spell*/)
+template <class T> T Player::ApplySpellMod(uint32 spellId, SpellModOp op, T &basevalue)
 {
     SpellEntry const* spellInfo = sSpellStore.LookupEntry(spellId);
     if (!spellInfo)
@@ -18727,40 +18734,41 @@ template <class T> T Player::ApplySpellMod(uint32 spellId, SpellModOp op, T& bas
 
     int32 totalpct = 0;
     int32 totalflat = 0;
-    for (AuraList::iterator itr = m_spellMods[op].begin(); itr != m_spellMods[op].end(); ++itr)
+    for (AuraList::const_iterator itr = m_spellMods[op].begin(); itr != m_spellMods[op].end(); ++itr)
     {
-        Aura* aura = *itr;
+        if (itr->IsEmpty())
+            continue;
 
-        Modifier const* mod = aura->GetModifier();
+        Modifier const* mod = (*itr)->GetModifier();
 
-        if (!aura->isAffectedOnSpell(spellInfo))
+        if (!(*itr)->isAffectedOnSpell(spellInfo))
             continue;
 
         if (mod->m_auraname == SPELL_AURA_ADD_FLAT_MODIFIER)
             totalflat += mod->m_amount;
         else
         {
-            // skip percent mods for null basevalue (most important for spell mods with charges )
+            // skip percent mods for null basevalue (most important for spell mods with charges)
             if (basevalue == T(0))
                 continue;
 
             // special case (skip >10sec spell casts for instant cast setting)
             if (mod->m_miscvalue == SPELLMOD_CASTING_TIME
-                    && basevalue >= T(10 * IN_MILLISECONDS) && mod->m_amount <= -100)
+                && basevalue >= T(10 * IN_MILLISECONDS) && mod->m_amount <= -100)
                 continue;
 
             totalpct += mod->m_amount;
         }
     }
 
-    float diff = (float)basevalue * (float)totalpct / 100.0f + (float)totalflat;
+    float diff = (float)basevalue*(float)totalpct / 100.0f + (float)totalflat;
     basevalue = T((float)basevalue + diff);
     return T(diff);
 }
 
-template int32 Player::ApplySpellMod<int32>(uint32 spellId, SpellModOp op, int32& basevalue, Spell const* spell);
-template uint32 Player::ApplySpellMod<uint32>(uint32 spellId, SpellModOp op, uint32& basevalue, Spell const* spell);
-template float Player::ApplySpellMod<float>(uint32 spellId, SpellModOp op, float& basevalue, Spell const* spell);
+template int32 Player::ApplySpellMod<int32>(uint32 spellId, SpellModOp op, int32 &basevalue);
+template uint32 Player::ApplySpellMod<uint32>(uint32 spellId, SpellModOp op, uint32 &basevalue);
+template float Player::ApplySpellMod<float>(uint32 spellId, SpellModOp op, float &basevalue);
 
 // send Proficiency
 void Player::SendProficiency(ItemClass itemClass, uint32 itemSubclassMask)
@@ -20301,9 +20309,10 @@ void Player::SendInitialPacketsAfterAddToMap()
         SPELL_AURA_FEATHER_FALL, SPELL_AURA_HOVER,                     SPELL_AURA_SAFE_FALL,
         SPELL_AURA_FLY,          SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED,  SPELL_AURA_NONE
     };
+
     for (AuraType const* itr = &auratypes[0]; itr && itr[0] != SPELL_AURA_NONE; ++itr)
     {
-        Unit::AuraList const& auraList = GetAurasByType(*itr);
+        Unit::AuraList& auraList = GetAurasByType(*itr);
         if (!auraList.empty())
             auraList.front()->ApplyModifier(true, true);
     }
@@ -20541,15 +20550,17 @@ void Player::learnSkillRewardedSpells(uint32 skill_id, uint32 skill_value)
 
 void Player::SendAurasForTarget(Unit* target)
 {
+    if (!target)
+        return;
+
     WorldPacket data(SMSG_AURA_UPDATE_ALL);
     data << target->GetPackGUID();
 
-    Unit::VisibleAuraMap const& visibleAuras = target->GetVisibleAuras();
-    for (Unit::VisibleAuraMap::const_iterator itr = visibleAuras.begin(); itr != visibleAuras.end(); ++itr)
+    for (uint8 slot = 0; slot < MAX_AURAS; ++slot)
     {
-        SpellAuraHolderConstBounds bounds = target->GetSpellAuraHolderBounds(itr->second);
-        for (SpellAuraHolderMap::const_iterator iter = bounds.first; iter != bounds.second; ++iter)
-            iter->second->BuildUpdatePacket(data);
+        SpellAuraHolder* const vAura = target->GetVisibleAura(slot);
+        if (vAura)
+            vAura->BuildUpdatePacket(data);
     }
 
     GetSession()->SendPacket(&data);
@@ -21904,7 +21915,7 @@ uint32 Player::GetRuneBaseCooldown(uint8 index) const
     AuraList const& modRegens = GetAurasByType(SPELL_AURA_MOD_POWER_REGEN_PERCENT);
     for (AuraList::const_iterator itr = modRegens.begin(); itr != modRegens.end(); ++itr)
     {
-        if ((*itr)->GetModifier()->m_miscvalue == POWER_RUNE && (*itr)->GetMiscBValue() == rune)
+        if ((*itr)->GetModifier()->m_miscvalue == POWER_RUNE && (*itr)->GetMiscValueB() == rune)
             cooldown = cooldown * (100 - (*itr)->GetModifier()->m_amount) / 100;
     }
 

@@ -4029,7 +4029,7 @@ bool ChatHandler::HandleAuraCommand(char* args)
         return false;
 
     if (!IsSpellAppliesAura(spellInfo) &&
-            !IsSpellHaveEffect(spellInfo, SPELL_EFFECT_PERSISTENT_AREA_AURA))
+        !IsSpellHaveEffect(spellInfo, SPELL_EFFECT_PERSISTENT_AREA_AURA))
     {
         PSendSysMessage(LANG_SPELL_NO_HAVE_AURAS, spellID);
         SetSentErrorMessage(true);
@@ -4043,12 +4043,11 @@ bool ChatHandler::HandleAuraCommand(char* args)
         uint8 eff = spellInfo->Effect[i];
         if (eff >= TOTAL_SPELL_EFFECTS)
             continue;
-        if (IsAreaAuraEffect(eff)           ||
-                eff == SPELL_EFFECT_APPLY_AURA  ||
-                eff == SPELL_EFFECT_PERSISTENT_AREA_AURA)
+        if (IsAreaAuraEffect(eff) ||
+            eff == SPELL_EFFECT_APPLY_AURA ||
+            eff == SPELL_EFFECT_PERSISTENT_AREA_AURA)
         {
-            Aura* aur = CreateAura(spellInfo, SpellEffectIndex(i), NULL, holder, target);
-            holder->AddAura(aur, SpellEffectIndex(i));
+            holder->CreateAura(spellInfo, SpellEffectIndex(i), NULL, holder, target, NULL, NULL);
         }
     }
     target->AddSpellAuraHolder(holder);

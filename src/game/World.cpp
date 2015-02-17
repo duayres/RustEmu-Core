@@ -561,6 +561,10 @@ void World::LoadConfigSettings(bool reload)
     
     setConfigMinMax(CONFIG_UINT32_START_PLAYER_MONEY, "StartPlayerMoney", 0, 0, MAX_MONEY_AMOUNT);
 
+    setConfigMinMax(CONFIG_UINT32_GEAR_CALC_BASE, "Player.GSCalculationBase", 190, 1, 384);
+
+    setConfigMinMax(CONFIG_FLOAT_CROWDCONTROL_HP_BASE, "CrowdControlHPBase", 0.1f, 0.0f, 1.0f);
+
     // resistance calculation options
     setConfigMinMax(CONFIG_UINT32_RESIST_CALC_METHOD, "Resistance.CalculationMethod", 1, 0, 1);
     setConfig(CONFIG_BOOL_RESIST_ADD_BY_OVER_LEVEL, "Resistance.AddByOverLevel", false);

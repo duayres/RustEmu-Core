@@ -42,6 +42,7 @@
 #include "DBCStructure.h"
 #include "Path.h"
 #include "WorldPacket.h"
+#include "SpellAuras.h"
 #include "Timer.h"
 #include <list>
 
@@ -166,7 +167,7 @@ enum UnitStandFlags
 {
     UNIT_STAND_FLAGS_UNK1         = 0x01,
     UNIT_STAND_FLAGS_CREEP        = 0x02,
-    UNIT_STAND_FLAGS_UNK3         = 0x04,
+    UNIT_STAND_FLAGS_UNTRACKABLE  = 0x04,
     UNIT_STAND_FLAGS_UNK4         = 0x08,
     UNIT_STAND_FLAGS_UNK5         = 0x10,
     UNIT_STAND_FLAGS_ALL          = 0xFF
@@ -176,8 +177,8 @@ enum UnitStandFlags
 enum UnitBytes1_Flags
 {
     UNIT_BYTE1_FLAG_ALWAYS_STAND = 0x01,
-    UNIT_BYTE1_FLAG_FLY_ANIM     = 0x02,                    // Creature that can fly and are not on the ground appear to have this flag. If they are on the ground, flag is not present.
-    UNIT_BYTE1_FLAG_UNTRACKABLE  = 0x04,
+    UNIT_BYTE1_FLAG_HOVER        = 0x02,                    // Creature that can fly and are not on the ground appear to have this flag. If they are on the ground, flag is not present.
+    UNIT_BYTE1_FLAG_UNK_3        = 0x04,
     UNIT_BYTE1_FLAG_ALL          = 0xFF
 };
 
@@ -276,12 +277,11 @@ struct Modifier;
 struct SpellEntry;
 struct SpellEntryExt;
 
-class Aura;
-class SpellAuraHolder;
 class Creature;
 class Spell;
 class DynamicObject;
 class GameObject;
+class SpellCastTargets;
 class Item;
 class Pet;
 class PetAura;
@@ -320,19 +320,6 @@ enum DamageTypeToSchool
     RESISTANCE,
     DAMAGE_DEALT,
     DAMAGE_TAKEN
-};
-
-enum AuraRemoveMode
-{
-    AURA_REMOVE_BY_DEFAULT,
-    AURA_REMOVE_BY_STACK,                                   // at replace by similar aura
-    AURA_REMOVE_BY_CANCEL,
-    AURA_REMOVE_BY_DISPEL,
-    AURA_REMOVE_BY_DEATH,
-    AURA_REMOVE_BY_DELETE,                                  // use for speedup and prevent unexpected effects at player logout/pet unsummon (must be used _only_ after save), delete.
-    AURA_REMOVE_BY_SHIELD_BREAK,                            // when absorb shield is removed by damage, heal absorb debuf
-    AURA_REMOVE_BY_EXPIRE,                                  // at duration end
-    AURA_REMOVE_BY_TRACKING,                                // aura is removed because of a conflicting tracked aura
 };
 
 enum UnitMods
@@ -378,6 +365,7 @@ enum BaseModGroup
     RANGED_CRIT_PERCENTAGE,
     OFFHAND_CRIT_PERCENTAGE,
     SHIELD_BLOCK_VALUE,
+    NONSTACKING_CRIT_PERCENTAGE,
     BASEMOD_END
 };
 
@@ -994,7 +982,7 @@ enum SpellAuraProcResult
     SPELL_AURA_PROC_CANT_TRIGGER    = 2                     // aura can't trigger - skip charges taking, move to next aura if exists
 };
 
-typedef SpellAuraProcResult(Unit::*pAuraProcHandler)(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+typedef SpellAuraProcResult(Unit::*pAuraProcHandler)(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
 extern pAuraProcHandler AuraProcHandler[TOTAL_AURAS];
 
 #define MAX_DECLINED_NAME_CASES 5
@@ -1254,15 +1242,15 @@ struct SpellProcEventEntry;                                 // used only private
 class MANGOS_DLL_SPEC Unit : public WorldObject
 {
     public:
-        typedef std::multimap<uint32 /*spellId*/, SpellAuraHolder*> SpellAuraHolderMap;
+        typedef UNORDERED_MULTIMAP<uint32 /*spellId*/, SpellAuraHolder*> SpellAuraHolderMap;
         typedef std::pair<SpellAuraHolderMap::iterator, SpellAuraHolderMap::iterator> SpellAuraHolderBounds;
         typedef std::pair<SpellAuraHolderMap::const_iterator, SpellAuraHolderMap::const_iterator> SpellAuraHolderConstBounds;
-        typedef std::list<SpellAuraHolder*> SpellAuraHolderList;
-        typedef std::list<Aura*> AuraList;
+        typedef std::queue<SpellAuraHolder*> SpellAuraHolderQueue;
+        typedef std::list<AuraPair> AuraList;
         typedef std::list<DiminishingReturn> Diminishing;
-        typedef std::set<ObjectGuid> ComboPointHolderSet;
-        typedef std::map<uint8 /*slot*/, uint32 /*spellId*/> VisibleAuraMap;
-        typedef std::map<SpellEntry const*, ObjectGuid /*targetGuid*/> TrackedAuraTargetMap;
+        typedef UNORDERED_SET<ObjectGuid> ComboPointHolderSet;
+        typedef std::vector<SpellAuraHolder*> VisibleAuraMap;
+        typedef UNORDERED_MAP<SpellEntry const*, ObjectGuid /*targetGuid*/> TrackedAuraTargetMap;
         typedef UNORDERED_SET<uint32> SpellIdSet;
 
         virtual ~Unit();
@@ -1512,7 +1500,8 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         // faction template id
         uint32 getFaction() const { return GetUInt32Value(UNIT_FIELD_FACTIONTEMPLATE); }
-        void setFaction(uint32 faction) { SetUInt32Value(UNIT_FIELD_FACTIONTEMPLATE, faction); }
+        uint32 GetOriginalFaction() const { return m_originalFaction; }
+        void setFaction(uint32 faction) { if (!m_originalFaction) m_originalFaction = faction; SetUInt32Value(UNIT_FIELD_FACTIONTEMPLATE, faction); }
         FactionTemplateEntry const* getFactionTemplateEntry() const;
         void RestoreOriginalFaction();
         bool IsHostileTo(Unit const* unit) const override;
@@ -1664,6 +1653,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         bool HasAuraType(AuraType auraType) const;
         bool HasAuraTypeWithCaster(AuraType auraType, ObjectGuid casterGuid) const;
+        bool HasNegativeAuraType(AuraType auraType) const;
         bool HasAffectedAura(AuraType auraType, SpellEntry const* spellProto) const;
         bool HasAura(uint32 spellId, SpellEffectIndex effIndex) const;
         bool HasAura(uint32 spellId) const
@@ -1679,7 +1669,9 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         bool isFeared()  const { return HasAuraType(SPELL_AURA_MOD_FEAR); }
         bool isInRoots() const { return HasAuraType(SPELL_AURA_MOD_ROOT); }
         bool IsPolymorphed() const;
+
         bool IsCrowdControlled() const;
+
         bool isFrozen() const;
         bool IsIgnoreUnitState(SpellEntry const* spell, IgnoreUnitState ignoreState);
 
@@ -1694,12 +1686,12 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         void SendEnergizeSpellLog(Unit* pVictim, uint32 SpellID, uint32 Damage, Powers powertype);
         void EnergizeBySpell(Unit* pVictim, uint32 SpellID, uint32 Damage, Powers powertype);
         uint32 SpellNonMeleeDamageLog(Unit* pVictim, uint32 spellID, uint32 damage);
-        void CastSpell(Unit* Victim, uint32 spellId, bool triggered, Item* castItem = NULL, Aura* triggeredByAura = NULL, ObjectGuid originalCaster = ObjectGuid(), SpellEntry const* triggeredBy = NULL);
-        void CastSpell(Unit* Victim, SpellEntry const* spellInfo, bool triggered, Item* castItem = NULL, Aura* triggeredByAura = NULL, ObjectGuid originalCaster = ObjectGuid(), SpellEntry const* triggeredBy = NULL);
-        void CastCustomSpell(Unit* Victim, uint32 spellId, int32 const* bp0, int32 const* bp1, int32 const* bp2, bool triggered, Item* castItem = NULL, Aura* triggeredByAura = NULL, ObjectGuid originalCaster = ObjectGuid(), SpellEntry const* triggeredBy = NULL);
-        void CastCustomSpell(Unit* Victim, SpellEntry const* spellInfo, int32 const* bp0, int32 const* bp1, int32 const* bp2, bool triggered, Item* castItem = NULL, Aura* triggeredByAura = NULL, ObjectGuid originalCaster = ObjectGuid(), SpellEntry const* triggeredBy = NULL);
-        void CastSpell(float x, float y, float z, uint32 spellId, bool triggered, Item* castItem = NULL, Aura* triggeredByAura = NULL, ObjectGuid originalCaster = ObjectGuid(), SpellEntry const* triggeredBy = NULL);
-        void CastSpell(float x, float y, float z, SpellEntry const* spellInfo, bool triggered, Item* castItem = NULL, Aura* triggeredByAura = NULL, ObjectGuid originalCaster = ObjectGuid(), SpellEntry const* triggeredBy = NULL);
+        void CastSpell(Unit* Victim, uint32 spellId, bool triggered, Item* castItem = NULL, Aura const* triggeredByAura = NULL, ObjectGuid originalCaster = ObjectGuid(), SpellEntry const* triggeredBy = NULL);
+        void CastSpell(Unit* Victim, SpellEntry const* spellInfo, bool triggered, Item* castItem = NULL, Aura const* triggeredByAura = NULL, ObjectGuid originalCaster = ObjectGuid(), SpellEntry const* triggeredBy = NULL);
+        void CastCustomSpell(Unit* Victim, uint32 spellId, int32 const* bp0, int32 const* bp1, int32 const* bp2, bool triggered, Item* castItem = NULL, Aura const* triggeredByAura = NULL, ObjectGuid originalCaster = ObjectGuid(), SpellEntry const* triggeredBy = NULL);
+        void CastCustomSpell(Unit* Victim, SpellEntry const* spellInfo, int32 const* bp0, int32 const* bp1, int32 const* bp2, bool triggered, Item* castItem = NULL, Aura const* triggeredByAura = NULL, ObjectGuid originalCaster = ObjectGuid(), SpellEntry const* triggeredBy = NULL);
+        void CastSpell(float x, float y, float z, uint32 spellId, bool triggered, Item* castItem = NULL, Aura const* triggeredByAura = NULL, ObjectGuid originalCaster = ObjectGuid(), SpellEntry const* triggeredBy = NULL);
+        void CastSpell(float x, float y, float z, SpellEntry const* spellInfo, bool triggered, Item* castItem = NULL, Aura const* triggeredByAura = NULL, ObjectGuid originalCaster = ObjectGuid(), SpellEntry const* triggeredBy = NULL);
 
         void DeMorph();
 
@@ -1831,15 +1823,19 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         bool CheckAllControlledUnits(Func const& func, uint32 controlledMask) const;
 
         bool AddSpellAuraHolder(SpellAuraHolder* holder);
-        void AddAuraToModList(Aura* aura);
+        void AddAuraToModList(Aura *aura);
 
+        SpellAuraHolder* _AddAura(uint32 spellID, uint32 duration = 60000, Unit* caster = NULL);
         float CheckAuraStackingAndApply(Aura *Aur, UnitMods unitMod, UnitModifierType modifierType, float amount, bool apply, int32 miscMask = 0, int32 miscValue = 0);
+
         // removing specific aura stack
         void RemoveAura(Aura* aura, AuraRemoveMode mode = AURA_REMOVE_BY_DEFAULT);
         void RemoveAura(uint32 spellId, SpellEffectIndex effindex, Aura* except = NULL);
         void RemoveSpellAuraHolder(SpellAuraHolder* holder, AuraRemoveMode mode = AURA_REMOVE_BY_DEFAULT);
         void RemoveSingleAuraFromSpellAuraHolder(SpellAuraHolder* holder, SpellEffectIndex index, AuraRemoveMode mode = AURA_REMOVE_BY_DEFAULT);
         void RemoveSingleAuraFromSpellAuraHolder(uint32 id, SpellEffectIndex index, ObjectGuid casterGuid, AuraRemoveMode mode = AURA_REMOVE_BY_DEFAULT);
+
+        bool AddSpellAuraHolderToRemoveList(SpellAuraHolder* holder);
 
         // removing specific aura stacks by diff reasons and selections
         void RemoveAurasDueToSpell(uint32 spellId, SpellAuraHolder* except = NULL, AuraRemoveMode mode = AURA_REMOVE_BY_DEFAULT);
@@ -1867,11 +1863,18 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         void RemoveAllAurasOnEvade();
 
         void HandleArenaPreparation(bool apply);
+        bool RemoveSpellsCausingAuraByCaster(AuraType auraType, ObjectGuid casterGuid, AuraRemoveMode mode = AURA_REMOVE_BY_DEFAULT);
+
+        // Method for enable-disable auras (currently - passive only) affect
+        void TriggerPassiveAurasWithAttribute(bool active, uint32 flags);
+
         // removing specific aura FROM stack by diff reasons and selections
         void RemoveAuraHolderFromStack(uint32 spellId, uint32 stackAmount = 1, ObjectGuid casterGuid = ObjectGuid(), AuraRemoveMode mode = AURA_REMOVE_BY_DEFAULT);
-        void RemoveAuraHolderDueToSpellByDispel(uint32 spellId, uint32 stackAmount, ObjectGuid casterGuid, Unit* dispeller);
+        void RemoveAuraHolderDueToSpellByDispel(uint32 spellId, uint32 stackAmount, ObjectGuid casterGuid, Unit *dispeller);
 
         void DelaySpellAuraHolder(uint32 spellId, int32 delaytime, ObjectGuid casterGuid);
+
+        bool HasMorePoweredBuff(uint32 spellId);
 
         float GetResistanceBuffMods(SpellSchools school, bool positive) const { return GetFloatValue(positive ? UNIT_FIELD_RESISTANCEBUFFMODSPOSITIVE + school : UNIT_FIELD_RESISTANCEBUFFMODSNEGATIVE + school); }
         void SetResistanceBuffMods(SpellSchools school, bool positive, float val) { SetFloatValue(positive ? UNIT_FIELD_RESISTANCEBUFFMODSPOSITIVE + school : UNIT_FIELD_RESISTANCEBUFFMODSNEGATIVE + school, val); }
@@ -1938,6 +1941,9 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
                    form != FORM_SHADOW;
         }
 
+        virtual uint32 GetModelForForm(SpellShapeshiftFormEntry const* ssEntry) const;
+        uint32 GetModelForForm() const;     // for current form
+
         float m_modMeleeHitChance;
         float m_modRangedHitChance;
         float m_modSpellHitChance;
@@ -1983,7 +1989,6 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         // common function for visibility checks for player/creatures with detection code
         bool isVisibleForOrDetect(Unit const* u, WorldObject const* viewPoint, bool detect, bool inVisibleList = false, bool is3dDistance = true, bool skipLOScheck = false) const;
-        bool HasMorePoweredBuff(uint32 spellId);
         bool canDetectInvisibilityOf(Unit const* u) const;
         void SetPhaseMask(uint32 newPhaseMask, bool update) override;// overwrite WorldObject::SetPhaseMask
         bool IsVisibleTargetForSpell(WorldObject const* caster, SpellEntry const* spellInfo, WorldLocation const* location = NULL) const;
@@ -2007,30 +2012,21 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         bool SelectHostileTarget();
         void TauntApply(Unit* pVictim);
         void TauntFadeOut(Unit* taunter);
+
         void FixateTarget(Unit* pVictim);
-        ObjectGuid GetFixateTargetGuid() const { return m_fixateTargetGuid; }
+        ObjectGuid const& GetFixatedTargetGuid() { return m_fixateTargetGuid; };
+        Unit* GetFixatedTarget();
+
         ThreatManager& getThreatManager() { return m_ThreatManager; }
         ThreatManager const& getThreatManager() const { return m_ThreatManager; }
         void addHatedBy(HostileReference* pHostileReference) { m_HostileRefManager.insertFirst(pHostileReference); };
         void removeHatedBy(HostileReference* /*pHostileReference*/) { /* nothing to do yet */ }
         HostileRefManager& getHostileRefManager() { return m_HostileRefManager; }
 
-        uint32 GetVisibleAura(uint8 slot) const
-        {
-            VisibleAuraMap::const_iterator itr = m_visibleAuras.find(slot);
-            if (itr != m_visibleAuras.end())
-                return itr->second;
-            return 0;
-        }
-        void SetVisibleAura(uint8 slot, uint32 spellid)
-        {
-            if (spellid == 0)
-                m_visibleAuras.erase(slot);
-            else
-                m_visibleAuras[slot] = spellid;
-        }
+        SpellAuraHolder* GetVisibleAura(uint8 slot) const;
+        void SetVisibleAura(uint8 slot, SpellAuraHolder* holder);
         VisibleAuraMap const& GetVisibleAuras() const { return m_visibleAuras; }
-        uint8 GetVisibleAurasCount() const { return m_visibleAuras.size(); }
+        uint8 GetVisibleAurasCount() const;
 
         Aura* GetAura(uint32 spellId, SpellEffectIndex effindex);
         Aura* GetAura(AuraType type, SpellFamily family, ClassFamilyMask const& classMask, ObjectGuid casterGuid = ObjectGuid());
@@ -2045,8 +2041,8 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
             return GetAura(type, family, ClassFamilyMask::create<CFM_VALUES_1>(), casterGuid);
         }
 
-        Aura* GetTriggeredByClientAura(uint32 spellId) const;
         Aura* GetScalingAura(AuraType type, uint32 stat = 0);
+        Aura const* GetTriggeredByClientAura(uint32 spellId);
 
         SpellAuraHolder* GetSpellAuraHolder(uint32 spellid) const;
         SpellAuraHolder* GetSpellAuraHolder(uint32 spellid, ObjectGuid casterGUID) const;
@@ -2079,7 +2075,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         float GetTotalAuraScriptedMultiplierForDamageTaken(SpellEntry const* spellInfo) const;
         float GetTotalAuraScriptedMultiplierForDamageDone(SpellEntry const* spellInfo) const;
 
-        Aura* GetDummyAura(uint32 spell_id) const;
+        Aura const* GetDummyAura(uint32 spell_id) const;
 
         uint32 m_AuraFlags;
 
@@ -2094,11 +2090,12 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         void UpdateModelData();
         void SendCollisionHeightUpdate(float height);
 
+        DynamicObject* GetEffectiveDynObject(uint32 spellId, SpellEffectIndex effIndex, Unit* pTarget);
         DynamicObject* GetDynObject(uint32 spellId, SpellEffectIndex effIndex);
         DynamicObject* GetDynObject(uint32 spellId);
         void AddDynObject(DynamicObject* dynObj);
         void RemoveDynObject(uint32 spellid);
-        void RemoveDynObjectWithGUID(ObjectGuid guid) { m_dynObjGUIDs.remove(guid); }
+        void RemoveDynObjectWithGuid(ObjectGuid const& guid) { m_dynObjGuids.remove(guid); }
         void RemoveAllDynObjects();
 
         GameObject* GetGameObject(uint32 spellId) const;
@@ -2138,52 +2135,47 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         uint32 SpellCriticalDamageBonus(SpellEntry const* spellProto, uint32 damage, Unit* pVictim);
         uint32 SpellCriticalHealingBonus(SpellEntry const* spellProto, uint32 damage, Unit* pVictim);
 
-        bool IsTriggeredAtSpellProcEvent(Unit* pVictim, SpellAuraHolder* holder, SpellEntry const* procSpell, uint32 procFlag, uint32 procExtra, WeaponAttackType attType, bool isVictim, SpellProcEventEntry const*& spellProcEvent);
+        bool IsTriggeredAtSpellProcEvent(Unit *pVictim, SpellAuraHolder* holder, SpellEntry const* procSpell, uint32 procFlag, uint32 procExtra, WeaponAttackType attType, bool isVictim, SpellProcEventEntry const*& spellProcEvent);
+        SpellAuraProcResult IsTriggeredAtCustomProcEvent(Unit *pVictim, SpellAuraHolder* holder, SpellEntry const* procSpell, uint32 procFlag, uint32 procExtra, WeaponAttackType attType, bool isVictim, SpellProcEventEntry const*& spellProcEvent);
         // Aura proc handlers
-        SpellAuraProcResult HandleDummyAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleHasteAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleSpellCritChanceAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleProcTriggerSpellAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleProcTriggerDamageAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleOverrideClassScriptAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleMendingAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleModCastingSpeedNotStackAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleReflectSpellsSchoolAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleModPowerCostSchoolAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleMechanicImmuneResistanceAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleModDamageFromCasterAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleAddFlatModifierAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleAddPctModifierAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleModDamagePercentDoneAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandlePeriodicDummyAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleModRating(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleRemoveByDamageProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleSpellMagnetAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleManaShieldAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleModResistanceAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleRemoveByDamageChanceProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleInvisibilityAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const* procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleNULLProc(Unit* /*pVictim*/, DamageInfo* /*damage*/, Aura* /*triggeredByAura*/, SpellEntry const* /*procSpell*/, uint32 /*procFlag*/, uint32 /*procEx*/, uint32 /*cooldown*/)
+        SpellAuraProcResult HandleDummyAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleHasteAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleSpellCritChanceAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleProcTriggerSpellAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleProcTriggerDamageAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleOverrideClassScriptAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleMendingAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleModCastingSpeedNotStackAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleReflectSpellsSchoolAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleModPowerCostSchoolAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleMechanicImmuneResistanceAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleModDamageFromCasterAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleAddFlatModifierAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleAddPctModifierAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleModDamagePercentDoneAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandlePeriodicDummyAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleModRating(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleRemoveByDamageProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleSpellMagnetAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleManaShieldAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleModResistanceAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleRemoveByDamageChanceProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleNULLProc(Unit* /*pVictim*/, DamageInfo* /*damage*/, Aura const* /*triggeredByAura*/, SpellEntry const* /*procSpell*/, uint32 /*procFlag*/, uint32 /*procEx*/, uint32 /*cooldown*/)
         {
             // no proc handler for this aura type
             return SPELL_AURA_PROC_OK;
         }
-        SpellAuraProcResult HandleCantTrigger(Unit* /*pVictim*/, DamageInfo* /*damage*/, Aura* /*triggeredByAura*/, SpellEntry const* /*procSpell*/, uint32 /*procFlag*/, uint32 /*procEx*/, uint32 /*cooldown*/)
+        SpellAuraProcResult HandleCantTrigger(Unit* /*pVictim*/, DamageInfo* /*damage*/, Aura const* /*triggeredByAura*/, SpellEntry const* /*procSpell*/, uint32 /*procFlag*/, uint32 /*procEx*/, uint32 /*cooldown*/)
         {
             // this aura type can't proc
             return SPELL_AURA_PROC_CANT_TRIGGER;
         }
-        SpellAuraProcResult HandleDamageShieldAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleDropChargeByDamageProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        SpellAuraProcResult HandleIgnoreUnitStateAuraProc(Unit* pVictim, DamageInfo* damageInfo, Aura* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
-        void SetLastManaUse()
-        {
-            if (GetTypeId() == TYPEID_PLAYER && !IsUnderLastManaUseEffect())
-                RemoveFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_REGENERATE_POWER);
+        SpellAuraProcResult HandleDamageShieldAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleDropChargeByDamageProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
+        SpellAuraProcResult HandleIgnoreUnitStateAuraProc(Unit *pVictim, DamageInfo* damageInfo, Aura const* triggeredByAura, SpellEntry const *procSpell, uint32 procFlag, uint32 procEx, uint32 cooldown);
 
-            m_lastManaUseTimer = 5000;
-        }
-        bool IsUnderLastManaUseEffect() const { return m_lastManaUseTimer; }
+        void SetLastManaUse();
+        bool IsUnderLastManaUseEffect() const { return bool(m_lastManaUseTimer > 0); }
 
         uint32 GetRegenTimer() const { return m_regenTimer; }
 
@@ -2324,14 +2316,12 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         DeathState m_deathState;
 
         SpellAuraHolderMap m_spellAuraHolders;
-        SpellAuraHolderMap::iterator m_spellAuraHoldersUpdateIterator; // != end() in Unit::m_spellAuraHolders update and point to next element
-        AuraList m_deletedAuras;                            // auras removed while in ApplyModifier and waiting deleted
-        SpellAuraHolderList m_deletedHolders;
+        SpellAuraHolderQueue m_deletedHolders;
 
         // Store Auras for which the target must be tracked
         TrackedAuraTargetMap m_trackedAuraTargets[MAX_TRACKED_AURA_TYPES];
 
-        GuidList m_dynObjGUIDs;
+        GuidList m_dynObjGuids;
 
         typedef std::list<GameObject*> GameObjectList;
         GameObjectList m_gameObj;
@@ -2363,7 +2353,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         bool m_isSpawningLinked;
 
     private:
-        void CleanupDeletedAuras();
+        void CleanupDeletedHolders(bool force = false);
         void UpdateSplineMovement(uint32 t_diff);
 
         // player or player's pet
@@ -2398,6 +2388,8 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         ComboPointHolderSet m_ComboPointHolders;
         ObjectGuid m_comboTargetGuid;
         int8 m_comboPoints;
+
+        uint32 m_originalFaction;
 
         GuidSet m_groupPets;
         GuidSet m_guardianPets;

@@ -1651,7 +1651,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         SpellEntry const* GetKnownTalentRankById(int32 talentId) const;
 
         void AddSpellMod(Aura* aura, bool apply);
-        template <class T> T ApplySpellMod(uint32 spellId, SpellModOp op, T& basevalue, Spell const* spell = NULL);
+        template <class T> T ApplySpellMod(uint32 spellId, SpellModOp op, T &basevalue);
         
         void SendCooldownEvent(SpellEntry const *spellInfo, uint32 itemId = 0);
         void ProhibitSpellSchool(SpellSchoolMask idSchoolMask, uint32 unTimeMs) override;

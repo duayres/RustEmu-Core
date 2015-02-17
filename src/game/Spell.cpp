@@ -1523,7 +1523,7 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
         // apply before deal damage because aura can be removed at target kill
         if (m_spellInfo->SpellFamilyName == SPELLFAMILY_WARLOCK && m_spellInfo->GetSpellIconID() == 3172 &&
             m_spellInfo->GetSpellFamilyFlags().test<CF_WARLOCK_HAUNT>())
-            if (Aura* dummy = unitTarget->GetDummyAura(m_spellInfo->Id))
+            if (Aura const* dummy = unitTarget->GetDummyAura(m_spellInfo->Id))
                 dummy->GetModifier()->m_amount = damageInfo.damage + damageInfo.GetAbsorb();
 
         caster->DealSpellDamage(&damageInfo, true);
@@ -1676,15 +1676,7 @@ void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
                 if (!unit->IsStandState() && !unit->hasUnitState(UNIT_STAT_STUNNED))
                     unit->SetStandState(UNIT_STAND_STATE_STAND);
 
-                if (!unit->isInCombat() && unit->GetTypeId() != TYPEID_PLAYER && ((Creature*)unit)->AI())
-                    unit->AttackedBy(realCaster);
-
-                unit->AddThreat(realCaster);
-                unit->SetInCombatWith(realCaster);
-                realCaster->SetInCombatWith(unit);
-
-                if (Player* attackedPlayer = unit->GetCharmerOrOwnerPlayerOrPlayerItself())
-                    realCaster->SetContestedPvP(attackedPlayer);
+                unit->AttackedBy(realCaster);
             }
         }
         else
@@ -1757,7 +1749,6 @@ void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
                 // Fully diminished
                 if (duration == 0)
                 {
-                    delete m_spellAuraHolder;
                     return;
                 }
             }
@@ -1772,8 +1763,6 @@ void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
 
             unit->AddSpellAuraHolder(m_spellAuraHolder);
         }
-        else
-            delete m_spellAuraHolder;
     }
 }
 
@@ -3456,7 +3445,7 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, UnitList&
     }
 }
 
-void Spell::prepare(SpellCastTargets const* targets, Aura* triggeredByAura)
+void Spell::prepare(SpellCastTargets const* targets, Aura const* triggeredByAura)
 {
     m_targets = *targets;
 
@@ -4350,7 +4339,7 @@ void Spell::finish(bool ok)
                         int32 auraBasePoints = (*i)->GetBasePoints();
                         int32 chance = caster->CalculateSpellDamage(unit, auraSpellInfo, auraSpellIdx, &auraBasePoints);
                         if (roll_chance_i(chance))
-                            caster->CastSpell(unit, auraSpellInfo->EffectTriggerSpell[auraSpellIdx], true, NULL, (*i));
+                            caster->CastSpell(unit, auraSpellInfo->EffectTriggerSpell[auraSpellIdx], true, NULL, (*i)());
                     }
                 }
             }

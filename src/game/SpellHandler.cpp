@@ -342,45 +342,79 @@ void WorldSession::HandleCastSpellOpcode(WorldPacket& recvPacket)
     recvPacket >> unk_flags;                                // flags (if 0x02 - some additional data are received)
 
     // ignore for remote control state (for player case)
-    Unit* mover = _player->GetMover();
-    if (mover != _player && mover->GetTypeId() == TYPEID_PLAYER)
+    Unit* _mover = GetPlayer()->GetMover();
+    if (_mover != GetPlayer() && _mover->GetTypeId() == TYPEID_PLAYER)
     {
-        recvPacket.rpos(recvPacket.wpos());                 // prevent spam at ignore packet
+        recvPacket.rpos(recvPacket.wpos());                               // prevent spam at ignore packet
         return;
     }
 
-    DEBUG_LOG("WORLD: got cast spell packet, spellId - %u, cast_count: %u, unk_flags %u, data length = " SIZEFMTD,
-              spellId, cast_count, unk_flags, recvPacket.size());
+    DEBUG_LOG("WORLD: got cast spell packet, spellId - %u, cast_count: %u, unk_flags %u, data length = %i",
+        spellId, cast_count, unk_flags, (uint32)recvPacket.size());
 
-    SpellEntry const* spellInfo = sSpellStore.LookupEntry(spellId);
+    SpellEntry const *spellInfo = sSpellStore.LookupEntry(spellId);
+
     if (!spellInfo)
     {
         sLog.outError("WORLD: unknown spell id %u", spellId);
-        recvPacket.rpos(recvPacket.wpos());                 // prevent spam at ignore packet
+        recvPacket.rpos(recvPacket.wpos());                               // prevent spam at ignore packet
         return;
     }
 
-    Aura* triggeredByAura = mover->GetTriggeredByClientAura(spellId);
+    //  Players on vehicles may cast many simple spells (like knock) from self
+
+    Unit* mover = NULL;
+
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX6_CASTABLE_ON_VEHICLE) && _mover->IsCharmerOrOwnerPlayerOrPlayerItself())
+        mover = _mover->GetCharmerOrOwnerPlayerOrPlayerItself();
+    else
+        mover = _mover;
+
+    // casting own spells on some vehicles
+    /*if (Player* plr = mover->GetCharmerOrOwnerPlayerOrPlayerItself())
+    {
+        if (mover->IsVehicle() && (mover != plr))
+        {
+            if (VehicleKitPtr vehicle = mover->GetVehicleKit())
+            {
+                if (VehicleSeatEntry const* seatInfo = vehicle->GetSeatInfo(plr))
+                    if (seatInfo->m_flags & (SEAT_FLAG_CAN_ATTACK | SEAT_FLAG_CAN_CAST))
+                        mover = plr;
+            }
+        }
+    }*/
+
+    bool triggered = false;
+    SpellEntry const* triggeredBy = NULL;
+    Aura const* triggeredByAura = mover->GetTriggeredByClientAura(spellId);
+    if (triggeredByAura)
+    {
+        triggered = true;
+        triggeredBy = triggeredByAura->GetSpellProto();
+        cast_count = 0;
+    }
 
     if (mover->GetTypeId() == TYPEID_PLAYER)
     {
         // not have spell in spellbook or spell passive and not casted by client
-
-        if ((!((Player*)mover)->HasActiveSpell(spellId) && !triggeredByAura) || IsPassiveSpell(spellInfo))
+        if (((((Player*)mover)->GetUInt16Value(PLAYER_FIELD_BYTES2, 0) == 0 &&
+            (!((Player*)mover)->HasActiveSpell(spellId) && !triggered))
+            || IsPassiveSpell(spellInfo)) && spellId != 1843)
         {
-            sLog.outError("World: %s casts spell %u which he shouldn't have", mover->GetGuidStr().c_str(), spellId);
-            // cheater? kick? ban?
-            recvPacket.rpos(recvPacket.wpos());             // prevent spam at ignore packet
+            sLog.outError("WorldSession::HandleCastSpellOpcode: %s casts spell %u which he shouldn't have", mover->GetGuidStr().c_str(), spellId);
+            //cheater? kick? ban?
+            recvPacket.rpos(recvPacket.wpos());                               // prevent spam at ignore packet
             return;
         }
     }
     else
     {
         // not have spell in spellbook or spell passive and not casted by client
-        if (!((Creature*)mover)->HasSpell(spellId) || IsPassiveSpell(spellInfo))
+        if ((!((Creature*)mover)->HasSpell(spellId) && !triggered) || IsPassiveSpell(spellInfo))
         {
-            // cheater? kick? ban?
-            recvPacket.rpos(recvPacket.wpos());             // prevent spam at ignore packet
+            sLog.outError("WorldSession::HandleCastSpellOpcode: %s try casts spell %u which he shouldn't have", mover->GetGuidStr().c_str(), spellId);
+            //cheater? kick? ban?
+            recvPacket.rpos(recvPacket.wpos());                               // prevent spam at ignore packet
             return;
         }
     }
@@ -392,32 +426,17 @@ void WorldSession::HandleCastSpellOpcode(WorldPacket& recvPacket)
 
     // some spell cast packet including more data (for projectiles?)
     if (unk_flags & 0x02)
-    {
-        uint8 unk1;
-
-        recvPacket >> Unused<float>();                      // unk1, coords?
-        recvPacket >> Unused<float>();                      // unk1, coords?
-        recvPacket >> unk1;                                 // >> 1 or 0
-        if (unk1)
-        {
-            ObjectGuid guid;                                // guid - unused
-            MovementInfo movementInfo;
-
-            recvPacket >> Unused<uint32>();                 // >> MSG_MOVE_STOP
-            recvPacket >> guid.ReadAsPacked();
-            recvPacket >> movementInfo;
-        }
-    }
+        targets.ReadAdditionalData(recvPacket);
 
     // auto-selection buff level base at target level (in spellInfo)
     if (Unit* target = targets.getUnitTarget())
     {
         // if rank not found then function return NULL but in explicit cast case original spell can be casted and later failed with appropriate error message
-        if (SpellEntry const* actualSpellInfo = sSpellMgr.SelectAuraRankForLevel(spellInfo, target->getLevel()))
+        if (SpellEntry const *actualSpellInfo = sSpellMgr.SelectAuraRankForLevel(spellInfo, target->getLevel()))
             spellInfo = actualSpellInfo;
     }
 
-    Spell* spell = new Spell(mover, spellInfo, triggeredByAura ? true : false, mover->GetObjectGuid(), triggeredByAura ? triggeredByAura->GetSpellProto() : NULL);
+    Spell *spell = new Spell(mover, spellInfo, triggered, mover->GetObjectGuid(), triggeredBy);
     spell->m_cast_count = cast_count;                       // set count of casts
     spell->prepare(&targets, triggeredByAura);
 }
