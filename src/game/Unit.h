@@ -1267,10 +1267,10 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         virtual ~Unit();
 
-        void AddToWorld() override;
-        void RemoveFromWorld() override;
+        void AddToWorld();
+        virtual void RemoveFromWorld(bool remove);
 
-        void CleanupsBeforeDelete() override;               // used in ~Creature/~Player (or before mass creature delete to remove cross-references to already deleted units)
+        virtual void CleanupsBeforeDelete();                // used in ~Creature/~Player (or before mass creature delete to remove cross-references to already deleted units)
 
         float GetObjectBoundingRadius() const override      // overwrite WorldObject version
         {

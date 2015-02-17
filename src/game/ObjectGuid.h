@@ -104,177 +104,178 @@ struct PackedGuidReader
 
 class MANGOS_DLL_SPEC ObjectGuid
 {
-public:                                                 // constructors
-    ObjectGuid() : m_guid(0) {}
-    explicit ObjectGuid(uint64 guid) : m_guid(guid) {}
-    ObjectGuid(HighGuid hi, uint32 entry, uint32 counter) : m_guid(counter ? uint64(counter) | (uint64(entry) << 24) | (uint64(hi) << 52) : 0) {}
-    ObjectGuid(HighGuid hi, uint32 counter) : m_guid(counter ? uint64(counter) | (uint64(hi) << 52) : 0) {}
+    public:                                                 // constructors
+        ObjectGuid() : m_guid(0) {}
+        explicit ObjectGuid(uint64 guid) : m_guid(guid) {}
+        ObjectGuid(HighGuid hi, uint32 entry, uint32 counter) : m_guid(counter ? uint64(counter) | (uint64(entry) << 24) | (uint64(hi) << 52) : 0) {}
+        ObjectGuid(HighGuid hi, uint32 counter) : m_guid(counter ? uint64(counter) | (uint64(hi) << 52) : 0) {}
 
-    operator uint64() const { return m_guid; }
-private:
-    explicit ObjectGuid(uint32 const&);                 // no implementation, used for catch wrong type assign
-    ObjectGuid(HighGuid, uint32, uint64 counter);       // no implementation, used for catch wrong type assign
-    ObjectGuid(HighGuid, uint64 counter);               // no implementation, used for catch wrong type assign
+        operator uint64() const { return m_guid; }
+    private:
+        explicit ObjectGuid(uint32 const&);                 // no implementation, used for catch wrong type assign
+        ObjectGuid(HighGuid, uint32, uint64 counter);       // no implementation, used for catch wrong type assign
+        ObjectGuid(HighGuid, uint64 counter);               // no implementation, used for catch wrong type assign
 
-public:                                                 // modifiers
-    PackedGuidReader ReadAsPacked() { return PackedGuidReader(*this); }
+    public:                                                 // modifiers
+        PackedGuidReader ReadAsPacked() { return PackedGuidReader(*this); }
 
-    void Set(uint64 guid) { m_guid = guid; }
-    void Clear() { m_guid = 0; }
+        void Set(uint64 guid) { m_guid = guid; }
+        void Clear() { m_guid = 0; }
 
-    PackedGuid WriteAsPacked() const;
-public:                                                 // accessors
-    uint64   GetRawValue() const { return m_guid; }
-    HighGuid GetHigh() const { return HighGuid((m_guid >> 52) & 0x00000FFF); }
-    uint32   GetEntry() const { return HasEntry() ? uint32((m_guid >> 24) & UI64LIT(0x0000000000FFFFFF)) : 0; }
-    uint32   GetCounter()  const
-    {
-        return HasEntry()
-            ? uint32(m_guid & UI64LIT(0x0000000000FFFFFF))
-            : uint32(m_guid & UI64LIT(0x00000000FFFFFFFF));
-    }
-
-    static uint32 GetMaxCounter(HighGuid high)
-    {
-        return HasEntry(high)
-            ? uint32(0x00FFFFFF)
-            : uint32(0xFFFFFFFF);
-    }
-
-    uint32 GetMaxCounter() const { return GetMaxCounter(GetHigh()); }
-
-    bool IsEmpty()             const { return m_guid == 0; }
-    bool IsCreature()          const { return GetHigh() == HIGHGUID_UNIT; }
-    bool IsPet()               const { return GetHigh() == HIGHGUID_PET; }
-    bool IsVehicle()           const { return GetHigh() == HIGHGUID_VEHICLE; }
-    bool IsCreatureOrPet()     const { return IsCreature() || IsPet(); }
-    bool IsCreatureOrVehicle() const { return IsCreature() || IsVehicle(); }
-    bool IsAnyTypeCreature()   const { return IsCreature() || IsPet() || IsVehicle(); }
-    bool IsPlayer()            const { return !IsEmpty() && GetHigh() == HIGHGUID_PLAYER; }
-    bool IsUnit()              const { return IsAnyTypeCreature() || IsPlayer(); }
-    bool IsItem()              const { return GetHigh() == HIGHGUID_ITEM; }
-    bool IsGameObject()        const { return GetHigh() == HIGHGUID_GAMEOBJECT; }
-    bool IsDynamicObject()     const { return GetHigh() == HIGHGUID_DYNAMICOBJECT; }
-    bool IsCorpse()            const { return GetHigh() == HIGHGUID_CORPSE; }
-    bool IsTransport()         const { return GetHigh() == HIGHGUID_TRANSPORT; }
-    bool IsMOTransport()       const { return GetHigh() == HIGHGUID_MO_TRANSPORT; }
-    bool IsInstance()          const { return GetHigh() == HIGHGUID_INSTANCE; }
-    bool IsGroup()             const { return GetHigh() == HIGHGUID_GROUP; }
-    bool IsPlayerOrPet()       const { return !IsEmpty() && (GetHigh() == HIGHGUID_PLAYER || GetHigh() == HIGHGUID_PET); }
-
-    bool IsEvent()             const { return GetHigh() == HIGHGUID_EVENT || GetHigh() == HIGHGUID_OBJECTEVENT || GetHigh() == HIGHGUID_MAPEVENT; }
-    bool IsAreaTrigger()       const { return GetHigh() == HIGHGUID_AREATRIGGER; }
-    bool IsWorldState()        const { return GetHigh() == HIGHGUID_WORLDSTATE; }
-    bool IsLocation()          const { return GetHigh() == HIGHGUID_WORLDLOCATION; }
-
-    bool IsCalendarEvent()     const { return GetHigh() == HIGHGUID_CALENDAR_EVENT; }
-    bool IsInvite()            const { return GetHigh() == HIGHGUID_INVITE; }
-
-    static TypeID GetTypeId(HighGuid high)
-    {
-        switch (high)
+        PackedGuid WriteAsPacked() const;
+    public:                                                 // accessors
+        uint64   GetRawValue() const { return m_guid; }
+        HighGuid GetHigh() const { return HighGuid((m_guid >> 52) & 0x00000FFF); }
+        uint32   GetEntry() const { return HasEntry() ? uint32((m_guid >> 24) & UI64LIT(0x0000000000FFFFFF)) : 0; }
+        uint32   GetCounter()  const
         {
-        case HIGHGUID_ITEM:         return TYPEID_ITEM;
-            //case HIGHGUID_CONTAINER:    return TYPEID_CONTAINER; HIGHGUID_CONTAINER==HIGHGUID_ITEM currently
-        case HIGHGUID_UNIT:         return TYPEID_UNIT;
-        case HIGHGUID_PET:          return TYPEID_UNIT;
-        case HIGHGUID_PLAYER:       return TYPEID_PLAYER;
-        case HIGHGUID_GAMEOBJECT:   return TYPEID_GAMEOBJECT;
-        case HIGHGUID_DYNAMICOBJECT:return TYPEID_DYNAMICOBJECT;
-        case HIGHGUID_CORPSE:       return TYPEID_CORPSE;
-        case HIGHGUID_MO_TRANSPORT: return TYPEID_GAMEOBJECT;
-        case HIGHGUID_VEHICLE:      return TYPEID_UNIT;
-
-        case HIGHGUID_CALENDAR_EVENT:
-        case HIGHGUID_INVITE:
-        case HIGHGUID_EVENT:
-        case HIGHGUID_OBJECTEVENT:
-        case HIGHGUID_MAPEVENT:     return TYPEID_AIGROUP;
-
-        case HIGHGUID_AREATRIGGER:
-        case HIGHGUID_WORLDLOCATION: return TYPEID_AREATRIGGER;
-
-            // unknown
-        case HIGHGUID_INSTANCE:
-        case HIGHGUID_GROUP:
-        case HIGHGUID_WORLDSTATE:
-        case HIGHGUID_BATTLEGROUND:
-        case HIGHGUID_GUILD:
-        default:                    return TYPEID_OBJECT;
+            return HasEntry()
+                ? uint32(m_guid & UI64LIT(0x0000000000FFFFFF))
+                : uint32(m_guid & UI64LIT(0x00000000FFFFFFFF));
         }
-    }
 
-    TypeID GetTypeId() const { return GetTypeId(GetHigh()); }
-
-    bool operator! () const { return IsEmpty(); }
-    bool operator== (ObjectGuid const& guid) const { return GetRawValue() == guid.GetRawValue(); }
-    bool operator!= (ObjectGuid const& guid) const { return GetRawValue() != guid.GetRawValue(); }
-    bool operator< (ObjectGuid const& guid) const { return GetRawValue() < guid.GetRawValue(); }
-
-public:                                                 // accessors - for debug
-    static char const* GetTypeName(HighGuid high);
-    char const* GetTypeName() const { return !IsEmpty() ? GetTypeName(GetHigh()) : "None"; }
-    std::string GetString() const;
-
-private:                                                // internal functions
-    static bool HasEntry(HighGuid high)
-    {
-        switch (high)
+        static uint32 GetMaxCounter(HighGuid high)
         {
-        case HIGHGUID_ITEM:
-        case HIGHGUID_PLAYER:
-        case HIGHGUID_DYNAMICOBJECT:
-        case HIGHGUID_CORPSE:
-        case HIGHGUID_MO_TRANSPORT:
-        case HIGHGUID_INSTANCE:
-        case HIGHGUID_GROUP:
-
-        case HIGHGUID_BATTLEGROUND:
-        case HIGHGUID_GUILD:
-
-        case HIGHGUID_AREATRIGGER:
-        case HIGHGUID_WORLDLOCATION:
-
-        case HIGHGUID_CALENDAR_EVENT:
-        case HIGHGUID_INVITE:
-            return false;
-
-        case HIGHGUID_GAMEOBJECT:
-        case HIGHGUID_TRANSPORT:
-        case HIGHGUID_UNIT:
-        case HIGHGUID_PET:
-        case HIGHGUID_VEHICLE:
-
-        case HIGHGUID_EVENT:
-        case HIGHGUID_OBJECTEVENT:
-        case HIGHGUID_MAPEVENT:
-        case HIGHGUID_WORLDSTATE:
-
-        default:
-            return true;
+            return HasEntry(high)
+                ? uint32(0x00FFFFFF)
+                : uint32(0xFFFFFFFF);
         }
-    }
 
-private:                                                // fields
-    uint64 m_guid;
+        uint32 GetMaxCounter() const { return GetMaxCounter(GetHigh()); }
 
-public:
-    bool HasEntry() const { return HasEntry(GetHigh()); }
-    // predefined empty object for safe return by reference
-    static ObjectGuid const Null;
+        bool IsEmpty()             const { return m_guid == 0;                                }
+        bool IsCreature()          const { return GetHigh() == HIGHGUID_UNIT;                 }
+        bool IsPet()               const { return GetHigh() == HIGHGUID_PET;                  }
+        bool IsVehicle()           const { return GetHigh() == HIGHGUID_VEHICLE;              }
+        bool IsCreatureOrPet()     const { return IsCreature() || IsPet();                    }
+        bool IsCreatureOrVehicle() const { return IsCreature() || IsVehicle();                }
+        bool IsAnyTypeCreature()   const { return IsCreature() || IsPet() || IsVehicle();     }
+        bool IsPlayer()            const { return !IsEmpty() && GetHigh() == HIGHGUID_PLAYER; }
+        bool IsUnit()              const { return IsAnyTypeCreature() || IsPlayer();          }
+        bool IsItem()              const { return GetHigh() == HIGHGUID_ITEM;                 }
+        bool IsGameObject()        const { return GetHigh() == HIGHGUID_GAMEOBJECT;           }
+        bool IsDynamicObject()     const { return GetHigh() == HIGHGUID_DYNAMICOBJECT;        }
+        bool IsCorpse()            const { return GetHigh() == HIGHGUID_CORPSE;               }
+        bool IsTransport()         const { return GetHigh() == HIGHGUID_TRANSPORT;            }
+        bool IsMOTransport()       const { return GetHigh() == HIGHGUID_MO_TRANSPORT;         }
+        bool IsInstance()          const { return GetHigh() == HIGHGUID_INSTANCE;             }
+        bool IsGroup()             const { return GetHigh() == HIGHGUID_GROUP;                }
+        bool IsPlayerOrPet()       const { return !IsEmpty() && (GetHigh() == HIGHGUID_PLAYER || GetHigh() == HIGHGUID_PET); }
+
+        bool IsEvent()             const { return GetHigh() == HIGHGUID_EVENT || GetHigh() == HIGHGUID_OBJECTEVENT || GetHigh() == HIGHGUID_MAPEVENT; }
+        bool IsAreaTrigger()       const { return GetHigh() == HIGHGUID_AREATRIGGER;          }
+        bool IsWorldState()        const { return GetHigh() == HIGHGUID_WORLDSTATE;           }
+        bool IsLocation()          const { return GetHigh() == HIGHGUID_WORLDLOCATION;        }
+
+        bool IsCalendarEvent()     const { return GetHigh() == HIGHGUID_CALENDAR_EVENT;       }
+        bool IsInvite()            const { return GetHigh() == HIGHGUID_INVITE;               }
+
+        static TypeID GetTypeId(HighGuid high)
+        {
+            switch(high)
+            {
+                case HIGHGUID_ITEM:         return TYPEID_ITEM;
+                //case HIGHGUID_CONTAINER:    return TYPEID_CONTAINER; HIGHGUID_CONTAINER==HIGHGUID_ITEM currently
+                case HIGHGUID_UNIT:         return TYPEID_UNIT;
+                case HIGHGUID_PET:          return TYPEID_UNIT;
+                case HIGHGUID_PLAYER:       return TYPEID_PLAYER;
+                case HIGHGUID_GAMEOBJECT:   return TYPEID_GAMEOBJECT;
+                case HIGHGUID_DYNAMICOBJECT:return TYPEID_DYNAMICOBJECT;
+                case HIGHGUID_CORPSE:       return TYPEID_CORPSE;
+                case HIGHGUID_MO_TRANSPORT: return TYPEID_GAMEOBJECT;
+                case HIGHGUID_VEHICLE:      return TYPEID_UNIT;
+
+                case HIGHGUID_CALENDAR_EVENT:
+                case HIGHGUID_INVITE:
+                case HIGHGUID_EVENT:
+                case HIGHGUID_OBJECTEVENT:
+                case HIGHGUID_MAPEVENT:     return TYPEID_AIGROUP;
+
+                case HIGHGUID_AREATRIGGER:
+                case HIGHGUID_WORLDLOCATION: return TYPEID_AREATRIGGER;
+
+                // unknown
+                case HIGHGUID_INSTANCE:
+                case HIGHGUID_GROUP:
+                case HIGHGUID_WORLDSTATE:
+                case HIGHGUID_BATTLEGROUND:
+                case HIGHGUID_GUILD:
+                default:                    return TYPEID_OBJECT;
+            }
+        }
+
+        TypeID GetTypeId() const { return GetTypeId(GetHigh()); }
+
+        bool operator! () const { return IsEmpty(); }
+        bool operator== (ObjectGuid const& guid) const { return GetRawValue() == guid.GetRawValue(); }
+        bool operator!= (ObjectGuid const& guid) const { return GetRawValue() != guid.GetRawValue(); }
+        bool operator< (ObjectGuid const& guid) const { return GetRawValue() < guid.GetRawValue(); }
+
+    public:                                                 // accessors - for debug
+        static char const* GetTypeName(HighGuid high);
+        char const* GetTypeName() const { return !IsEmpty() ? GetTypeName(GetHigh()) : "None"; }
+        std::string GetString() const;
+
+    private:                                                // internal functions
+        static bool HasEntry(HighGuid high)
+        {
+            switch(high)
+            {
+                case HIGHGUID_ITEM:
+                case HIGHGUID_PLAYER:
+                case HIGHGUID_DYNAMICOBJECT:
+                case HIGHGUID_CORPSE:
+                case HIGHGUID_MO_TRANSPORT:
+                case HIGHGUID_INSTANCE:
+                case HIGHGUID_GROUP:
+
+                case HIGHGUID_BATTLEGROUND:
+                case HIGHGUID_GUILD:
+
+                case HIGHGUID_AREATRIGGER:
+                case HIGHGUID_WORLDLOCATION:
+
+                case HIGHGUID_CALENDAR_EVENT:
+                case HIGHGUID_INVITE:
+                    return false;
+
+                case HIGHGUID_GAMEOBJECT:
+                case HIGHGUID_TRANSPORT:
+                case HIGHGUID_UNIT:
+                case HIGHGUID_PET:
+                case HIGHGUID_VEHICLE:
+
+                case HIGHGUID_EVENT:
+                case HIGHGUID_OBJECTEVENT:
+                case HIGHGUID_MAPEVENT:
+                case HIGHGUID_WORLDSTATE:
+
+                default:
+                    return true;
+            }
+        }
+
+    private:                                                // fields
+        uint64 m_guid;
+
+    public:
+        bool HasEntry() const { return HasEntry(GetHigh()); }
+        // predefined empty object for safe return by reference
+        static ObjectGuid const Null;
 };
 
 // Some Shared defines
 typedef std::set<ObjectGuid> GuidSet;
 typedef std::list<ObjectGuid> GuidList;
 typedef std::vector<ObjectGuid> GuidVector;
+// typedef std::queue<ObjectGuid> GuidQueue;
 
-// minimum buffer size for packed guid is 9 bytes
+//minimum buffer size for packed guid is 9 bytes
 #define PACKED_GUID_MIN_BUFFER_SIZE 9
 
 class PackedGuid
 {
-        friend ByteBuffer& operator<< (ByteBuffer& buf, PackedGuid const& guid);
+    friend ByteBuffer& operator<< (ByteBuffer& buf, PackedGuid const& guid);
 
     public:                                                 // constructors
         explicit PackedGuid() : m_packedGuid(PACKED_GUID_MIN_BUFFER_SIZE) { m_packedGuid.appendPackGUID(0); }
@@ -319,16 +320,16 @@ inline PackedGuid ObjectGuid::WriteAsPacked() const { return PackedGuid(*this); 
 
 HASH_NAMESPACE_START
 
-template<>
-class hash<ObjectGuid>
-{
-    public:
+    template<>
+    class hash<ObjectGuid>
+    {
+        public:
 
-        size_t operator()(ObjectGuid const& key) const
-        {
-            return hash<uint64>()(key.GetRawValue());
-        }
-};
+            size_t operator() (ObjectGuid const& key) const
+            {
+                return hash<uint64>()(key.GetRawValue());
+            }
+    };
 
 HASH_NAMESPACE_END
 

@@ -83,7 +83,7 @@ class TerrainInfo;
 class TransportInfo;
 struct MangosStringLocale;
 
-typedef UNORDERED_MAP<Player*, UpdateData> UpdateDataMapType;
+typedef UNORDERED_MAP<ObjectGuid, UpdateData> UpdateDataMapType;
 
 struct Position
 {
@@ -160,7 +160,7 @@ class MANGOS_DLL_SPEC Object
             // synchronize values mirror with values array (changes will send in updatecreate opcode any way
             ClearUpdateMask(false);                         // false - we can't have update data in update queue before adding to world
         }
-        virtual void RemoveFromWorld()
+        virtual void RemoveFromWorld(bool /*remove*/)
         {
             // if we remove from world then sending changes not required
             ClearUpdateMask(true);
@@ -193,8 +193,15 @@ class MANGOS_DLL_SPEC Object
         virtual void AddToClientUpdateList();
         virtual void RemoveFromClientUpdateList();
         virtual void BuildUpdateData(UpdateDataMapType& update_players);
+
         void MarkForClientUpdate();
         void SendForcedObjectUpdate();
+
+        virtual GuidSet const* GetObjectsUpdateQueue() { return NULL; };
+        bool IsMarkedForClientUpdate() const { return m_objectUpdated; };
+        virtual Object* GetDependentObject(ObjectGuid const& guid) { return NULL; };
+        virtual void RemoveUpdateObject(ObjectGuid const& guid) {};
+        virtual void AddUpdateObject(ObjectGuid const& guid) {};
 
         void SetFieldNotifyFlag(uint16 flag) { m_fieldNotifyFlags |= flag; }
         void RemoveFieldNotifyFlag(uint16 flag) { m_fieldNotifyFlags &= ~flag; }
@@ -471,6 +478,9 @@ class MANGOS_DLL_SPEC WorldObject : public Object
 
         void _Create(uint32 guidlow, HighGuid guidhigh, uint32 phaseMask);
 
+        void AddToWorld();
+        virtual void RemoveFromWorld(bool remove) override;
+
         TransportInfo* GetTransportInfo() const { return m_transportInfo; }
         bool IsBoarded() const { return m_transportInfo != NULL; }
         void SetTransportInfo(TransportInfo* transportInfo) { m_transportInfo = transportInfo; }
@@ -632,7 +642,7 @@ class MANGOS_DLL_SPEC WorldObject : public Object
 
         void AddToClientUpdateList() override;
         void RemoveFromClientUpdateList() override;
-        void BuildUpdateData(UpdateDataMapType&) override;
+        void BuildUpdateData(UpdateDataMapType &) override;
 
         Creature* SummonCreature(uint32 id, float x, float y, float z, float ang, TempSummonType spwtype, uint32 despwtime, bool asActiveObject = false);
 

@@ -110,10 +110,10 @@ void MapManager::LoadTransports()
         for (std::set<uint32>::const_iterator i = mapsUsed.begin(); i != mapsUsed.end(); ++i)
             m_TransportsByMap[*i].insert(t);
 
-        // If we someday decide to use the grid to track transports, here:
-        t->SetMap(sMapMgr.CreateMap(mapid, t));
-
-        // t->GetMap()->Add<GameObject>((GameObject *)t);
+        //If we someday decide to use the grid to track transports, here:
+        Map* map = sMapMgr.CreateMap(mapid, t);
+        t->SetMap(map);
+        map->InsertObject(t);
         ++count;
     }
     while (result->NextRow());
@@ -443,7 +443,7 @@ void Transport::MoveToNextWayPoint()
 
 void Transport::TeleportTransport(uint32 newMapid, float x, float y, float z)
 {
-    Map const* oldMap = GetMap();
+    Map* oldMap = GetMap();
     Relocate(x, y, z);
 
     for (PlayerSet::iterator itr = m_passengers.begin(); itr != m_passengers.end();)
@@ -478,7 +478,9 @@ void Transport::TeleportTransport(uint32 newMapid, float x, float y, float z)
     if (oldMap != newMap)
     {
         UpdateForMap(oldMap);
+        oldMap->EraseObject(this);
         UpdateForMap(newMap);
+        newMap->InsertObject(this);
     }
 }
 

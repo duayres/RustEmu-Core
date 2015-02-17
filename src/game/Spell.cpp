@@ -4970,7 +4970,7 @@ void Spell::SendChannelUpdate(uint32 time)
             if (possessed)
                 player->SetClientControl(possessed, 0);
             player->SetMover(NULL);
-            player->GetCamera().ResetView();
+            player->SetViewPoint(NULL);
             player->RemovePetActionBar();
 
             if (possessed)
@@ -4988,7 +4988,7 @@ void Spell::SendChannelUpdate(uint32 time)
         else if (m_spellInfo->HasAttribute(SPELL_ATTR_EX_FARSIGHT) && m_caster->GetTypeId() == TYPEID_PLAYER)
         {
             if (/*DynamicObject* dynObj = */m_caster->GetDynObject(m_triggeredByAuraSpell ? m_triggeredByAuraSpell->Id : m_spellInfo->Id))
-                ((Player*)m_caster)->GetCamera().ResetView();
+                ((Player*)m_caster)->SetViewPoint(NULL);
         }
 
         m_caster->RemoveAurasByCasterSpell(m_spellInfo->Id, m_caster->GetObjectGuid());
@@ -5006,7 +5006,7 @@ void Spell::SendChannelUpdate(uint32 time)
         m_caster->SetUInt32Value(UNIT_CHANNEL_SPELL, 0);
     }
 
-    WorldPacket data(MSG_CHANNEL_UPDATE, 8 + 4);
+    WorldPacket data(MSG_CHANNEL_UPDATE, m_caster->GetPackGUID().size() + 4);
     data << m_caster->GetPackGUID();
     data << uint32(time);
     m_caster->SendMessageToSet(&data, true);
@@ -5044,7 +5044,7 @@ void Spell::SendChannelStart(uint32 duration)
         }
     }
 
-    WorldPacket data(MSG_CHANNEL_START, (8 + 4 + 4));
+    WorldPacket data(MSG_CHANNEL_START, m_caster->GetPackGUID().size() + 4 + 4);
     data << m_caster->GetPackGUID();
     data << uint32(m_spellInfo->Id);
     data << uint32(duration);
@@ -6618,11 +6618,11 @@ SpellCastResult Spell::CheckCast(bool strict)
                 return SPELL_FAILED_ROOTED;
             break;
         }
-        /*case SPELL_EFFECT_ADD_FARSIGHT:
+        case SPELL_EFFECT_ADD_FARSIGHT:
         {
             if (m_caster->GetTypeId() != TYPEID_PLAYER || ((Player*)m_caster)->HasExternalViewPoint())
                 return SPELL_FAILED_BAD_TARGETS;
-        }*/                                                                                                                //not implemented
+        }
         default:
             break;
         }
@@ -6828,11 +6828,11 @@ SpellCastResult Spell::CheckCast(bool strict)
             break;
         }
         case SPELL_AURA_FAR_SIGHT:
-        /*case SPELL_AURA_BIND_SIGHT:
+        case SPELL_AURA_BIND_SIGHT:
         {
             if (m_caster->GetTypeId() != TYPEID_PLAYER || ((Player*)m_caster)->HasExternalViewPoint())
                 return SPELL_FAILED_BAD_TARGETS;
-        }*/                                                                                             //not implemented
+        }
         default:
             break;
         }

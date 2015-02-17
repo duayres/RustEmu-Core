@@ -281,6 +281,9 @@ class MANGOS_DLL_SPEC Item : public Object
 
         virtual bool Create(uint32 guidlow, uint32 itemid, Player const* owner);
 
+        void AddToWorld();
+        virtual void RemoveFromWorld(bool remove);
+
         ItemPrototype const* GetProto() const;
 
         ObjectGuid const& GetOwnerGuid() const { return GetGuidValue(ITEM_FIELD_OWNER); }

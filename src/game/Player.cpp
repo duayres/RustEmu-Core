@@ -392,7 +392,7 @@ void TradeData::SetAccepted(bool state, bool crosssend /*= false*/)
 
 //== Player ====================================================
 
-Player::Player(WorldSession* session): Unit(), m_mover(this), m_camera(this), m_achievementMgr(this), m_reputationMgr(this)
+Player::Player(WorldSession* session) : Unit(), m_mover(this), m_camera(NULL), m_achievementMgr(this), m_reputationMgr(this)
 {
     m_transport = 0;
 
@@ -574,6 +574,8 @@ Player::Player(WorldSession* session): Unit(), m_mover(this), m_camera(this), m_
     m_lastFallTime = 0;
     m_lastFallZ = 0;
 
+    m_camera = new Camera(*this);
+
     m_cachedGS = 0;
 }
 
@@ -589,7 +591,11 @@ Player::~Player()
     // Note: buy back item already deleted from DB when player was saved
     for (int i = 0; i < PLAYER_SLOTS_COUNT; ++i)
     {
-        delete m_items[i];
+        if (m_items[i])
+        {
+            m_items[i]->RemoveFromWorld(true);
+            delete m_items[i];
+        }
     }
     CleanupChannels();
 
@@ -598,7 +604,13 @@ Player::~Player()
         delete *itr;
 
     for (ItemMap::const_iterator iter = mMitems.begin(); iter != mMitems.end(); ++iter)
-        delete iter->second;                                // if item is duplicated... then server may crash ... but that item should be deallocated
+    {
+        if (!iter->second)
+            continue;
+
+        iter->second->RemoveFromWorld(true);
+        delete iter->second;                                //if item is duplicated... then server may crash ... but that item should be deallocated
+    }
 
     delete PlayerTalkClass;
 
@@ -617,6 +629,7 @@ Player::~Player()
 
     delete m_declinedname;
     delete m_runes;
+    delete m_camera;
 }
 
 void Player::CleanupsBeforeDelete()
@@ -1825,6 +1838,10 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
 
             CombatStop();
 
+            InterruptSpell(CURRENT_CHANNELED_SPELL);
+            RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_TELEPORTED);
+            UnsummonAllTotems();
+
             ResetContestedPvP();
 
             // remove player from battleground on far teleport (when changing maps)
@@ -2008,23 +2025,28 @@ void Player::AddToWorld()
         if (m_items[i])
             m_items[i]->AddToWorld();
     }
+    SetViewPoint(NULL);
 }
 
-void Player::RemoveFromWorld()
+void Player::RemoveFromWorld(bool remove)
 {
     for (int i = PLAYER_SLOT_START; i < PLAYER_SLOT_END; ++i)
     {
         if (m_items[i])
-            m_items[i]->RemoveFromWorld();
+        {
+            m_items[i]->RemoveFromWorld(true);
+            // possible need delete Item structure in this place? Need recheck
+            //delete m_items[i];
+        }
     }
 
     ///- Do not add/remove the player from the object storage
     ///- It will crash when updating the ObjectAccessor
     ///- The player should only be removed when logging out
-    if (IsInWorld())
-        GetCamera().ResetView();
+    if (IsInWorld() && GetCamera())
+        GetCamera()->ResetView();
 
-    Unit::RemoveFromWorld();
+    Unit::RemoveFromWorld(remove);
 }
 
 void Player::RewardRage(uint32 damage, uint32 weaponSpeedHitFactor, bool attacker)
@@ -2408,7 +2430,7 @@ void Player::SetGameMaster(bool on)
         getHostileRefManager().setOnlineOfflineState(true);
     }
 
-    m_camera.UpdateVisibilityForOwner();
+    GetCamera()->UpdateVisibilityForOwner();
     UpdateObjectVisibility();
     UpdateForQuestWorldObjects();
 }
@@ -4462,7 +4484,7 @@ void Player::ResurrectPlayer(float restore_percent, bool applySickness)
     UpdateZone(newzone, newarea);
 
     // update visibility of world around viewpoint
-    m_camera.UpdateVisibilityForOwner();
+    GetCamera()->UpdateVisibilityForOwner();
     // update visibility of player for nearby cameras
     UpdateObjectVisibility();
 
@@ -11094,7 +11116,7 @@ Item* Player::_StoreItem(uint16 pos, Item* pItem, uint32 count, bool clone, bool
             // delete item (it not in any slot currently)
             if (IsInWorld() && update)
             {
-                pItem->RemoveFromWorld();
+                pItem->RemoveFromWorld(false);
                 pItem->DestroyForPlayer(this);
             }
 
@@ -11210,7 +11232,7 @@ Item* Player::EquipItem(uint16 pos, Item* pItem, bool update)
         // pItem->DeleteFromDB();
         if (IsInWorld() && update)
         {
-            pItem->RemoveFromWorld();
+            pItem->RemoveFromWorld(false);
             pItem->DestroyForPlayer(this);
         }
 
@@ -11410,7 +11432,7 @@ void Player::MoveItemFromInventory(uint8 bag, uint8 slot, bool update)
         it->RemoveFromUpdateQueueOf(this);
         if (it->IsInWorld())
         {
-            it->RemoveFromWorld();
+            it->RemoveFromWorld(false);
             it->DestroyForPlayer(this);
         }
     }
@@ -11517,7 +11539,7 @@ void Player::DestroyItem(uint8 bag, uint8 slot, bool update)
 
         if (IsInWorld() && update)
         {
-            pItem->RemoveFromWorld();
+            pItem->RemoveFromWorld(false);
             pItem->DestroyForPlayer(this);
         }
 
@@ -12277,7 +12299,7 @@ void Player::RemoveItemFromBuyBackSlot(uint32 slot, bool del)
         Item* pItem = m_items[slot];
         if (pItem)
         {
-            pItem->RemoveFromWorld();
+            pItem->RemoveFromWorld(false);
             if (del)
                 pItem->SetState(ITEM_REMOVED, this);
         }
@@ -18869,7 +18891,7 @@ void Player::HandleStealthedUnitsDetection()
     MaNGOS::UnitListSearcher<MaNGOS::AnyStealthedCheck > searcher(stealthedUnits, u_check);
     Cell::VisitAllObjects(this, searcher, MAX_PLAYER_STEALTH_DETECT_RANGE);
 
-    WorldObject const* viewPoint = GetCamera().GetBody();
+    WorldObject const* viewPoint = GetCamera()->GetBody();
 
     for (std::list<Unit*>::const_iterator i = stealthedUnits.begin(); i != stealthedUnits.end(); ++i)
     {
@@ -23968,6 +23990,29 @@ void Player::InterruptTaxiFlying()
         SaveRecallPosition();
 }
 
+Object* Player::GetDependentObject(ObjectGuid const& guid)
+{
+    // Currently only items dependent from player.
+    if (guid.IsEmpty() || !guid.IsItem())
+        return NULL;
+    return (Object*)GetItemByGuid(guid);
+}
+
+void Player::AddUpdateObject(ObjectGuid const& guid)
+{
+    i_objectsToClientUpdate.insert(guid);
+
+    // Not need add owner to update queue if owner already marked for update.
+    if (!IsMarkedForClientUpdate() && GetMap())
+        GetMap()->AddUpdateObject(GetObjectGuid());
+}
+
+void Player::RemoveUpdateObject(ObjectGuid const& guid)
+{
+    // possible required remove player from update queue also.
+    i_objectsToClientUpdate.erase(guid);
+}
+
 void Player::AddItemWithTimeCheck(uint32 lowGuid)
 {
     m_itemsWithTimeCheck.insert(lowGuid);
@@ -24168,4 +24213,41 @@ void Player::RefundItem(Item* item)
     SaveInventoryAndGoldToDB();
 
     CharacterDatabase.CommitTransaction();
+}
+
+void Player::SetViewPoint(WorldObject* target, bool immediate, bool update_far_sight_field)
+{
+    if (!GetCamera())
+        return;
+
+    if (target && target->IsInWorld())
+    {
+        if (immediate && (HasExternalViewPoint() && GetCamera()->GetBody() != target))
+        {
+            WorldPacket data(SMSG_CLEAR_FAR_SIGHT_IMMEDIATE, 0);
+            GetSession()->SendPacket(&data);
+        }
+
+        if (target->GetObjectGuid().IsUnit() && target->GetObjectGuid() != GetObjectGuid())
+        {
+            if (((Unit*)target)->IsLevitating() || (target->GetObjectGuid().IsPlayer() && ((Player*)target)->IsFlying()))
+            {
+                WorldPacket data(SMSG_MOVE_SET_CAN_FLY, target->GetPackGUID().size() + 4);
+                data << target->GetPackGUID();
+                data << uint32(0);
+                target->SendMessageToSet(&data, false);
+            }
+        }
+
+        GetCamera()->SetView(target, update_far_sight_field);
+    }
+    else
+    {
+        if (immediate && HasExternalViewPoint())
+        {
+            WorldPacket data(SMSG_CLEAR_FAR_SIGHT_IMMEDIATE, 0);
+            GetSession()->SendPacket(&data);
+        }
+        GetCamera()->ResetView(update_far_sight_field);
+    }
 }

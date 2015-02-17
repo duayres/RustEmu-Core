@@ -79,19 +79,16 @@ GameObject::~GameObject()
 void GameObject::AddToWorld()
 {
     ///- Register the gameobject for guid lookup
-    if (!IsInWorld())
-        GetMap()->GetObjectsStore().insert<GameObject>(GetObjectGuid(), (GameObject*)this);
+    WorldObject::AddToWorld();
 
     if (m_model)
         GetMap()->InsertGameObjectModel(*m_model);
 
-    Object::AddToWorld();
-
-    // After Object::AddToWorld so that for initial state the GO is added to the world (and hence handled correctly)
+    // After AddToWorld so that for initial state the GO is added to the world (and hence handled correctly)
     UpdateCollisionState();
 }
 
-void GameObject::RemoveFromWorld()
+void GameObject::RemoveFromWorld(bool remove)
 {
     ///- Remove the gameobject from the accessor
     if (IsInWorld())
@@ -115,10 +112,9 @@ void GameObject::RemoveFromWorld()
         if (m_model && GetMap()->ContainsGameObjectModel(*m_model))
             GetMap()->RemoveGameObjectModel(*m_model);
 
-        GetMap()->GetObjectsStore().erase<GameObject>(GetObjectGuid(), (GameObject*)NULL);
     }
 
-    Object::RemoveFromWorld();
+    WorldObject::RemoveFromWorld(remove);
 }
 
 bool GameObject::Create(uint32 guidlow, uint32 name_id, Map* map, uint32 phaseMask, float x, float y, float z, float ang, const QuaternionData &rotation, uint8 animprogress, GOState go_state)

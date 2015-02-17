@@ -1017,10 +1017,10 @@ class MANGOS_DLL_SPEC Player : public Unit
         explicit Player(WorldSession* session);
         ~Player();
 
-        void CleanupsBeforeDelete() override;
+        virtual void CleanupsBeforeDelete() override;
 
-        void AddToWorld() override;
-        void RemoveFromWorld() override;
+        void AddToWorld();
+        virtual void RemoveFromWorld(bool remove) override;
 
         bool TeleportTo(uint32 mapid, float x, float y, float z, float orientation, uint32 options = 0);
 
@@ -1464,6 +1464,12 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         //! Return collision height sent to client
         float GetCollisionHeight(bool mounted) const;
+
+        // Parent objects (items currently) update system
+        Object* GetDependentObject(ObjectGuid const& guid) override;
+        virtual GuidSet const* GetObjectsUpdateQueue() override { return &i_objectsToClientUpdate; };
+        void AddUpdateObject(ObjectGuid const& guid) override;
+        void RemoveUpdateObject(ObjectGuid const& guid) override;
 
         /*********************************************************/
         /***                   LOAD SYSTEM                     ***/
@@ -2201,6 +2207,9 @@ class MANGOS_DLL_SPEC Player : public Unit
         void InterruptTaxiFlying();
 
         ObjectGuid const& GetFarSightGuid() const { return GetGuidValue(PLAYER_FARSIGHT); }
+        Camera* GetCamera() { return m_camera; }
+        void    SetViewPoint(WorldObject* target, bool immediate = false, bool update_far_sight_field = true);
+        bool    HasExternalViewPoint() const { return m_camera->GetBody() != (WorldObject*)this; };
 
         // Transports
         Transport* GetTransport() const { return m_transport; }
@@ -2245,8 +2254,6 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         // Stealth detection system
         void HandleStealthedUnitsDetection();
-
-        Camera& GetCamera() { return m_camera; }
 
         virtual void SetPhaseMask(uint32 newPhaseMask, bool update) override;// overwrite Unit::SetPhaseMask
 
@@ -2615,6 +2622,9 @@ class MANGOS_DLL_SPEC Player : public Unit
         Runes* m_runes;
         EquipmentSets m_EquipmentSets;
 
+        // Parent objects (items currently) update system
+        GuidSet i_objectsToClientUpdate;
+
         /// class dependent melee diminishing constant for dodge/parry/missed chances
         static const float m_diminishing_k[MAX_CLASSES];
 
@@ -2658,7 +2668,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         void RefundItem(Item* item);
 
         Unit* m_mover;
-        Camera m_camera;
+        Camera* m_camera;
 
         GridReference<Player> m_gridRef;
         MapReference m_mapRef;

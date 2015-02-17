@@ -53,8 +53,8 @@ class Corpse : public WorldObject
         explicit Corpse(CorpseType type = CORPSE_BONES);
         ~Corpse();
 
-        void AddToWorld() override;
-        void RemoveFromWorld() override;
+        void AddToWorld();
+        virtual void RemoveFromWorld(bool remove) override;
 
         bool Create(uint32 guidlow);
         bool Create(uint32 guidlow, Player* owner);

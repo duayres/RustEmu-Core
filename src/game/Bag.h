@@ -33,8 +33,8 @@ class Bag : public Item
         Bag();
         ~Bag();
 
-        void AddToWorld() override;
-        void RemoveFromWorld() override;
+        void AddToWorld();
+        virtual void RemoveFromWorld(bool remove) override;
 
         bool Create(uint32 guidlow, uint32 itemid, Player const* owner) override;
 

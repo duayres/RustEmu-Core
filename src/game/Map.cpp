@@ -592,10 +592,11 @@ void Map::Remove(Player* player, bool remove)
 
     if (remove)
         player->CleanupsBeforeDelete();
-    else
-        player->RemoveFromWorld();
 
     RemoveAttackersStorageFor(player->GetObjectGuid());
+
+    player->RemoveFromWorld(remove);
+
     // this may be called during Map::Update
     // after decrement+unlink, ++m_mapRefIter will continue correctly
     // when the first element of the list is being removed
@@ -634,7 +635,9 @@ void Map::Remove(Player* player, bool remove)
     UpdateObjectVisibility(player, cell, p);
 
     player->ResetMap();
-    if (remove)
+    if (!remove)
+        EraseObject(player->GetObjectGuid());
+    else
         DeleteFromWorld(player);
 }
 
@@ -662,8 +665,7 @@ Map::Remove(T* obj, bool remove)
 
     if (remove)
         obj->CleanupsBeforeDelete();
-    else
-        obj->RemoveFromWorld();
+    obj->RemoveFromWorld(remove);
 
     UpdateObjectVisibility(obj, cell, p);                   // i think will be better to call this function while object still in grid, this changes nothing but logically is better(as for me)
     RemoveFromGrid(obj, grid, cell);
@@ -999,14 +1001,20 @@ inline void Map::setNGrid(NGridType* grid, uint32 x, uint32 y)
     i_grids[x][y] = grid;
 }
 
-void Map::AddObjectToRemoveList(WorldObject* obj)
+void Map::AddObjectToRemoveList(WorldObject* obj, bool immediateCleanup)
 {
-    MANGOS_ASSERT(obj->GetMapId() == GetId() && obj->GetInstanceId() == GetInstanceId());
+    MANGOS_ASSERT(obj && obj->GetMap() == this);
 
-    obj->CleanupsBeforeDelete();                            // remove or simplify at least cross referenced links
+    obj->CleanupsBeforeDelete();                                // remove or simplify at least cross referenced links
 
     i_objectsToRemove.insert(obj);
-    // DEBUG_LOG("Object (GUID: %u TypeId: %u ) added to removing list.",obj->GetGUIDLow(),obj->GetTypeId());
+    //DEBUG_LOG("Object (GUID: %u TypeId: %u ) added to removing list.",obj->GetGUIDLow(),obj->GetTypeId());
+}
+
+void Map::RemoveObjectFromRemoveList(WorldObject* obj)
+{
+    if (!i_objectsToRemove.empty())
+        i_objectsToRemove.erase(obj);
 }
 
 void Map::RemoveAllObjectsInRemoveList()
@@ -1014,39 +1022,35 @@ void Map::RemoveAllObjectsInRemoveList()
     if (i_objectsToRemove.empty())
         return;
 
-    // DEBUG_LOG("Object remover 1 check.");
+    //DEBUG_LOG("Object remover 1 check.");
     while (!i_objectsToRemove.empty())
     {
         WorldObject* obj = *i_objectsToRemove.begin();
         i_objectsToRemove.erase(i_objectsToRemove.begin());
 
+        if (!obj)
+            continue;
+
         switch (obj->GetTypeId())
         {
-            case TYPEID_CORPSE:
-            {
-                // ??? WTF
-                Corpse* corpse = GetCorpse(obj->GetObjectGuid());
-                if (!corpse)
-                    sLog.outError("Try delete corpse/bones %u that not in map", obj->GetGUIDLow());
-                else
-                    Remove(corpse, true);
-                break;
-            }
-            case TYPEID_DYNAMICOBJECT:
-                Remove((DynamicObject*)obj, true);
-                break;
-            case TYPEID_GAMEOBJECT:
-                Remove((GameObject*)obj, true);
-                break;
-            case TYPEID_UNIT:
-                Remove((Creature*)obj, true);
-                break;
-            default:
-                sLog.outError("Non-grid object (TypeId: %u) in grid object removing list, ignored.", obj->GetTypeId());
-                break;
+        case TYPEID_CORPSE:
+            Remove((Corpse*)obj, true);
+            break;
+        case TYPEID_DYNAMICOBJECT:
+            Remove((DynamicObject*)obj, true);
+            break;
+        case TYPEID_GAMEOBJECT:
+            Remove((GameObject*)obj, true);
+            break;
+        case TYPEID_UNIT:
+            Remove((Creature*)obj, true);
+            break;
+        default:
+            sLog.outError("Non-grid object (TypeId: %u) in grid object removing list, ignored.", obj->GetTypeId());
+            break;
         }
     }
-    // DEBUG_LOG("Object remover 2 check.");
+    //DEBUG_LOG("Object remover 2 check.");
 }
 
 uint32 Map::GetPlayersCountExceptGMs() const
@@ -1733,6 +1737,44 @@ void Map::ScriptsProcess()
 }
 
 /**
+* Function inserts any object in MapObjectStore
+*
+* @param guid must be WorldObject*
+*/
+void Map::InsertObject(WorldObject* object)
+{
+    if (!object)
+        return;
+
+    m_objectsStore.insert(MapStoredObjectTypesContainer::value_type(object->GetObjectGuid(), object));
+}
+
+void Map::EraseObject(WorldObject* object)
+{
+    if (!object)
+        return;
+
+    EraseObject(object->GetObjectGuid());
+}
+
+void Map::EraseObject(ObjectGuid guid)
+{
+    if (guid.IsEmpty())
+        return;
+
+    m_objectsStore.erase(guid);
+}
+
+WorldObject* Map::FindObject(ObjectGuid guid)
+{
+    if (guid.IsEmpty())
+        return NULL;
+
+    MapStoredObjectTypesContainer::iterator itr = m_objectsStore.find(guid);
+    return (itr == m_objectsStore.end()) ? NULL : itr->second;
+}
+
+/**
  * Function return player that in world at CURRENT map
  *
  * Note: This is function preferred if you sure that need player only placed at specific map
@@ -1740,92 +1782,108 @@ void Map::ScriptsProcess()
  *
  * @param guid must be player guid (HIGHGUID_PLAYER)
  */
-Player* Map::GetPlayer(ObjectGuid guid)
+Player* Map::GetPlayer(ObjectGuid const& guid, bool globalSearch)
 {
-    Player* plr = ObjectAccessor::FindPlayer(guid);         // return only in world players
-    return plr && plr->GetMap() == this ? plr : NULL;
+    if (globalSearch)                                           // possible obsolete
+    {
+        Player* plr = ObjectAccessor::FindPlayer(guid);         // return only in world players
+        return plr && plr->GetMap() == this ? plr : NULL;
+    }
+    else
+        return (Player*)FindObject(guid);
 }
 
 /**
- * Function return creature (non-pet and then most summoned by spell creatures) that in world at CURRENT map
- *
- * @param guid must be creature or vehicle guid (HIGHGUID_UNIT HIGHGUID_VEHICLE)
- */
-Creature* Map::GetCreature(ObjectGuid guid)
+* Function return creature (non-pet and then most summoned by spell creatures) that in world at CURRENT map
+*
+* @param guid must be creature or vehicle guid (HIGHGUID_UNIT HIGHGUID_VEHICLE)
+*/
+Creature* Map::GetCreature(ObjectGuid const& guid)
 {
-    return m_objectsStore.find<Creature>(guid, (Creature*)NULL);
+    return (Creature*)FindObject(guid);
 }
 
 /**
- * Function return pet that in world at CURRENT map
- *
- * @param guid must be pet guid (HIGHGUID_PET)
- */
-Pet* Map::GetPet(ObjectGuid guid)
+* Function return pet that in world at CURRENT map
+*
+* @param guid must be pet guid (HIGHGUID_PET)
+*/
+Pet* Map::GetPet(ObjectGuid const& guid)
 {
-    return m_objectsStore.find<Pet>(guid, (Pet*)NULL);
+    return (Pet*)FindObject(guid);
 }
 
 /**
- * Function return corpse that at CURRENT map
- *
- * Note: corpse can be NOT IN WORLD, so can't be used corpse->GetMap() without pre-check corpse->isInWorld()
- *
- * @param guid must be corpse guid (HIGHGUID_CORPSE)
- */
-Corpse* Map::GetCorpse(ObjectGuid guid)
+* Function return corpse that at CURRENT map
+*
+* Note: corpse can be NOT IN WORLD, so can't be used corpse->GetMap() without pre-check corpse->isInWorld()
+*
+* @param guid must be corpse guid (HIGHGUID_CORPSE)
+*/
+Corpse* Map::GetCorpse(ObjectGuid const& guid)
 {
-    Corpse* ret = ObjectAccessor::GetCorpseInMap(guid, GetId());
+    Corpse * ret = ObjectAccessor::GetCorpseInMap(guid, GetId());
     return ret && ret->GetInstanceId() == GetInstanceId() ? ret : NULL;
 }
 
 /**
- * Function return non-player unit object that in world at CURRENT map, so creature, or pet, or vehicle
- *
- * @param guid must be non-player unit guid (HIGHGUID_PET HIGHGUID_UNIT HIGHGUID_VEHICLE)
- */
-Creature* Map::GetAnyTypeCreature(ObjectGuid guid)
+* Function return non-player unit object that in world at CURRENT map, so creature, or pet, or vehicle
+*
+* @param guid must be non-player unit guid (HIGHGUID_PET HIGHGUID_UNIT HIGHGUID_VEHICLE)
+*/
+Creature* Map::GetAnyTypeCreature(ObjectGuid const& guid)
 {
     switch (guid.GetHigh())
     {
-        case HIGHGUID_UNIT:
-        case HIGHGUID_VEHICLE:      return GetCreature(guid);
-        case HIGHGUID_PET:          return GetPet(guid);
-        default:                    break;
+    case HIGHGUID_UNIT:
+    case HIGHGUID_VEHICLE:
+    case HIGHGUID_PET:
+        return (Creature*)FindObject(guid);
+    default:
+        break;
     }
-
     return NULL;
 }
 
 /**
- * Function return gameobject that in world at CURRENT map
- *
- * @param guid must be gameobject guid (HIGHGUID_GAMEOBJECT)
- */
-GameObject* Map::GetGameObject(ObjectGuid guid)
+* Function return gameobject that in world at CURRENT map
+*
+* @param guid must be gameobject guid (HIGHGUID_GAMEOBJECT)
+*/
+GameObject* Map::GetGameObject(ObjectGuid const& guid)
 {
-    return m_objectsStore.find<GameObject>(guid, (GameObject*)NULL);
+    return (GameObject*)FindObject(guid);
 }
 
 /**
- * Function return dynamic object that in world at CURRENT map
- *
- * @param guid must be dynamic object guid (HIGHGUID_DYNAMICOBJECT)
- */
-DynamicObject* Map::GetDynamicObject(ObjectGuid guid)
+* Function return dynamic object that in world at CURRENT map
+*
+* @param guid must be dynamic object guid (HIGHGUID_DYNAMICOBJECT)
+*/
+DynamicObject* Map::GetDynamicObject(ObjectGuid const& guid)
 {
-    return m_objectsStore.find<DynamicObject>(guid, (DynamicObject*)NULL);
+    return (DynamicObject*)FindObject(guid);
 }
 
 /**
- * Function return unit in world at CURRENT map
- *
- * Note: in case player guid not always expected need player at current map only.
- *       For example in spell casting can be expected any in world player targeting in some cases
- *
- * @param guid must be unit guid (HIGHGUID_PLAYER HIGHGUID_PET HIGHGUID_UNIT HIGHGUID_VEHICLE)
- */
-Unit* Map::GetUnit(ObjectGuid guid)
+* Function return transport that in world at CURRENT map
+*
+* @param guid must be dynamic object guid (HIGHGUID_MO_TRANSPORT)
+*/
+Transport* Map::GetTransport(ObjectGuid const& guid)
+{
+    return (Transport*)FindObject(guid);
+}
+
+/**
+* Function return unit in world at CURRENT map
+*
+* Note: in case player guid not always expected need player at current map only.
+*       For example in spell casting can be expected any in world player targeting in some cases
+*
+* @param guid must be unit guid (HIGHGUID_PLAYER HIGHGUID_PET HIGHGUID_UNIT HIGHGUID_VEHICLE)
+*/
+Unit* Map::GetUnit(ObjectGuid const& guid)
 {
     if (guid.IsPlayer())
         return GetPlayer(guid);
@@ -1834,49 +1892,95 @@ Unit* Map::GetUnit(ObjectGuid guid)
 }
 
 /**
- * Function return world object in world at CURRENT map, so any except transports
- */
-WorldObject* Map::GetWorldObject(ObjectGuid guid)
+* Function return world object in world at CURRENT map, so any except transports
+*/
+WorldObject* Map::GetWorldObject(ObjectGuid const& guid)
 {
     switch (guid.GetHigh())
     {
-        case HIGHGUID_PLAYER:       return GetPlayer(guid);
-        case HIGHGUID_GAMEOBJECT:   return GetGameObject(guid);
-        case HIGHGUID_UNIT:
-        case HIGHGUID_VEHICLE:      return GetCreature(guid);
-        case HIGHGUID_PET:          return GetPet(guid);
-        case HIGHGUID_DYNAMICOBJECT: return GetDynamicObject(guid);
-        case HIGHGUID_CORPSE:
-        {
-            // corpse special case, it can be not in world
-            Corpse* corpse = GetCorpse(guid);
-            return corpse && corpse->IsInWorld() ? corpse : NULL;
-        }
-        case HIGHGUID_MO_TRANSPORT:
-        case HIGHGUID_TRANSPORT:
-        default:                    break;
+    case HIGHGUID_PLAYER:
+    case HIGHGUID_GAMEOBJECT:
+    case HIGHGUID_UNIT:
+    case HIGHGUID_VEHICLE:
+    case HIGHGUID_PET:
+    case HIGHGUID_DYNAMICOBJECT:
+    case HIGHGUID_MO_TRANSPORT:
+    case HIGHGUID_TRANSPORT:
+        return FindObject(guid);
+    case HIGHGUID_CORPSE:
+    {
+        // corpse special case, it can be not in world
+        Corpse* corpse = GetCorpse(guid);
+        return corpse && corpse->IsInWorld() ? corpse : NULL;
+    }
+    default:
+        break;
     }
 
     return NULL;
+}
+
+void Map::AddUpdateObject(ObjectGuid const& guid)
+{
+    i_objectsToClientUpdate.insert(guid);
+}
+
+void Map::RemoveUpdateObject(ObjectGuid const& guid)
+{
+    i_objectsToClientUpdate.erase(guid);
 }
 
 void Map::SendObjectUpdates()
 {
     UpdateDataMapType update_players;
 
-    while (!i_objectsToClientUpdate.empty())
+    while (!GetObjectsUpdateQueue()->empty())
     {
-        Object* obj = *i_objectsToClientUpdate.begin();
-        i_objectsToClientUpdate.erase(i_objectsToClientUpdate.begin());
-        obj->BuildUpdateData(update_players);
+        ObjectGuid guid;
+        {
+            guid = *i_objectsToClientUpdate.begin();
+            i_objectsToClientUpdate.erase(i_objectsToClientUpdate.begin());
+        }
+
+        if (guid.IsEmpty())
+            continue;
+
+        WorldObject* obj = GetWorldObject(guid);
+        if (obj && obj->IsInWorld())
+        {
+            if (obj->IsMarkedForClientUpdate())
+                obj->BuildUpdateData(update_players);
+            if (obj->GetObjectsUpdateQueue() && !obj->GetObjectsUpdateQueue()->empty())
+            {
+                while (!obj->GetObjectsUpdateQueue()->empty())
+                {
+                    ObjectGuid dependentGuid = *obj->GetObjectsUpdateQueue()->begin();
+                    obj->RemoveUpdateObject(dependentGuid);
+                    Object* dependentObj = obj->GetDependentObject(dependentGuid);
+                    if (dependentObj && dependentObj->IsMarkedForClientUpdate())
+                        dependentObj->BuildUpdateData(update_players);
+                }
+            }
+        }
     }
 
-    WorldPacket packet;                                     // here we allocate a std::vector with a size of 0x10000
-    for (UpdateDataMapType::iterator iter = update_players.begin(); iter != update_players.end(); ++iter)
+    if (!update_players.empty())
     {
-        iter->second.BuildPacket(&packet);
-        iter->first->GetSession()->SendPacket(&packet);
-        packet.clear();                                     // clean the string
+        for (UpdateDataMapType::iterator iter = update_players.begin(); iter != update_players.end(); ++iter)
+        {
+            if (!iter->first || !iter->first.IsPlayer())
+                continue;
+
+            Player* pPlayer = GetPlayer(iter->first);
+            if (!pPlayer)
+                continue;
+
+            WorldPacket packet;
+
+            if (pPlayer->GetSession())
+                if (iter->second.BuildPacket(&packet))
+                    pPlayer->GetSession()->SendPacket(&packet);
+        }
     }
 }
 
@@ -1888,6 +1992,8 @@ uint32 Map::GenerateLocalLowGuid(HighGuid guidhigh)
         case HIGHGUID_UNIT:
             return m_CreatureGuids.Generate();
         case HIGHGUID_GAMEOBJECT:
+        case HIGHGUID_MO_TRANSPORT:
+        case HIGHGUID_TRANSPORT:
             return m_GameObjectGuids.Generate();
         case HIGHGUID_DYNAMICOBJECT:
             return m_DynObjectGuids.Generate();

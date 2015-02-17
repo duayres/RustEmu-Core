@@ -50,6 +50,7 @@ class Unit;
 class WorldPacket;
 class InstanceData;
 class Group;
+class Transport;
 class MapPersistentState;
 class WorldPersistentState;
 class DungeonPersistentState;
@@ -205,7 +206,8 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>
         // can't be NULL for loaded map
         MapPersistentState* GetPersistentState() const { return m_persistentState; }
 
-        void AddObjectToRemoveList(WorldObject* obj);
+        void AddObjectToRemoveList(WorldObject *obj, bool immediateCleanup = false);
+        void RemoveObjectFromRemoveList(WorldObject* obj);
 
         void UpdateObjectVisibility(WorldObject* obj, Cell cell, CellPair cellpair);
 
@@ -242,28 +244,30 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>
         // must called with RemoveFromWorld
         void RemoveFromActive(WorldObject* obj);
 
-        Player* GetPlayer(ObjectGuid guid);
-        Creature* GetCreature(ObjectGuid guid);
-        Pet* GetPet(ObjectGuid guid);
-        Creature* GetAnyTypeCreature(ObjectGuid guid);      // normal creature or pet or vehicle
-        GameObject* GetGameObject(ObjectGuid guid);
-        DynamicObject* GetDynamicObject(ObjectGuid guid);
-        Corpse* GetCorpse(ObjectGuid guid);                 // !!! find corpse can be not in world
-        Unit* GetUnit(ObjectGuid guid);                     // only use if sure that need objects at current map, specially for player case
-        WorldObject* GetWorldObject(ObjectGuid guid);       // only use if sure that need objects at current map, specially for player case
+        Player* GetPlayer(ObjectGuid const& guid, bool globalSearch = false);
+        Creature* GetCreature(ObjectGuid  const& guid);
+        Pet* GetPet(ObjectGuid const& guid);
+        Creature* GetAnyTypeCreature(ObjectGuid const& guid);      // normal creature or pet or vehicle
+        GameObject* GetGameObject(ObjectGuid const& guid);
+        DynamicObject* GetDynamicObject(ObjectGuid const& guid);
+        Transport* GetTransport(ObjectGuid const& guid);
+        Corpse* GetCorpse(ObjectGuid const& guid);                 // !!! find corpse can be not in world
+        Unit* GetUnit(ObjectGuid const& guid);                     // only use if sure that need objects at current map, specially for player case
+        WorldObject* GetWorldObject(ObjectGuid const& guid);       // only use if sure that need objects at current map, specially for player case
 
-        typedef TypeUnorderedMapContainer<AllMapStoredObjectTypes, ObjectGuid> MapStoredObjectTypesContainer;
-        MapStoredObjectTypesContainer& GetObjectsStore() { return m_objectsStore; }
+        // Container maked without any locks (for faster search), need make external locks!
+        typedef UNORDERED_MAP<ObjectGuid, WorldObject*> MapStoredObjectTypesContainer;
+        MapStoredObjectTypesContainer const& GetObjectsStore() { return m_objectsStore; }
+        void InsertObject(WorldObject* object);
+        void EraseObject(WorldObject* object);
+        void EraseObject(ObjectGuid guid);
+        WorldObject* FindObject(ObjectGuid guid);
 
-        void AddUpdateObject(Object* obj)
-        {
-            i_objectsToClientUpdate.insert(obj);
-        }
+        // Manipulation with objects update queue
+        void AddUpdateObject(ObjectGuid const& guid);
+        void RemoveUpdateObject(ObjectGuid const& guid);
+        GuidSet const* GetObjectsUpdateQueue() { return &i_objectsToClientUpdate; };
 
-        void RemoveUpdateObject(Object* obj)
-        {
-            i_objectsToClientUpdate.erase(obj);
-        }
 
         // DynObjects currently
         uint32 GenerateLocalLowGuid(HighGuid guidhigh);
@@ -363,7 +367,7 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>
         void ScriptsProcess();
 
         void SendObjectUpdates();
-        std::set<Object*> i_objectsToClientUpdate;
+        GuidSet i_objectsToClientUpdate;
 
     protected:
         MapEntry const* i_mapEntry;

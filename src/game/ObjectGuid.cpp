@@ -85,7 +85,7 @@ ByteBuffer& operator<< (ByteBuffer& buf, ObjectGuid const& guid)
     return buf;
 }
 
-ByteBuffer& operator>>(ByteBuffer& buf, ObjectGuid& guid)
+ByteBuffer &operator>>(ByteBuffer& buf, ObjectGuid& guid)
 {
     guid.Set(buf.read<uint64>());
     return buf;
@@ -97,7 +97,7 @@ ByteBuffer& operator<< (ByteBuffer& buf, PackedGuid const& guid)
     return buf;
 }
 
-ByteBuffer& operator>>(ByteBuffer& buf, PackedGuidReader const& guid)
+ByteBuffer &operator>>(ByteBuffer& buf, PackedGuidReader const& guid)
 {
     guid.m_guidPtr->Set(buf.readPackGUID());
     return buf;
@@ -114,5 +114,6 @@ template uint32 ObjectGuidGenerator<HIGHGUID_DYNAMICOBJECT>::Generate();
 template uint32 ObjectGuidGenerator<HIGHGUID_CORPSE>::Generate();
 template uint32 ObjectGuidGenerator<HIGHGUID_INSTANCE>::Generate();
 template uint32 ObjectGuidGenerator<HIGHGUID_GROUP>::Generate();
+
 template uint32 ObjectGuidGenerator<HIGHGUID_CALENDAR_EVENT>::Generate();
 template uint32 ObjectGuidGenerator<HIGHGUID_INVITE>::Generate();

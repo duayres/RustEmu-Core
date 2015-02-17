@@ -167,9 +167,6 @@ Creature::~Creature()
 void Creature::AddToWorld()
 {
     ///- Register the creature for guid lookup
-    if (!IsInWorld() && GetObjectGuid().IsCreatureOrVehicle())
-        GetMap()->GetObjectsStore().insert<Creature>(GetObjectGuid(), (Creature*)this);
-
     Unit::AddToWorld();
 
     // Make active if required
@@ -178,13 +175,10 @@ void Creature::AddToWorld()
         SetActiveObjectState(true);
 }
 
-void Creature::RemoveFromWorld()
+void Creature::RemoveFromWorld(bool remove)
 {
     ///- Remove the creature from the accessor
-    if (IsInWorld() && GetObjectGuid().IsCreatureOrVehicle())
-        GetMap()->GetObjectsStore().erase<Creature>(GetObjectGuid(), (Creature*)NULL);
-
-    Unit::RemoveFromWorld();
+    Unit::RemoveFromWorld(remove);
 }
 
 void Creature::RemoveCorpse()

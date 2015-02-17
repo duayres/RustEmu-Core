@@ -31,111 +31,112 @@ class Player;
 /// Camera - object-receiver. Receives broadcast packets from nearby worldobjects, object visibility changes and sends them to client
 class MANGOS_DLL_SPEC Camera
 {
-        friend class ViewPoint;
-    public:
+    friend class ViewPoint;
+public:
 
-        explicit Camera(Player* pl);
-        ~Camera();
+    explicit Camera(Player& player);
+    ~Camera();
 
-        WorldObject* GetBody() { return m_source;}
-        Player* GetOwner() { return &m_owner;}
+    WorldObject* GetBody();
+    Player* GetOwner() { return &m_owner; }
 
-        // set camera's view to any worldobject
-        // Note: this worldobject must be in same map, in same phase with camera's owner(player)
-        // client supports only unit and dynamic objects as farsight objects
-        void SetView(WorldObject* obj, bool update_far_sight_field = true);
+    // helper functions for detect/set initial state for camera
+    void Initialize();
+    void Reset();
+    bool IsInitialized() const { return !m_sourceGuid.IsEmpty(); };
 
-        // set view to camera's owner
-        void ResetView(bool update_far_sight_field = true);
+    // set camera's view to any worldobject
+    // Note: this worldobject must be in same map, in same phase with camera's owner(player)
+    // client supports only unit and dynamic objects as farsight objects
+    void SetView(WorldObject* obj, bool update_far_sight_field = true);
 
-        template<class T>
-        void UpdateVisibilityOf(T* obj, UpdateData& d, std::set<WorldObject*>& vis);
-        void UpdateVisibilityOf(WorldObject* obj);
+    // set view to camera's owner
+    void ResetView(bool update_far_sight_field = true);
 
-        void ReceivePacket(WorldPacket* data);
+    template<class T>
+    void UpdateVisibilityOf(T* obj, UpdateData& d, std::set<WorldObject*>& vis);
+    void UpdateVisibilityOf(WorldObject* obj);
 
-        // updates visibility of worldobjects around viewpoint for camera's owner
-        void UpdateVisibilityForOwner();
+    void ReceivePacket(WorldPacket* data);
 
-    private:
-        // called when viewpoint changes visibility state
-        void Event_AddedToWorld();
-        void Event_RemovedFromWorld();
-        void Event_Moved();
-        void Event_ViewPointVisibilityChanged();
+    // updates visibility of worldobjects around viewpoint for camera's owner
+    void UpdateVisibilityForOwner();
 
-        Player& m_owner;
-        WorldObject* m_source;
+private:
+    // called when viewpoint changes visibility state
+    void Event_AddedToWorld();
+    void Event_RemovedFromWorld();
+    void Event_Moved();
+    void Event_ViewPointVisibilityChanged();
 
-        void UpdateForCurrentViewPoint();
+    Player& m_owner;
+    ObjectGuid m_sourceGuid;
 
-    public:
-        GridReference<Camera>& GetGridRef() { return m_gridRef; }
-        bool isActiveObject() const { return false; }
-    private:
-        GridReference<Camera> m_gridRef;
+    void UpdateForCurrentViewPoint();
+
+public:
+    GridReference<Camera>& GetGridRef() { return m_gridRef; }
+    bool isActiveObject() const { return false; }
+private:
+    GridReference<Camera> m_gridRef;
 };
 
 /// Object-observer, notifies farsight object state to cameras that attached to it
 class MANGOS_DLL_SPEC ViewPoint
 {
-        friend class Camera;
+    friend class Camera;
 
-        typedef std::list<Camera*> CameraList;
+    typedef GuidSet CameraList;
 
-        CameraList m_cameras;
-        GridType* m_grid;
+    CameraList          m_cameras;
+    GridType*           m_grid;
+    WorldObject&        m_body;
 
-        void Attach(Camera* c) { m_cameras.push_back(c); }
-        void Detach(Camera* c) { m_cameras.remove(c); }
+    void Attach(ObjectGuid const& cameraOwnerGuid);
+    void Detach(ObjectGuid const& cameraOwnerGuid);
 
-        void CameraCall(void (Camera::*handler)())
-        {
-            if (!m_cameras.empty())
-            {
-                for (CameraList::iterator itr = m_cameras.begin(); itr != m_cameras.end();)
-                {
-                    Camera* c = *(itr++);
-                    (c->*handler)();
-                }
-            }
-        }
+    void CameraCall(void (Camera::*handler)());
 
-    public:
+public:
 
-        ViewPoint() : m_grid(0) {}
-        ~ViewPoint();
+    ViewPoint(WorldObject& object) : m_grid(NULL), m_body(object)
+    {
+        m_cameras.clear();
+    }
+    ~ViewPoint();
 
-        bool hasViewers() const { return !m_cameras.empty(); }
+    WorldObject* GetBody() { return &m_body; }
 
-        // these events are called when viewpoint changes visibility state
-        void Event_AddedToWorld(GridType* grid)
-        {
-            m_grid = grid;
-            CameraCall(&Camera::Event_AddedToWorld);
-        }
+    bool hasViewers() const { return !m_cameras.empty(); }
 
-        void Event_RemovedFromWorld()
-        {
-            m_grid = NULL;
-            CameraCall(&Camera::Event_RemovedFromWorld);
-        }
+    // these events are called when viewpoint changes visibility state
+    void Event_AddedToWorld(GridType* grid)
+    {
+        m_grid = grid;
+        CameraCall(&Camera::Event_AddedToWorld);
+    }
 
-        void Event_GridChanged(GridType* grid)
-        {
-            m_grid = grid;
-            CameraCall(&Camera::Event_Moved);
-        }
+    void Event_RemovedFromWorld()
+    {
+        m_grid = NULL;
+        CameraCall(&Camera::Event_RemovedFromWorld);
+    }
 
-        void Event_ViewPointVisibilityChanged()
-        {
-            CameraCall(&Camera::Event_ViewPointVisibilityChanged);
-        }
+    void Event_GridChanged(GridType* grid)
+    {
+        m_grid = grid;
+        CameraCall(&Camera::Event_Moved);
+    }
 
-        void Call_UpdateVisibilityForOwner()
-        {
-            CameraCall(&Camera::UpdateVisibilityForOwner);
-        }
+    void Event_ViewPointVisibilityChanged()
+    {
+        CameraCall(&Camera::Event_ViewPointVisibilityChanged);
+    }
+
+    void Call_UpdateVisibilityForOwner()
+    {
+        CameraCall(&Camera::UpdateVisibilityForOwner);
+    }
 };
 
 #endif
