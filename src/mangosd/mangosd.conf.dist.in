@@ -3,7 +3,7 @@
 #####################################
 
 [MangosdConf]
-ConfVersion=2015021401
+ConfVersion=2015021810
 
 ###################################################################################################################
 # CONNECTIONS AND DIRECTORIES
@@ -764,6 +764,21 @@ LogColors = ""
 #                 0 - unsummon only for flying mounts
 #        Default: 1 - unsummon for any mount
 #
+#    PetSaveAllInDB
+#        Persmanent pet state saving in database
+#        Default: 0 - default mangos style, only permanent pets saved in DB
+#                 1 - all pets (including multipets and temporary summoned pets) saved in DB.
+#
+#    PetAdvancedAI
+#        Advanced AI for summoned minions (pet/guardian/etc). Not fully offlike! Use at own risk.
+#        Default: 0 - default mangos pet AI style
+#                 1 - enable advanced AI usage
+#
+#    PetAdvancedAIWithSlacker
+#        Should only use in combination with PetAdvancedAI
+#        Default: 0 - disable, default mangos pet AI style
+#                 1 - enable, pet returns below 20% life to owner
+#
 #    RaidFlags.Unique
 #        Set raid flags (assistant, main assistant, main tank) unique in raid
 #        Default: 0 - flags not unique
@@ -806,6 +821,12 @@ LogColors = ""
 #        Default: 1 (parse commands)
 #                 0 (ignore commands)
 #
+#    CrowdControlHPBase
+#        Base HP part for calculation CrowdControl effects (from MAX HP!).
+#        Default: 0.1  (10% max HP)
+#        min:     0.0  (default mangos method)
+#        max:     1.0  (full CrowdControl, auras like Fear not breaked by damage anyway)
+#
 #    ResilenceAlternativeCalculation
 #        enable/disable alternative resilence damage reduction calculation (for Avenger/Sanctified wrath mostly)
 #        Default: 0     (disable, default mangos style)
@@ -819,6 +840,10 @@ LogColors = ""
 #        If the target level is greater than caster level, add to target additional resistance points.
 #        Default: 0 - disabled (don't add additional resistance points)
 #                 1 - enabled  (add to target 5 resistance points on each target over level)
+#
+#    Melee.Distance.Addition
+#        Addition for check strict melee distance in CheckRange()
+#        Default: 4 (overall dist ~ 9)
 #
 ###################################################################################################################
 
@@ -898,9 +923,11 @@ WaitAtStartupError = 0
 Motd = "Welcome to the Continued Massive Network Game Object Server."
 Raid.MinLevel = 10
 PlayerCommands = 1
+CrowdControlHPBase = 0.1
 ResilienceAlternativeCalculation = 0
 Resistance.CalculationMethod = 1
 Resistance.AddByOverLevel = 0
+Melee.Distance.Addition = 4
 
 ###################################################################################################################
 # PLAYER INTERACTION
@@ -1053,6 +1080,11 @@ TalentsInspecting = 1
 #        in game from other side
 #        Default: 100
 #
+#    Player.GSCalculationBase
+#        default (base) player Gear Score (GS) for calculate additional bonus for vehicles, scaled by GS.
+#        default: 190
+#        range: 1 - 384
+#
 ###################################################################################################################
 
 ThreatRadius = 100
@@ -1090,6 +1122,7 @@ ListenRange.TextEmote = 40
 ListenRange.Yell = 300
 GuidReserveSize.Creature = 100
 GuidReserveSize.GameObject = 100
+Player.GSCalculationBase = 190
 
 ###################################################################################################################
 # CHAT SETTINGS
