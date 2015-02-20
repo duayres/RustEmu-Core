@@ -332,7 +332,7 @@ void instance_ahnkahet::HandleInsanityClear()
 void instance_ahnkahet::HandleInsanitySwitch(Player* pPhasedPlayer)
 {
     // Get the phase aura id
-    std::list<Aura*> lAuraList = pPhasedPlayer->GetAurasByType(SPELL_AURA_PHASE);
+    Unit::AuraList lAuraList = pPhasedPlayer->GetAurasByType(SPELL_AURA_PHASE);
     if (lAuraList.empty())
         return;
 
@@ -362,7 +362,7 @@ void instance_ahnkahet::HandleInsanitySwitch(Player* pPhasedPlayer)
     Player* pNewPlayer = vOtherPhasePlayers[urand(0, vOtherPhasePlayers.size() - 1)];
 
     // Get the phase aura id
-    std::list<Aura*> lNewAuraList = pNewPlayer->GetAurasByType(SPELL_AURA_PHASE);
+    Unit::AuraList lNewAuraList = pNewPlayer->GetAurasByType(SPELL_AURA_PHASE);
     if (lNewAuraList.empty())
         return;
 

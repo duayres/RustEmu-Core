@@ -1071,28 +1071,62 @@ GridMapLiquidStatus TerrainInfo::getLiquidStatus(float x, float y, float z, uint
     return result;
 }
 
-bool TerrainInfo::IsInWater(float x, float y, float pZ, GridMapLiquidData* data) const
+bool TerrainInfo::IsInWater(float x, float y, float pZ, GridMapLiquidData* data, float min_depth) const
 {
     // Check surface in x, y point for liquid
     if (const_cast<TerrainInfo*>(this)->GetGrid(x, y))
     {
         GridMapLiquidData liquid_status;
-        GridMapLiquidData* liquid_ptr = data ? data : &liquid_status;
-        if (getLiquidStatus(x, y, pZ, MAP_ALL_LIQUIDS, liquid_ptr))
+        GridMapLiquidData *liquid_ptr = data ? data : &liquid_status;
+        GridMapLiquidStatus status = getLiquidStatus(x, y, pZ, MAP_ALL_LIQUIDS, liquid_ptr);
+        if (status == LIQUID_MAP_NO_WATER)
+            return false;
+        else if (status & LIQUID_MAP_ABOVE_WATER)
+            return false;
+        else if (status & LIQUID_MAP_WATER_WALK)
+            return false;
+        else if ((status & LIQUID_MAP_IN_WATER) ||
+            (status & LIQUID_MAP_UNDER_WATER))
         {
-            // if (liquid_prt->level - liquid_prt->depth_level > 2) //???
+            if (liquid_ptr && (liquid_ptr->level - liquid_ptr->depth_level > min_depth)) // avoid water with depth < 2
+                return true;
+            else
+                return false;
+        };
+    }
+    return false;
+}
+
+bool TerrainInfo::IsAboveWater(float x, float y, float z, float* pWaterZ/*= NULL*/) const
+{
+    if (const_cast<TerrainInfo*>(this)->GetGrid(x, y))
+    {
+        GridMapLiquidData mapData;
+
+        if (getLiquidStatus(x, y, z, MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_OCEAN, &mapData) & LIQUID_MAP_ABOVE_WATER)
+        {
+            if (pWaterZ)
+                *pWaterZ = mapData.level;
+
             return true;
         }
     }
     return false;
 }
 
-bool TerrainInfo::IsUnderWater(float x, float y, float z) const
+bool TerrainInfo::IsUnderWater(float x, float y, float z, float* pWaterZ/*= NULL*/) const
 {
     if (const_cast<TerrainInfo*>(this)->GetGrid(x, y))
     {
-        if (getLiquidStatus(x, y, z, MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_OCEAN)&LIQUID_MAP_UNDER_WATER)
+        GridMapLiquidData mapData;
+
+        if (getLiquidStatus(x, y, z, MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_OCEAN, &mapData) & LIQUID_MAP_UNDER_WATER)
+        {
+            if (pWaterZ)
+                *pWaterZ = mapData.level;
+
             return true;
+        }
     }
     return false;
 }

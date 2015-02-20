@@ -394,8 +394,6 @@ void TradeData::SetAccepted(bool state, bool crosssend /*= false*/)
 
 Player::Player(WorldSession* session) : Unit(), m_mover(this), m_camera(NULL), m_achievementMgr(this), m_reputationMgr(this)
 {
-    m_transport = 0;
-
     m_speakTime = 0;
     m_speakCount = 0;
 
@@ -561,10 +559,6 @@ Player::Player(WorldSession* session) : Unit(), m_mover(this), m_camera(NULL), m
 
     // Player summoning
     m_summon_expire = 0;
-    m_summon_mapid = 0;
-    m_summon_x = 0.0f;
-    m_summon_y = 0.0f;
-    m_summon_z = 0.0f;
 
     m_contestedPvPTimer = 0;
 
@@ -614,10 +608,8 @@ Player::~Player()
 
     delete PlayerTalkClass;
 
-    if (m_transport)
-    {
-        m_transport->RemovePassenger(this);
-    }
+    if (Transport* transport = GetTransport())
+        transport->RemovePassenger(this);
 
     for (size_t x = 0; x < ItemSetEff.size(); ++x)
         delete ItemSetEff[x];
@@ -1703,74 +1695,78 @@ ChatTagFlags Player::GetChatTag() const
     return tag;
 }
 
-bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientation, uint32 options /*=0*/)
+bool Player::TeleportTo(WorldLocation const& loc, uint32 options)
 {
-    if (!MapManager::IsValidMapCoord(mapid, x, y, z, orientation))
+    if (!MapManager::IsValidMapCoord(loc))
     {
-        sLog.outError("TeleportTo: invalid map %d or absent instance template.", mapid);
+        sLog.outError("Player::TeleportTo: %s has invalid map %d or absent instance template.", GetGuidStr().c_str(), loc.GetMapId());
         return false;
     }
 
-    MapEntry const* mEntry = sMapStore.LookupEntry(mapid);  // Validity checked in IsValidMapCoord
-
-    // preparing unsummon pet if lost (we must get pet before teleportation or will not find it later)
-    Pet* pet = GetPet();
-
-    // don't let enter battlegrounds without assigned battleground id (for example through areatrigger)...
-    // don't let gm level > 1 either
-    if (!InBattleGround() && mEntry->IsBattleGroundOrArena())
-        return false;
-
-    // Check requirements for teleport
-    if (GetMapId() != mapid)
+    if (GetMapId() != loc.GetMapId())
     {
         if (!(options & TELE_TO_CHECKED))
         {
-            if (!CheckTransferPossibility(mapid))
+            if (!CheckTransferPossibility(loc.GetMapId()))
             {
-                if (IsBoarded())
+                if (IsOnTransport())
                     TeleportToHomebind();
 
-                DEBUG_LOG("Player::TeleportTo %s is NOT teleported to map %u (requirements check failed)", GetName(), mapid);
+                DEBUG_LOG("Player::TeleportTo %s is NOT teleported to map %u (requirements check failed)", GetName(), loc.GetMapId());
 
                 return false;                                       // normal client can't teleport to this map...
             }
             else
                 options |= TELE_TO_CHECKED;
         }
-        DEBUG_LOG("Player::TeleportTo %s is being far teleported to map %u %s", GetName(), mapid, IsBeingTeleportedFar() ? "(stage 2)" : "");
+        DEBUG_LOG("Player::TeleportTo %s is being far teleported to map %u %s", GetName(), loc.GetMapId(), IsBeingTeleportedFar() ? "(stage 2)" : "");
     }
     else
     {
-        DEBUG_LOG("Player::TeleportTo %s is being near teleported to map %u %s", GetName(), mapid, IsBeingTeleportedNear() ? "(stage 2)" : "");
+        DEBUG_LOG("Player::TeleportTo %s is being near teleported to map %u %s", GetName(), loc.GetMapId(), IsBeingTeleportedNear() ? "(stage 2)" : "");
     }
 
-    if (Group* grp = GetGroup())                            // TODO: Verify that this is correct place
-        grp->SetPlayerMap(GetObjectGuid(), mapid);
+    // preparing unsummon pet if lost (we must get pet before teleportation or will not find it later)
+    Pet* pet = GetPet();
+
+    MapEntry const* mEntry = sMapStore.LookupEntry(loc.GetMapId());
+    if (!mEntry)
+    {
+        sLog.outError("TeleportTo: invalid map entry (id %d). possible disk or memory error.", loc.GetMapId());
+        return false;
+    }
+
+    // don't let enter battlegrounds without assigned battleground id (for example through areatrigger)...
+    // don't let gm level > 1 either
+    if (!InBattleGround() && mEntry->IsBattleGroundOrArena())
+        return false;
+
+    if (!GetMap())
+        options |= TELE_TO_NODELAY;
+
+    if (Group* grp = GetGroup())
+        grp->SetPlayerMap(GetObjectGuid(), loc.GetMapId());
 
     // if we were on a transport, leave
-    if (!(options & TELE_TO_NOT_LEAVE_TRANSPORT) && m_transport)
-    {
-        m_transport->RemovePassenger(this);
-        m_transport = NULL;
-        m_movementInfo.ClearTransportData();
-    }
+    if (!(options & TELE_TO_NOT_LEAVE_TRANSPORT) && IsOnTransport())
+        GetTransport()->RemovePassenger(this);
 
     // The player was ported to another map and looses the duel immediately.
     // We have to perform this check before the teleport, otherwise the
     // ObjectAccessor won't find the flag.
-    if (duel && GetMapId() != mapid)
+    if (duel && GetMapId() != loc.GetMapId())
         if (GetMap()->GetGameObject(GetGuidValue(PLAYER_DUEL_ARBITER)))
             DuelComplete(DUEL_FLED);
 
     // reset movement flags at teleport, because player will continue move with these flags after teleport
-    m_movementInfo.SetMovementFlags(MOVEFLAG_NONE);
     DisableSpline();
+    m_movementInfo.SetMovementFlags(MOVEFLAG_NONE);
 
-    if ((GetMapId() == mapid) && (!m_transport))            // TODO the !m_transport might have unexpected effects when teleporting from transport to other place on same map
+    if (GetMap() && GetMapId() == loc.GetMapId() && !IsOnTransport())
     {
         // lets reset far teleport flag if it wasn't reset during chained teleports
         SetSemaphoreTeleportFar(false);
+
         // setup delayed teleport flag
         // if teleport spell is casted in Unit::Update() func
         // then we need to delay it until update process will be finished
@@ -1778,7 +1774,7 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
         {
             SetSemaphoreTeleportNear(true);
             // lets save teleport destination for player
-            m_teleport_dest = WorldLocation(mapid, x, y, z, orientation);
+            m_teleport_dest = loc;
             m_teleport_options = options;
             return true;
         }
@@ -1786,16 +1782,21 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
         if (!(options & TELE_TO_NOT_UNSUMMON_PET))
         {
             // same map, only remove pet if out of range for new position
-            if (pet && !pet->IsWithinDist3d(x, y, z, GetMap()->GetVisibilityDistance()))
+            if (pet && !pet->IsWithinDist3d(loc.x, loc.y, loc.z, GetMap()->GetVisibilityDistance()))
                 UnsummonPetTemporaryIfAny();
         }
 
         if (!(options & TELE_TO_NOT_LEAVE_COMBAT))
             CombatStop();
 
+        InterruptSpell(CURRENT_CHANNELED_SPELL);
+
+        if (!IsWithinDist3d(loc.x, loc.y, loc.z, GetMap()->GetVisibilityDistance()))
+            RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_TELEPORTED);
+
         // this will be used instead of the current location in SaveToDB
-        m_teleport_dest = WorldLocation(mapid, x, y, z, orientation);
-        SetFallInformation(0, z);
+        m_teleport_dest = loc;
+        SetFallInformation(0, loc.z);
 
         // code for finish transfer called in WorldSession::HandleMovementOpcodes()
         // at client packet MSG_MOVE_TELEPORT_ACK
@@ -1804,7 +1805,7 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
         if (!GetSession()->PlayerLogout())
         {
             WorldPacket data;
-            BuildTeleportAckMsg(data, x, y, z, orientation);
+            BuildTeleportAckMsg(data, loc.getX(), loc.getY(), loc.getZ(), loc.orientation);
             GetSession()->SendPacket(&data);
         }
     }
@@ -1816,20 +1817,21 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
 
         // If the map is not created, assume it is possible to enter it.
         // It will be created in the WorldPortAck.
-        DungeonPersistentState* state = GetBoundInstanceSaveForSelfOrGroup(mapid);
-        Map* map = sMapMgr.FindMap(mapid, state ? state->GetInstanceId() : 0);
+        DungeonPersistentState* state = GetBoundInstanceSaveForSelfOrGroup(loc.GetMapId());
+        Map* map = sMapMgr.FindMap(loc.GetMapId(), state ? state->GetInstanceId() : loc.GetInstanceId());
         if (!map || map->CanEnter(this))
         {
             // lets reset near teleport flag if it wasn't reset during chained teleports
             SetSemaphoreTeleportNear(false);
+
             // setup delayed teleport flag
             // if teleport spell is casted in Unit::Update() func
             // then we need to delay it until update process will be finished
             if (SetDelayedTeleportFlagIfCan())
             {
                 SetSemaphoreTeleportFar(true);
-                // lets save teleport destination for player
-                m_teleport_dest = WorldLocation(mapid, x, y, z, orientation);
+                //lets save teleport destination for player
+                m_teleport_dest = loc;
                 m_teleport_options = options;
                 return true;
             }
@@ -1850,17 +1852,12 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
                 // Note: at battleground join battleground id set before teleport
                 // and we already will found "current" battleground
                 // just need check that this is targeted map or leave
-                if (bg->GetMapId() != mapid)
-                    LeaveBattleground(false);               // don't teleport to entry point
+                if (bg->GetMapId() != loc.GetMapId())
+                    LeaveBattleground(false);                   // don't teleport to entry point
             }
 
             // remove pet on map change
-            if (pet)
-                UnsummonPetTemporaryIfAny();
-
-            // remove vehicle accessories on map change
-            if (IsVehicle())
-                GetVehicleInfo()->RemoveAccessoriesFromMap();
+            UnsummonPetTemporaryIfAny();
 
             // remove all dyn objects
             RemoveAllDynObjects();
@@ -1871,17 +1868,17 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
                 if (IsNonMeleeSpellCasted(true))
                     InterruptNonMeleeSpells(true);
 
-            // remove auras before removing from map...
+            //remove auras before removing from map...
             RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_CHANGE_MAP | AURA_INTERRUPT_FLAG_MOVE | AURA_INTERRUPT_FLAG_TURNING);
 
             if (!GetSession()->PlayerLogout())
             {
                 // send transfer packet to display load screen
                 WorldPacket data(SMSG_TRANSFER_PENDING, (4 + 4 + 4));
-                data << uint32(mapid);
-                if (m_transport)
+                data << uint32(loc.GetMapId());
+                if (IsOnTransport())
                 {
-                    data << uint32(m_transport->GetEntry());
+                    data << uint32(GetTransport()->GetEntry());
                     data << uint32(GetMapId());
                 }
                 GetSession()->SendPacket(&data);
@@ -1891,24 +1888,15 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
             if (oldmap)
                 oldmap->Remove(this, false);
 
+            SkipUpdate(true);
+
             // new final coordinates
-            float final_x = x;
-            float final_y = y;
-            float final_z = z;
-            float final_o = orientation;
+            WorldLocation final = loc;
+            if (IsOnTransport())
+                final += (*m_movementInfo.GetTransportPos());
 
-            Position const* transportPosition = m_movementInfo.GetTransportPos();
-
-            if (m_transport)
-            {
-                final_x += transportPosition->x;
-                final_y += transportPosition->y;
-                final_z += transportPosition->z;
-                final_o += transportPosition->o;
-            }
-
-            m_teleport_dest = WorldLocation(mapid, final_x, final_y, final_z, final_o);
-            SetFallInformation(0, final_z);
+            m_teleport_dest = final;
+            SetFallInformation(0, final.z);
             // if the player is saved before worldport ack (at logout for example)
             // this will be used instead of the current location in SaveToDB
 
@@ -1919,28 +1907,28 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
             if (!GetSession()->PlayerLogout())
             {
                 // transfer finished, inform client to start load
-                WorldPacket data(SMSG_NEW_WORLD, (20));
-                data << uint32(mapid);
-                if (m_transport)
+                WorldPacket data(SMSG_NEW_WORLD, 20);
+                data << uint32(loc.GetMapId());
+                if (IsOnTransport())
                 {
-                    data << float(transportPosition->x);
-                    data << float(transportPosition->y);
-                    data << float(transportPosition->z);
-                    data << float(transportPosition->o);
+                    data << float(m_movementInfo.GetTransportPos()->x);
+                    data << float(m_movementInfo.GetTransportPos()->y);
+                    data << float(m_movementInfo.GetTransportPos()->z);
+                    data << float(m_movementInfo.GetTransportPos()->o);
                 }
                 else
                 {
-                    data << float(final_x);
-                    data << float(final_y);
-                    data << float(final_z);
-                    data << float(final_o);
+                    data << float(final.x);
+                    data << float(final.y);
+                    data << float(final.z);
+                    data << float(final.o);
                 }
 
                 GetSession()->SendPacket(&data);
                 SendSavedInstances();
             }
         }
-        else                                                // !map->CanEnter(this)
+        else
             return false;
     }
     return true;
@@ -1960,7 +1948,7 @@ void Player::ProcessDelayedOperations()
 
     if (m_DelayedOperations & DELAYED_RESURRECT_PLAYER)
     {
-        ResurrectPlayer(0.0f, false);
+        ResurrectPlayer(0, false);
 
         if (GetMaxHealth() > m_resurrectHealth)
             SetHealth(m_resurrectHealth);
@@ -4450,7 +4438,7 @@ void Player::BuildPlayerRepop()
     SetByteValue(UNIT_FIELD_BYTES_1, 3, UNIT_BYTE1_FLAG_ALWAYS_STAND);
 }
 
-void Player::ResurrectPlayer(float restore_percent, bool applySickness)
+void Player::ResurrectPlayer(uint32 restorePercent, bool applySickness)
 {
     WorldPacket data(SMSG_DEATH_RELEASE_LOC, 4 * 4);        // remove spirit healer position
     data << uint32(-1);
@@ -4475,13 +4463,16 @@ void Player::ResurrectPlayer(float restore_percent, bool applySickness)
 
     m_deathTimer = 0;
 
+    if (restorePercent > 100)
+        restorePercent = 100;
+
     // set health/powers (0- will be set in caller)
-    if (restore_percent > 0.0f)
+    if (restorePercent > 0)
     {
-        SetHealth(uint32(GetMaxHealth()*restore_percent));
-        SetPower(POWER_MANA, uint32(GetMaxPower(POWER_MANA)*restore_percent));
+        SetHealth(GetMaxHealth() * restorePercent / 100);
+        SetPower(POWER_MANA, GetMaxPower(POWER_MANA) * restorePercent / 100);
         SetPower(POWER_RAGE, 0);
-        SetPower(POWER_ENERGY, uint32(GetMaxPower(POWER_ENERGY)*restore_percent));
+        SetPower(POWER_ENERGY, GetMaxPower(POWER_ENERGY) * restorePercent / 100);
     }
 
     // trigger update zone for alive state zone updates
@@ -4846,9 +4837,9 @@ void Player::RepopAtGraveyard()
     AreaTableEntry const* zone = GetAreaEntryByAreaID(GetAreaId());
 
     // Such zones are considered unreachable as a ghost and the player must be automatically revived
-    if ((!isAlive() && zone && zone->flags & AREA_FLAG_NEED_FLY) || GetTransport())
+    if ((!isAlive() && zone && (zone->flags & AREA_FLAG_NEED_FLY)) || IsOnTransport() || GetPositionZ() < -500.0f)
     {
-        ResurrectPlayer(0.5f);
+        ResurrectPlayer(50);
         SpawnCorpseBones();
     }
 
@@ -6095,54 +6086,32 @@ ActionButton const* Player::GetActionButton(uint8 button)
     return &buttonItr->second;
 }
 
-bool Player::SetPosition(float x, float y, float z, float orientation, bool teleport)
+bool Player::SetPosition(Position const& pos, bool teleport)
 {
-    // prevent crash when a bad coord is sent by the client
-    if (!MaNGOS::IsValidMapCoord(x, y, z, orientation))
-    {
-        DEBUG_LOG("Player::SetPosition(%f, %f, %f, %f, %d) .. bad coordinates for player %d!", x, y, z, orientation, teleport, GetGUIDLow());
+    bool groupUpdate = (GetGroup() && (teleport || abs(GetPositionX() - pos.x) > 1.0f || abs(GetPositionY() - pos.y) > 1.0f));
+
+    if (!Unit::SetPosition(pos, teleport))
         return false;
-    }
 
-    Map* m = GetMap();
-
-    const float old_x = GetPositionX();
-    const float old_y = GetPositionY();
-    const float old_z = GetPositionZ();
-    const float old_r = GetOrientation();
-
-    if (teleport || old_x != x || old_y != y || old_z != z || old_r != orientation)
-    {
-        if (teleport || old_x != x || old_y != y || old_z != z)
-            RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_MOVE | AURA_INTERRUPT_FLAG_TURNING);
-        else
-            RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_TURNING);
-
-        RemoveSpellsCausingAura(SPELL_AURA_FEIGN_DEATH);
-
-        // move and update visible state if need
-        m->PlayerRelocation(this, x, y, z, orientation);
-
-        // reread after Map::Relocation
-        m = GetMap();
-        x = GetPositionX();
-        y = GetPositionY();
-        z = GetPositionZ();
-
-        // group update
-        if (GetGroup() && (old_x != x || old_y != y))
-            SetGroupUpdateFlag(GROUP_UPDATE_FLAG_POSITION);
-
-        if (GetTrader() && !IsWithinDistInMap(GetTrader(), INTERACTION_DISTANCE))
-            GetSession()->SendCancelTrade();   // will close both side trade windows
-    }
-
-    if (m_positionStatusUpdateTimer)                        // Update position's state only on interval
+    // Update position's state only on interval
+    if (m_positionStatusUpdateTimer)
         return true;
     m_positionStatusUpdateTimer = 100;
 
+    // will close both side trade windows
+    if (GetTrader() && !IsWithinDistInMap(GetTrader(), INTERACTION_DISTANCE))
+        GetSession()->SendCancelTrade();
+
+    // movement should cancel looting
+    if (ObjectGuid lootGuid = GetLootGuid())
+        SendLootRelease(lootGuid);
+
+    // group update
+    if (groupUpdate)
+        SetGroupUpdateFlag(GROUP_UPDATE_FLAG_POSITION);
+
     // code block for underwater state update
-    UpdateUnderwaterState(m, x, y, z);
+    UpdateUnderwaterState(GetMap(), pos.x, pos.y, pos.z);
 
     // code block for outdoor state and area-explore check
     CheckAreaExploreAndOutdoor();
@@ -6152,11 +6121,7 @@ bool Player::SetPosition(float x, float y, float z, float orientation, bool tele
 
 void Player::SaveRecallPosition()
 {
-    m_recallMap = GetMapId();
-    m_recallX = GetPositionX();
-    m_recallY = GetPositionY();
-    m_recallZ = GetPositionZ();
-    m_recallO = GetOrientation();
+    m_recall = GetPosition();
 }
 
 void Player::SendMessageToSet(WorldPacket* data, bool self) const
@@ -15586,6 +15551,7 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
         transGUID = 0;
 
         m_movementInfo.ClearTransportData();
+        ClearTransportData();
     }
 
     _LoadBGData(holder->GetResult(PLAYER_LOGIN_QUERY_LOADBGDATA));
@@ -15617,8 +15583,8 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
 
             // move to bg enter point
             const WorldLocation& _loc = GetBattleGroundEntryPoint();
-            SetLocationMapId(_loc.mapid);
-            Relocate(_loc.coord_x, _loc.coord_y, _loc.coord_z, _loc.orientation);
+            SetLocationMapId(_loc.GetMapId());
+            Relocate(_loc);
 
             // We are not in BG anymore
             SetBattleGroundId(0, BATTLEGROUND_TYPE_NONE);
@@ -15631,11 +15597,20 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
         MapEntry const* mapEntry = sMapStore.LookupEntry(GetMapId());
         // if server restart after player save in BG or area
         // player can have current coordinates in to BG/Arena map, fix this
-        if (!mapEntry || mapEntry->IsBattleGroundOrArena())
+        if (mapEntry->IsBattleGroundOrArena())
         {
             const WorldLocation& _loc = GetBattleGroundEntryPoint();
-            SetLocationMapId(_loc.mapid);
-            Relocate(_loc.coord_x, _loc.coord_y, _loc.coord_z, _loc.orientation);
+            if (!MapManager::IsValidMapCoord(_loc))
+            {
+                RelocateToHomebind();
+                transGUID = 0;
+                m_movementInfo.ClearTransportData();
+            }
+            else
+            {
+                SetLocationMapId(_loc.GetMapId());
+                Relocate(_loc);
+            }
 
             // We are not in BG anymore
             SetBattleGroundId(0, BATTLEGROUND_TYPE_NONE);
@@ -15646,68 +15621,48 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
 
     if (transGUID != 0)
     {
-        m_movementInfo.SetTransportData(ObjectGuid(HIGHGUID_MO_TRANSPORT, transGUID), fields[26].GetFloat(), fields[27].GetFloat(), fields[28].GetFloat(), fields[29].GetFloat(), 0, -1);
+        ObjectGuid transportGuid = ObjectGuid(HIGHGUID_MO_TRANSPORT, transGUID);
+        Transport* transport = sObjectMgr.GetTransportByGuid(transportGuid);
 
-        Position const* transportPosition = m_movementInfo.GetTransportPos();
-
-        if (!MaNGOS::IsValidMapCoord(
-                    GetPositionX() + transportPosition->x, GetPositionY() + transportPosition->y,
-                    GetPositionZ() + transportPosition->z, GetOrientation() + transportPosition->o) ||
-                // transport size limited
-                transportPosition->x > 50 || transportPosition->y > 50 || transportPosition->z > 50)
+        if (transport)
         {
-            sLog.outError("%s have invalid transport coordinates (X: %f Y: %f Z: %f O: %f). Teleport to default race/class locations.",
-                          guid.GetString().c_str(), GetPositionX() + transportPosition->x, GetPositionY() + transportPosition->y,
-                          GetPositionZ() + transportPosition->z, GetOrientation() + transportPosition->o);
-
-            RelocateToHomebind();
-
-            m_movementInfo.ClearTransportData();
-
-            transGUID = 0;
-        }
-    }
-
-    if (transGUID != 0)
-    {
-        for (MapManager::TransportSet::const_iterator iter = sMapMgr.m_Transports.begin(); iter != sMapMgr.m_Transports.end(); ++iter)
-        {
-            if ((*iter)->GetGUIDLow() == transGUID)
+            MapEntry const* transMapEntry = sMapStore.LookupEntry(transport->GetMapId());
+            // client without expansion support
+            if (GetSession()->Expansion() < transMapEntry->Expansion())
             {
-                MapEntry const* transMapEntry = sMapStore.LookupEntry((*iter)->GetMapId());
-                // client without expansion support
-                if (GetSession()->Expansion() < transMapEntry->Expansion())
-                {
-                    DEBUG_LOG("Player %s using client without required expansion tried login at transport at non accessible map %u", GetName(), (*iter)->GetMapId());
-                    break;
-                }
+                DEBUG_LOG("Player %s using client without required expansion tried login at transport at non accessible map %u", GetName(), transport->GetMapId());
+            }
+            else
+            {
+                Relocate(transport->GetPosition());
+                SetLocationMapId(transport->GetMapId());
+                // AddPassenger not used, becoze need add passenger in correct position on transport
+                Position t_pos = Position(fields[26].GetFloat(), fields[27].GetFloat(), fields[28].GetFloat(), fields[29].GetFloat());
+                transport->AddPassenger(this, t_pos);
+            }
 
-                m_transport = *iter;
-                m_transport->AddPassenger(this);
-                SetLocationMapId(m_transport->GetMapId());
-                break;
+            if (!MaNGOS::IsValidMapCoord(
+                GetPositionX() + m_movementInfo.GetTransportPos()->x, GetPositionY() + m_movementInfo.GetTransportPos()->y,
+                GetPositionZ() + m_movementInfo.GetTransportPos()->z, GetOrientation() + m_movementInfo.GetTransportPos()->o) ||
+                // transport size limited
+                m_movementInfo.GetTransportPos()->x > 50 || m_movementInfo.GetTransportPos()->y > 50 || m_movementInfo.GetTransportPos()->z > 50)
+            {
+                sLog.outError("%s have invalid transport coordinates (X: %f Y: %f Z: %f O: %f). Teleport to default race/class locations.",
+                    guid.GetString().c_str(), GetPositionX() + m_movementInfo.GetTransportPos()->x, GetPositionY() + m_movementInfo.GetTransportPos()->y,
+                    GetPositionZ() + m_movementInfo.GetTransportPos()->z, GetOrientation() + m_movementInfo.GetTransportPos()->o);
+
+                transport->RemovePassenger(this);
             }
         }
 
-        if (!m_transport)
+        if (!IsOnTransport())
         {
             sLog.outError("%s have problems with transport guid (%u). Teleport to default race/class locations.",
-                          guid.GetString().c_str(), transGUID);
+                guid.GetString().c_str(), transGUID);
 
-            RelocateToHomebind();
-
+            ClearTransportData();
             m_movementInfo.ClearTransportData();
-
             transGUID = 0;
-        }
-    }
-    else                                                    // not transport case
-    {
-        MapEntry const* mapEntry = sMapStore.LookupEntry(GetMapId());
-        // client without expansion support
-        if (GetSession()->Expansion() < mapEntry->Expansion())
-        {
-            DEBUG_LOG("Player %s using client without required expansion tried login at non accessible map %u", GetName(), GetMapId());
             RelocateToHomebind();
         }
     }
@@ -15918,10 +15873,7 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
         // save source node as recall coord to prevent recall and fall from sky
         TaxiNodesEntry const* nodeEntry = sTaxiNodesStore.LookupEntry(node_id);
         MANGOS_ASSERT(nodeEntry);                           // checked in m_taxi.LoadTaxiDestinationsFromString
-        m_recallMap = nodeEntry->map_id;
-        m_recallX = nodeEntry->x;
-        m_recallY = nodeEntry->y;
-        m_recallZ = nodeEntry->z;
+        m_recall = WorldLocation(nodeEntry->map_id, nodeEntry->x, nodeEntry->y, nodeEntry->z);
 
         // flight will started later
     }
@@ -16240,7 +16192,7 @@ void Player::LoadCorpse()
         else
         {
             // Prevent Dead Player login without corpse
-            ResurrectPlayer(0.5f);
+            ResurrectPlayer(50);
         }
     }
 }
@@ -17222,42 +17174,31 @@ bool Player::_LoadHomeBind(QueryResult* result)
     }
 
     bool ok = false;
-    // QueryResult *result = CharacterDatabase.PQuery("SELECT map,zone,position_x,position_y,position_z FROM character_homebind WHERE guid = '%u'", GUID_LOPART(playerGuid));
+    //QueryResult *result = CharacterDatabase.PQuery("SELECT map,zone,position_x,position_y,position_z FROM character_homebind WHERE guid = '%u'", GUID_LOPART(playerGuid));
     if (result)
     {
         Field* fields = result->Fetch();
-        m_homebindMapId = fields[0].GetUInt32();
-        m_homebindAreaId = fields[1].GetUInt16();
-        m_homebindX = fields[2].GetFloat();
-        m_homebindY = fields[3].GetFloat();
-        m_homebindZ = fields[4].GetFloat();
+        m_homebind = WorldLocation(fields[0].GetUInt32(), fields[2].GetFloat(), fields[3].GetFloat(), fields[4].GetFloat());
+        // m_homebindAreaId = fields[1].GetUInt16();
         delete result;
 
-        MapEntry const* bindMapEntry = sMapStore.LookupEntry(m_homebindMapId);
+        MapEntry const* bindMapEntry = sMapStore.LookupEntry(m_homebind.GetMapId());
 
         // accept saved data only for valid position (and non instanceable), and accessable
-        if (MapManager::IsValidMapCoord(m_homebindMapId, m_homebindX, m_homebindY, m_homebindZ) &&
-                !bindMapEntry->Instanceable() && GetSession()->Expansion() >= bindMapEntry->Expansion())
+        if (MapManager::IsValidMapCoord(m_homebind) &&
+            !bindMapEntry->Instanceable() && GetSession()->Expansion() >= bindMapEntry->Expansion())
         {
             ok = true;
         }
         else
-            CharacterDatabase.PExecute("DELETE FROM character_homebind WHERE guid = '%u'", GetGUIDLow());
+            CharacterDatabase.PExecute("DELETE FROM character_homebind WHERE guid = %u", GetGUIDLow());
     }
 
     if (!ok)
-    {
-        m_homebindMapId = info->mapId;
-        m_homebindAreaId = info->areaId;
-        m_homebindX = info->positionX;
-        m_homebindY = info->positionY;
-        m_homebindZ = info->positionZ;
-
-        CharacterDatabase.PExecute("INSERT INTO character_homebind (guid,map,zone,position_x,position_y,position_z) VALUES ('%u', '%u', '%u', '%f', '%f', '%f')", GetGUIDLow(), m_homebindMapId, (uint32)m_homebindAreaId, m_homebindX, m_homebindY, m_homebindZ);
-    }
+        SetHomebindToLocation(WorldLocation(info->mapId, info->positionX, info->positionY, info->positionZ));
 
     DEBUG_LOG("Setting player home position: mapid is: %u, zoneid is %u, X is %f, Y is %f, Z is %f",
-              m_homebindMapId, m_homebindAreaId, m_homebindX, m_homebindY, m_homebindZ);
+        m_homebind.GetMapId(), m_homebind.GetAreaId(), m_homebind.x, m_homebind.y, m_homebind.z);
 
     return true;
 }
@@ -17334,12 +17275,12 @@ void Player::SaveToDB()
     }
     else
     {
-        uberInsert.addUInt32(GetTeleportDest().mapid);
+        uberInsert.addUInt32(GetTeleportDest().GetMapId());
         uberInsert.addUInt32(uint32(GetDungeonDifficulty()));
-        uberInsert.addFloat(finiteAlways(GetTeleportDest().coord_x));
-        uberInsert.addFloat(finiteAlways(GetTeleportDest().coord_y));
-        uberInsert.addFloat(finiteAlways(GetTeleportDest().coord_z));
-        uberInsert.addFloat(finiteAlways(GetTeleportDest().orientation));
+        uberInsert.addFloat(finiteAlways(GetTeleportDest().getX()));
+        uberInsert.addFloat(finiteAlways(GetTeleportDest().getY()));
+        uberInsert.addFloat(finiteAlways(GetTeleportDest().getZ()));
+        uberInsert.addFloat(finiteAlways(GetTeleportDest().getO()));
     }
 
     std::ostringstream ss;
@@ -17367,8 +17308,8 @@ void Player::SaveToDB()
     uberInsert.addFloat(finiteAlways(transportPosition->z));
     uberInsert.addFloat(finiteAlways(transportPosition->o));
 
-    if (m_transport)
-        uberInsert.addUInt32(m_transport->GetGUIDLow());
+    if (IsOnTransport())
+        uberInsert.addUInt32(GetTransport()->GetGUIDLow());
     else
         uberInsert.addUInt32(0);
 
@@ -18906,7 +18847,7 @@ void Player::HandleStealthedUnitsDetection()
         if ((*i) == this)
             continue;
 
-        bool hasAtClient = HaveAtClient((*i));
+        bool hasAtClient = HaveAtClient((*i)->GetObjectGuid());
         bool hasDetected = (*i)->isVisibleForOrDetect(this, viewPoint, true);
 
         if (hasDetected)
@@ -18915,7 +18856,7 @@ void Player::HandleStealthedUnitsDetection()
             {
                 ObjectGuid i_guid = (*i)->GetObjectGuid();
                 (*i)->SendCreateUpdateToPlayer(this);
-                m_clientGUIDs.insert(i_guid);
+                AddClientGuid(i_guid);
 
                 DEBUG_FILTER_LOG(LOG_FILTER_VISIBILITY_CHANGES, "%s is detected in stealth by player %u. Distance = %f", i_guid.GetString().c_str(), GetGUIDLow(), GetDistance(*i));
 
@@ -18930,7 +18871,7 @@ void Player::HandleStealthedUnitsDetection()
             if (hasAtClient)
             {
                 (*i)->DestroyForPlayer(this);
-                m_clientGUIDs.erase((*i)->GetObjectGuid());
+                RemoveClientGuid((*i)->GetObjectGuid());
             }
         }
     }
@@ -19918,7 +19859,7 @@ void Player::SetBattleGroundEntryPoint(bool forLFG)
     }
 
     // In error cases use homebind position
-    m_bgData.joinPos = WorldLocation(m_homebindMapId, m_homebindX, m_homebindY, m_homebindZ, 0.0f);
+    m_bgData.joinPos = m_homebind;
     m_bgData.m_needSave = true;
 }
 
@@ -20043,29 +19984,50 @@ bool Player::IsVisibleGloballyFor(Player* u) const
     return true;
 }
 
-template<class T>
-inline void BeforeVisibilityDestroy(T* /*t*/, Player* /*p*/)
+bool Player::HaveAtClient(ObjectGuid const& guid) const
 {
+    return  guid == GetObjectGuid() ||
+        (IsBoarded() && GetTransportInfo()->GetTransportGuid() == guid) ||
+        HasClientGuid(guid);
 }
 
-template<>
-inline void BeforeVisibilityDestroy<Creature>(Creature* t, Player* p)
+void Player::AddClientGuid(ObjectGuid const& guid)
 {
-    if (p->GetPetGuid() == t->GetObjectGuid() && ((Creature*)t)->IsPet())
+    m_clientGUIDs.insert(guid);
+}
+
+void Player::RemoveClientGuid(ObjectGuid const& guid)
+{
+    m_clientGUIDs.erase(guid);
+}
+
+bool Player::HasClientGuid(ObjectGuid const& guid) const
+{
+    return (m_clientGUIDs.find(guid) != m_clientGUIDs.end());
+}
+
+void Player::BeforeVisibilityDestroy(WorldObject* t)
+{
+    if (GetPetGuid() == t->GetObjectGuid() && ((Creature*)t)->IsPet())
         ((Pet*)t)->Unsummon(PET_SAVE_REAGENTS);
 }
 
 void Player::UpdateVisibilityOf(WorldObject const* viewPoint, WorldObject* target)
 {
-    if (HaveAtClient(target))
+    if (HaveAtClient(target->GetObjectGuid()))
     {
         if (!target->isVisibleForInState(this, viewPoint, true))
         {
             ObjectGuid t_guid = target->GetObjectGuid();
 
-            if (target->GetTypeId() == TYPEID_UNIT)
+            if (GetMap()->IsVisibleGlobally(t_guid))
             {
-                BeforeVisibilityDestroy<Creature>((Creature*)target, this);
+                // FIXME - this code block temporary, only on test phase (seems as not need, but...)
+                target->AddNotifiedClient(GetObjectGuid());
+            }
+            else if (target->GetTypeId() == TYPEID_UNIT)
+            {
+                BeforeVisibilityDestroy(target);
 
                 // at remove from map (destroy) show kill animation (in different out of range/stealth case)
                 target->DestroyForPlayer(this, !target->IsInWorld() && ((Creature*)target)->isDead());
@@ -20073,57 +20035,45 @@ void Player::UpdateVisibilityOf(WorldObject const* viewPoint, WorldObject* targe
             else
                 target->DestroyForPlayer(this);
 
-            m_clientGUIDs.erase(t_guid);
+            RemoveClientGuid(t_guid);
 
-            DEBUG_FILTER_LOG(LOG_FILTER_VISIBILITY_CHANGES, "UpdateVisibilityOf: %s out of range for player %u. Distance = %f", t_guid.GetString().c_str(), GetGUIDLow(), GetDistance(target));
+            DEBUG_FILTER_LOG(LOG_FILTER_VISIBILITY_CHANGES, "Player::UpdateVisibilityOf (by viewPoint) %s out of range for %s, distance = %f", t_guid.GetString().c_str(), GetObjectGuid().GetString().c_str(), GetDistance(target));
         }
     }
     else
     {
         if (target->isVisibleForInState(this, viewPoint, false))
         {
-            target->SendCreateUpdateToPlayer(this);
-            if (target->GetTypeId() != TYPEID_GAMEOBJECT || !((GameObject*)target)->IsTransport())
-                m_clientGUIDs.insert(target->GetObjectGuid());
+            if (!GetMap()->IsVisibleGlobally(target->GetObjectGuid()))
+            {
+                target->SendCreateUpdateToPlayer(this);
+                AddClientGuid(target->GetObjectGuid());
 
-            DEBUG_FILTER_LOG(LOG_FILTER_VISIBILITY_CHANGES, "UpdateVisibilityOf: %s is visible now for player %u. Distance = %f", target->GetGuidStr().c_str(), GetGUIDLow(), GetDistance(target));
+                DEBUG_FILTER_LOG(LOG_FILTER_VISIBILITY_CHANGES, "Player::UpdateVisibilityOf (by viewPoint) %s is visible now for %s, distance = %f", target->GetObjectGuid().GetString().c_str(), GetObjectGuid().GetString().c_str(), GetDistance(target));
 
-            // target aura duration for caster show only if target exist at caster client
-            // send data at target visibility change (adding to client)
-            if (target != this && target->isType(TYPEMASK_UNIT))
-                SendAurasForTarget((Unit*)target);
+                // target aura duration for caster show only if target exist at caster client
+                // send data at target visibility change (adding to client)
+                if (target != this && target->isType(TYPEMASK_UNIT))
+                    SendAurasForTarget((Unit*)target);
+            }
         }
     }
 }
 
-template<class T>
-inline void UpdateVisibilityOf_helper(GuidSet& s64, T* target)
+void Player::UpdateVisibilityOf(WorldObject const* viewPoint, WorldObject* target, UpdateData& data, WorldObjectSet& visibleNow)
 {
-    s64.insert(target->GetObjectGuid());
-}
-
-template<>
-inline void UpdateVisibilityOf_helper(GuidSet& s64, GameObject* target)
-{
-    if (!target->IsTransport())
-        s64.insert(target->GetObjectGuid());
-}
-
-template<class T>
-void Player::UpdateVisibilityOf(WorldObject const* viewPoint, T* target, UpdateData& data, std::set<WorldObject*>& visibleNow)
-{
-    if (HaveAtClient(target))
+    if (HaveAtClient(target->GetObjectGuid()))
     {
         if (!target->isVisibleForInState(this, viewPoint, true))
         {
-            BeforeVisibilityDestroy<T>(target, this);
+            BeforeVisibilityDestroy(target);
 
             ObjectGuid t_guid = target->GetObjectGuid();
 
             target->BuildOutOfRangeUpdateBlock(&data);
-            m_clientGUIDs.erase(t_guid);
+            RemoveClientGuid(t_guid);
 
-            DEBUG_FILTER_LOG(LOG_FILTER_VISIBILITY_CHANGES, "UpdateVisibilityOf(TemplateV): %s is out of range for %s. Distance = %f", t_guid.GetString().c_str(), GetGuidStr().c_str(), GetDistance(target));
+            DEBUG_FILTER_LOG(LOG_FILTER_VISIBILITY_CHANGES, "Player::UpdateVisibilityOf %s is out of range for %s, distance = %f", t_guid.GetString().c_str(), GetGuidStr().c_str(), GetDistance(target));
         }
     }
     else
@@ -20132,18 +20082,12 @@ void Player::UpdateVisibilityOf(WorldObject const* viewPoint, T* target, UpdateD
         {
             visibleNow.insert(target);
             target->BuildCreateUpdateBlockForPlayer(&data, this);
-            UpdateVisibilityOf_helper(m_clientGUIDs, target);
+            AddClientGuid(target->GetObjectGuid());
 
-            DEBUG_FILTER_LOG(LOG_FILTER_VISIBILITY_CHANGES, "UpdateVisibilityOf(TemplateV): %s is visible now for %s. Distance = %f", target->GetGuidStr().c_str(), GetGuidStr().c_str(), GetDistance(target));
+            DEBUG_FILTER_LOG(LOG_FILTER_VISIBILITY_CHANGES, "Player::UpdateVisibilityOf %s is visible now for %s, distance = %f", target->GetGuidStr().c_str(), GetGuidStr().c_str(), GetDistance(target));
         }
     }
 }
-
-template void Player::UpdateVisibilityOf(WorldObject const* viewPoint, Player*        target, UpdateData& data, std::set<WorldObject*>& visibleNow);
-template void Player::UpdateVisibilityOf(WorldObject const* viewPoint, Creature*      target, UpdateData& data, std::set<WorldObject*>& visibleNow);
-template void Player::UpdateVisibilityOf(WorldObject const* viewPoint, Corpse*        target, UpdateData& data, std::set<WorldObject*>& visibleNow);
-template void Player::UpdateVisibilityOf(WorldObject const* viewPoint, GameObject*    target, UpdateData& data, std::set<WorldObject*>& visibleNow);
-template void Player::UpdateVisibilityOf(WorldObject const* viewPoint, DynamicObject* target, UpdateData& data, std::set<WorldObject*>& visibleNow);
 
 void Player::SetPhaseMask(uint32 newPhaseMask, bool update)
 {
@@ -20237,9 +20181,9 @@ void Player::SendInitialPacketsBeforeAddToMap()
 
     // Homebind
     WorldPacket data(SMSG_BINDPOINTUPDATE, 5 * 4);
-    data << m_homebindX << m_homebindY << m_homebindZ;
-    data << (uint32) m_homebindMapId;
-    data << (uint32) m_homebindAreaId;
+    data << m_homebind.x << m_homebind.y << m_homebind.z;
+    data << uint32(m_homebind.GetMapId());
+    data << uint32(m_homebind.GetAreaId());
     GetSession()->SendPacket(&data);
 
     // SMSG_SET_PROFICIENCY
@@ -20818,7 +20762,7 @@ void Player::SummonIfPossible(bool agree)
     // stop taxi flight at summon
     if (IsTaxiFlying())
     {
-        GetMotionMaster()->MovementExpired();
+        GetMotionMaster()->MoveIdle();
         m_taxi.ClearTaxiDestinations();
     }
 
@@ -20831,7 +20775,8 @@ void Player::SummonIfPossible(bool agree)
 
     GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_ACCEPTED_SUMMONINGS, 1);
 
-    TeleportTo(m_summon_mapid, m_summon_x, m_summon_y, m_summon_z, GetOrientation());
+    m_summon_loc.SetOrientation(GetOrientation());
+    TeleportTo(m_summon_loc);
 }
 
 void Player::RemoveItemDurations(Item* item)
@@ -21263,7 +21208,7 @@ void Player::ResurectUsingRequestData()
         return;
     }
 
-    ResurrectPlayer(0.0f, false);
+    ResurrectPlayer(0, false);
 
     if (GetMaxHealth() > m_resurrectHealth)
         SetHealth(m_resurrectHealth);
@@ -23034,11 +22979,11 @@ void Player::_SaveBGData()
         stmt.addUInt32(GetGUIDLow());
         stmt.addUInt32(m_bgData.bgInstanceID);
         stmt.addUInt32(uint32(m_bgData.bgTeam));
-        stmt.addFloat(m_bgData.joinPos.coord_x);
-        stmt.addFloat(m_bgData.joinPos.coord_y);
-        stmt.addFloat(m_bgData.joinPos.coord_z);
+        stmt.addFloat(m_bgData.joinPos.x);
+        stmt.addFloat(m_bgData.joinPos.y);
+        stmt.addFloat(m_bgData.joinPos.z);
         stmt.addFloat(m_bgData.joinPos.orientation);
-        stmt.addUInt32(m_bgData.joinPos.mapid);
+        stmt.addUInt32(m_bgData.joinPos.GetMapId());
         stmt.addUInt32(m_bgData.taxiPath[0]);
         stmt.addUInt32(m_bgData.taxiPath[1]);
         stmt.addUInt32(m_bgData.mountSpell);
@@ -23315,17 +23260,21 @@ bool Player::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex
     return Unit::IsImmuneToSpellEffect(spellInfo, index);
 }
 
-void Player::SetHomebindToLocation(WorldLocation const& loc, uint32 area_id)
+void Player::SetHomebindToLocation(WorldLocation const& loc)
 {
-    m_homebindMapId = loc.mapid;
-    m_homebindAreaId = area_id;
-    m_homebindX = loc.coord_x;
-    m_homebindY = loc.coord_y;
-    m_homebindZ = loc.coord_z;
+    m_homebind = loc;
 
     // update sql homebind
-    CharacterDatabase.PExecute("UPDATE character_homebind SET map = '%u', zone = '%u', position_x = '%f', position_y = '%f', position_z = '%f' WHERE guid = '%u'",
-                               m_homebindMapId, m_homebindAreaId, m_homebindX, m_homebindY, m_homebindZ, GetGUIDLow());
+    static SqlStatementID saveHomebind;
+    SqlStatement stmt = CharacterDatabase.CreateStatement(saveHomebind, "REPLACE INTO character_homebind (guid, map, zone, position_x, position_y, position_z) VALUES (?, ?, ?, ?, ?, ?)");
+
+    stmt.addUInt32(GetGUIDLow());
+    stmt.addUInt32(m_homebind.GetMapId());
+    stmt.addUInt32(m_homebind.GetAreaId());
+    stmt.addFloat(m_homebind.x);
+    stmt.addFloat(m_homebind.y);
+    stmt.addFloat(m_homebind.z);
+    stmt.Execute();
 }
 
 Object* Player::GetObjectByTypeMask(ObjectGuid guid, TypeMask typemask)
@@ -23993,8 +23942,9 @@ void Player::InterruptTaxiFlying()
     // stop flight if need
     if (IsTaxiFlying())
     {
-        GetMotionMaster()->MovementExpired();
+        GetUnitStateMgr().DropAction(UNIT_ACTION_TAXI);
         m_taxi.ClearTaxiDestinations();
+        GetUnitStateMgr().InitDefaults(false);
     }
     // save only in non-flight case
     else

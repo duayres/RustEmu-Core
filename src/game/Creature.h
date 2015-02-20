@@ -37,6 +37,7 @@ class CreatureAI;
 class Group;
 class Quest;
 class Player;
+class Spell;
 class WorldSession;
 
 struct GameEventCreatureData;
@@ -182,12 +183,6 @@ struct CreatureInfo
     }
 };
 
-struct CreatureTemplateSpells
-{
-    uint32 entry;
-    uint32 spells[CREATURE_MAX_SPELLS];
-};
-
 struct EquipmentInfo
 {
     uint32  entry;
@@ -217,12 +212,6 @@ struct CreatureData
 
     // helper function
     ObjectGuid GetObjectGuid(uint32 lowguid) const;
-};
-
-enum SplineFlags
-{
-    SPLINEFLAG_WALKMODE     = 0x00001000,
-    SPLINEFLAG_FLYING       = 0x00002000,
 };
 
 // from `creature_addon` and `creature_template_addon`tables
@@ -311,6 +300,15 @@ enum InhabitTypeValues
     INHABIT_WATER  = 2,
     INHABIT_AIR    = 4,
     INHABIT_ANYWHERE = INHABIT_GROUND | INHABIT_WATER | INHABIT_AIR
+};
+
+enum ModelInhabitTypeValues
+{
+    MODEL_INHABIT_ONLY_GROUND         = 0,
+    MODEL_INHABIT_ONLY_SWIM           = 1,
+    MODEL_INHABIT_ONLY_FLY            = 2,
+    MODEL_INHABIT_ONLY_GROUND_AND_FLY = 3,
+    MODEL_INHABIT_ONLY_UNDERWATER     = 4,
 };
 
 // Enums used by StringTextData::Type (CreatureEventAI)
@@ -452,28 +450,38 @@ enum VirtualItemSlot
 
 struct CreatureCreatePos
 {
-    public:
-        // exactly coordinates used
-        CreatureCreatePos(Map* map, float x, float y, float z, float o, uint32 phaseMask)
-            : m_map(map), m_phaseMask(phaseMask), m_closeObject(NULL), m_angle(0.0f), m_dist(0.0f) { m_pos.x = x; m_pos.y = y; m_pos.z = z; m_pos.o = o; }
-        // if dist == 0.0f -> exactly object coordinates used, in other case close point to object (CONTACT_DIST can be used as minimal distances)
-        CreatureCreatePos(WorldObject* closeObject, float ori, float dist = 0.0f, float angle = 0.0f)
-            : m_map(closeObject->GetMap()), m_phaseMask(closeObject->GetPhaseMask()),
-              m_closeObject(closeObject), m_angle(angle), m_dist(dist) { m_pos.o = ori; }
-    public:
-        Map* GetMap() const { return m_map; }
-        uint32 GetPhaseMask() const { return m_phaseMask; }
-        void SelectFinalPoint(Creature* cr);
-        bool Relocate(Creature* cr) const;
+public:
+    // exactly coordinates used
+    CreatureCreatePos(Map* map, float x, float y, float z, float o, uint32 phaseMask)
+        : m_pos(map->GetId(), x, y, z, o, phaseMask, map->GetInstanceId()), m_map(map),
+        m_closeObject(NULL), m_angle(0.0f), m_dist(0.0f)
+    {
+    }
+    // if dist == 0.0f -> exactly object coordinates used, in other case close point to object (CONTACT_DIST can be used as minimal distances)
+    CreatureCreatePos(WorldObject* closeObject, float ori, float dist = 0.0f, float angle = 0.0f)
+        : m_pos(closeObject->GetPosition()), m_map(closeObject->GetMap()), m_closeObject(closeObject),
+        m_angle(angle), m_dist(dist)
+    {
+        m_pos.o = ori;
+    }
+    // Constructor for use with casttarget
+    CreatureCreatePos(Map* map, WorldLocation const& loc)
+        : m_pos(loc), m_map(map), m_closeObject(NULL), m_angle(0.0f), m_dist(0.0f)
+    {
+    }
+public:
+    Map* GetMap() const { return m_map; }
+    uint32 GetPhaseMask() const { return m_pos.GetPhaseMask(); }
+    void SelectFinalPoint(Creature* cr, bool checkLOS = false);
+    bool Relocate(Creature* cr) const;
 
-        // read only after SelectFinalPoint
-        Position m_pos;
-    private:
-        Map* m_map;
-        uint32 m_phaseMask;
-        WorldObject* m_closeObject;
-        float m_angle;
-        float m_dist;
+    // read only after SelectFinalPoint
+    WorldLocation m_pos;
+private:
+    Map* m_map;
+    WorldObject* m_closeObject;
+    float m_angle;
+    float m_dist;
 };
 
 enum CreatureSubtype
@@ -518,7 +526,7 @@ class MANGOS_DLL_SPEC Creature : public Unit
 
         char const* GetSubName() const { return GetCreatureInfo()->SubName; }
 
-        void Update(uint32 update_diff, uint32 time) override;  // overwrite Unit::Update
+        virtual void Update(uint32 update_diff, uint32 time) override;  // overwrite Unit::Update
 
         virtual void RegenerateAll(uint32 update_diff);
         uint32 GetEquipmentId() const { return m_equipmentId; }
@@ -535,11 +543,15 @@ class MANGOS_DLL_SPEC Creature : public Unit
         bool IsCivilian() const { return GetCreatureInfo()->ExtraFlags & CREATURE_FLAG_EXTRA_CIVILIAN; }
         bool IsGuard() const { return GetCreatureInfo()->ExtraFlags & CREATURE_FLAG_EXTRA_GUARD; }
 
-        bool CanWalk() const { return GetCreatureInfo()->InhabitType & INHABIT_GROUND; }
-        bool CanSwim() const { return GetCreatureInfo()->InhabitType & INHABIT_WATER; }
-        bool IsSwimming() const { return (m_movementInfo.HasMovementFlag((MovementFlags)(MOVEFLAG_SWIMMING))); } 
-        bool CanFly() const { return (GetCreatureInfo()->InhabitType & INHABIT_AIR) || (GetByteValue(UNIT_FIELD_BYTES_1, 3) & UNIT_BYTE1_FLAG_HOVER) || m_movementInfo.HasMovementFlag((MovementFlags)(MOVEFLAG_LEVITATING | MOVEFLAG_CAN_FLY)); }
-        bool IsFlying() const { return (m_movementInfo.HasMovementFlag((MovementFlags)(MOVEFLAG_FLYING|MOVEFLAG_LEVITATING))); }
+        uint32 GetModelInhabitType();
+
+        bool IsSwimming() const { return (m_movementInfo.HasMovementFlag((MovementFlags)(MOVEFLAG_SWIMMING))); }
+        bool IsFlying() const { return (m_movementInfo.HasMovementFlag((MovementFlags)(MOVEFLAG_FLYING | MOVEFLAG_LEVITATING))); }
+
+        bool CanWalk();
+        bool CanSwim();
+        bool CanFly();
+
         bool IsTrainerOf(Player* player, bool msg) const;
         bool CanInteractWithBattleMaster(Player* player, bool msg) const;
         bool CanTrainAndResetTalentsOf(Player* pPlayer) const;
@@ -588,6 +600,10 @@ class MANGOS_DLL_SPEC Creature : public Unit
         void SetRoot(bool enable) override;
         void SetWaterWalk(bool enable) override;
 
+        void SetTargetGuid(ObjectGuid targetGuid) override;
+        void FocusTarget(Spell const* focusSpell, WorldObject* target);
+        void ReleaseFocus(Spell const* focusSpell);
+
         uint32 GetShieldBlockValue() const override         // dunno mob block value
         {
             return (getLevel() / 2 + uint32(GetStat(STAT_STRENGTH) / 20));
@@ -628,6 +644,7 @@ class MANGOS_DLL_SPEC Creature : public Unit
         CreatureDataAddon const* GetCreatureAddon() const;
 
         static uint32 ChooseDisplayId(const CreatureInfo* cinfo, const CreatureData* data = NULL, GameEventCreatureData const* eventData = NULL);
+        void SetDisplayId(uint32 modelId);
 
         std::string GetAIName() const;
         std::string GetScriptName() const;
@@ -663,8 +680,6 @@ class MANGOS_DLL_SPEC Creature : public Unit
 
         SpellEntry const* ReachWithSpellAttack(Unit* pVictim);
         SpellEntry const* ReachWithSpellCure(Unit* pVictim);
-
-        uint32 m_spells[CREATURE_MAX_SPELLS];
 
         uint32 GetSpell(uint8 index, uint8 activeState = 0);
         uint8  GetSpellMaxIndex(uint8 activeState = 0);
@@ -740,14 +755,17 @@ class MANGOS_DLL_SPEC Creature : public Unit
                 return m_charmInfo->GetCharmSpell(pos)->GetAction();
         }
 
-        void SetCombatStartPosition(float x, float y, float z) { m_combatStartX = x; m_combatStartY = y; m_combatStartZ = z; }
-        void GetCombatStartPosition(float& x, float& y, float& z) { x = m_combatStartX; y = m_combatStartY; z = m_combatStartZ; }
+        void SetCombatStartPosition(float x, float y, float z) { m_combatStart = WorldLocation(GetMapId(), x, y, z); }
+        void GetCombatStartPosition(float& x, float& y, float& z) { x = m_combatStart.x; y = m_combatStart.y; z = m_combatStart.z; }
+        WorldLocation const& GetCombatStartPosition() const { return m_combatStart; };
 
-        void SetRespawnCoord(CreatureCreatePos const& pos) { m_respawnPos = pos.m_pos; }
-        void SetRespawnCoord(float x, float y, float z, float ori) { m_respawnPos.x = x; m_respawnPos.y = y; m_respawnPos.z = z; m_respawnPos.o = ori; }
         void GetRespawnCoord(float& x, float& y, float& z, float* ori = NULL, float* dist = NULL) const;
         void SetSummonPoint(CreatureCreatePos const& pos) { m_respawnPos = pos.m_pos; }
+        void SetRespawnCoord(float x, float y, float z, float ori) { m_respawnPos.x = x; m_respawnPos.y = y; m_respawnPos.z = z; m_respawnPos.o = ori; }
+        void SetRespawnCoord(CreatureCreatePos const& pos) { m_respawnPos = pos.m_pos; }
         void ResetRespawnCoord();
+        WorldLocation const& GetRespawnCoord() const { return m_respawnPos; };
+        void SetRespawnCoord(WorldLocation const& loc) { m_respawnPos = loc; }
 
         void SetDeadByDefault(bool death_state) { m_isDeadByDefault = death_state; }
 
@@ -806,15 +824,18 @@ class MANGOS_DLL_SPEC Creature : public Unit
         SpellSchoolMask m_meleeDamageSchoolMask;
         uint32 m_originalEntry;
 
-        float m_combatStartX;
-        float m_combatStartY;
-        float m_combatStartZ;
+        WorldLocation m_combatStart;
+        WorldLocation m_respawnPos;
 
-        Position m_respawnPos;
+        CreatureSpellsList m_spellOverride;
 
     private:
         GridReference<Creature> m_gridRef;
         CreatureInfo const* m_creatureInfo;                 // in difficulty mode > 0 can different from ObjMgr::GetCreatureTemplate(GetEntry())
+
+        int32 m_modelInhabitType;                           // cached value
+
+        Spell const* m_focusSpell;                          // Locks the target during spell cast for proper facing
 };
 
 class ForcedDespawnDelayEvent : public BasicEvent

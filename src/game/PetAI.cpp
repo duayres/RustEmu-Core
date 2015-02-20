@@ -384,7 +384,8 @@ void PetAI::EnterEvadeMode()
     Reset();
     UpdateAIType();
 
-    m_creature->GetMotionMaster()->MoveTargetedHome();
+    if (!m_creature->IsInUnitState(UNIT_ACTION_HOME))
+        m_creature->GetMotionMaster()->MoveTargetedHome();
 }
 
 bool PetAI::IsVisible(Unit* pl) const
@@ -448,7 +449,7 @@ void PetAI::UpdateAI(const uint32 diff)
 
     Unit* owner = m_creature->GetCharmerOrOwner();
 
-    if (owner && !m_creature->IsWithinDistInMap(owner, m_fMaxRadiusToOwner) && ((Pet*)m_creature)->GetModeFlags() & PET_MODE_DISABLE_ACTIONS)
+    if (owner && !m_creature->IsWithinDistInMap(owner, m_fMaxRadiusToOwner) && !m_creature->IsInUnitState(UNIT_ACTION_HOME))
     {
         if (owner->GetTypeId() == TYPEID_PLAYER && (m_creature->IsPet() || m_creature->isCharmed()))
         {

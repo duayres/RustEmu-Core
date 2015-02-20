@@ -109,7 +109,10 @@ void AggressorAI::EnterEvadeMode()
         m_creature->RemoveAllAurasOnEvade();
 
         // Remove ChaseMovementGenerator from MotionMaster stack list, and add HomeMovementGenerator instead
-        if (m_creature->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
+        if (m_creature->IsInUnitState(UNIT_ACTION_CHASE))
+            m_creature->GetUnitStateMgr().DropAction(UNIT_ACTION_CHASE);
+
+        if (!m_creature->GetVehicle())
             m_creature->GetMotionMaster()->MoveTargetedHome();
     }
 

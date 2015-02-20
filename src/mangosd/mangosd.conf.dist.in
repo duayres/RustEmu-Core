@@ -3,7 +3,7 @@
 #####################################
 
 [MangosdConf]
-ConfVersion=2015021810
+ConfVersion=2015021919
 
 ###################################################################################################################
 # CONNECTIONS AND DIRECTORIES
@@ -203,6 +203,12 @@ BindIP = "0.0.0.0"
 #        Default: 1 (Enable)
 #                 0 (Disabled)
 #
+#    MapUpdate.MaxVisitorsInUpdate
+#    MapUpdate.MaxVisitsInUpdate
+#        Limitation for units update time delta per map update cycle.
+#        MaxVisitorsInUpdate - count of maximal update diffs for calculation update deadline. Min = 1, default = 9, max = 50.
+#        MaxVisitsInUpdate   - limits count of units in one per-visit update cycle (for maps only) min = 10, default = 20, max = 100.
+#
 ###################################################################################################################
 
 UseProcessors = 0
@@ -231,6 +237,8 @@ UpdateUptimeInterval = 10
 MaxCoreStuckTime = 0
 AddonChannel = 1
 CleanCharacterDB = 1
+MapUpdate.MaxVisitorsInUpdate = 9
+MapUpdate.MaxVisitsInUpdate = 10
 
 ###################################################################################################################
 # SERVER LOGGING
@@ -914,7 +922,11 @@ SkillChance.Prospecting = 0
 SkillChance.Milling = 0
 OffhandCheckAtTalentsReset = 0
 PetUnsummonAtMount = 1
+PetSaveAllInDB = 0
+PetAdvancedAI = 0
+PetAdvancedAIWithSlacker = 0
 RaidFlags.Unique = 0
+AllowFlightOnOldMaps = 0
 ClientCacheVersion = 0
 Event.Announce = 0
 BeepAtStart = 1

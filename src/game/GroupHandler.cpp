@@ -791,8 +791,9 @@ void WorldSession::BuildPartyMemberStatsChangedPacket(Player* player, WorldPacke
         {
             if (auraMask & (uint64(1) << i))
             {
-                *data << uint32(player->GetVisibleAura(i));
-                *data << uint8(1);
+                SpellAuraHolder* holder = player->GetVisibleAura(i);
+                *data << uint32(holder ? holder->GetId() : 0);
+                *data << uint8(holder ? holder->GetAuraFlags() : 0);
             }
         }
     }
@@ -833,8 +834,9 @@ void WorldSession::BuildPartyMemberStatsChangedPacket(Player* player, WorldPacke
             {
                 if (auramask & (uint64(1) << i))
                 {
-                    *data << uint32(pet->GetVisibleAura(i));
-                    *data << uint8(1);
+                    SpellAuraHolder* holder = pet->GetVisibleAura(i);
+                    *data << uint32(holder ? holder->GetId() : 0);
+                    *data << uint8(holder ? holder->GetAuraFlags() : 0);
                 }
             }
         }
@@ -842,10 +844,8 @@ void WorldSession::BuildPartyMemberStatsChangedPacket(Player* player, WorldPacke
             *data << uint64(0);
     }
 
-    if (player->GetTransportInfo())
-        *data << uint32(((Unit*)player->GetTransportInfo()->GetTransport())->GetVehicleInfo()->GetVehicleEntry()->m_seatID[player->GetTransportInfo()->GetTransportSeat()]);
-    else
-        *data << uint32(0);
+    if (mask & GROUP_UPDATE_FLAG_VEHICLE_SEAT)
+        *data << uint32(player->m_movementInfo.GetTransportDBCSeat());
 }
 
 // this procedure handles clients CMSG_REQUEST_PARTY_MEMBER_STATS request
@@ -880,9 +880,9 @@ void WorldSession::HandleRequestPartyMemberStatsOpcode(WorldPacket& recv_data)
     Pet* pet = player->GetPet();
     if (pet)
         updateFlags |= GROUP_UPDATE_FLAG_PET_GUID | GROUP_UPDATE_FLAG_PET_CUR_HP | GROUP_UPDATE_FLAG_PET_MAX_HP |
-            GROUP_UPDATE_FLAG_PET_POWER_TYPE | GROUP_UPDATE_FLAG_PET_CUR_POWER | GROUP_UPDATE_FLAG_PET_MAX_POWER;
+        GROUP_UPDATE_FLAG_PET_POWER_TYPE | GROUP_UPDATE_FLAG_PET_CUR_POWER | GROUP_UPDATE_FLAG_PET_MAX_POWER;
 
-    if (player->GetTransportInfo())
+    if (player->GetVehicle())
         updateFlags |= GROUP_UPDATE_FLAG_VEHICLE_SEAT;
 
     uint16 playerStatus = MEMBER_STATUS_ONLINE;
@@ -934,9 +934,9 @@ void WorldSession::HandleRequestPartyMemberStatsOpcode(WorldPacket& recv_data)
     else if (player->IsBeingTeleported())               // Player is in teleportation
     {
         WorldLocation& loc = player->GetTeleportDest(); // So take teleportation destination
-        iZoneId = sTerrainMgr.GetZoneId(loc.mapid, loc.coord_x, loc.coord_y, loc.coord_z);
-        iCoordX = loc.coord_x;
-        iCoordY = loc.coord_y;
+        iZoneId = sTerrainMgr.GetZoneId(loc.GetMapId(), loc.x, loc.y, loc.z);
+        iCoordX = loc.x;
+        iCoordY = loc.y;
     }
 
     data << uint16(iZoneId);                              // GROUP_UPDATE_FLAG_ZONE
@@ -957,7 +957,7 @@ void WorldSession::HandleRequestPartyMemberStatsOpcode(WorldPacket& recv_data)
     }
     data.put<uint64>(maskPos, auramask);                    // GROUP_UPDATE_FLAG_AURAS
 
-    if(pet)
+    if (pet)
     {
         Powers petPowerType = pet->GetPowerType();
         data << pet->GetObjectGuid();                       // GROUP_UPDATE_FLAG_PET_GUID
@@ -990,8 +990,8 @@ void WorldSession::HandleRequestPartyMemberStatsOpcode(WorldPacket& recv_data)
         data << uint64(0);                                  // GROUP_UPDATE_FLAG_PET_AURAS
     }
 
-    if (player->GetTransportInfo())                         // GROUP_UPDATE_FLAG_VEHICLE_SEAT
-        data << uint32(((Unit*)player->GetTransportInfo()->GetTransport())->GetVehicleInfo()->GetVehicleEntry()->m_seatID[player->GetTransportInfo()->GetTransportSeat()]);
+    if (updateFlags & GROUP_UPDATE_FLAG_VEHICLE_SEAT)
+        data << uint32(player->m_movementInfo.GetTransportDBCSeat());
 
     SendPacket(&data);
 }

@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,14 +19,15 @@
 #include "MoveSplineInit.h"
 #include "MoveSpline.h"
 #include "packet_builder.h"
-#include "Unit.h"
-#include "TransportSystem.h"
+#include "../Unit.h"
+#include "../GameObject.h"
+#include "../TransportSystem.h"
 
 namespace Movement
 {
     UnitMoveType SelectSpeedType(uint32 moveFlags)
     {
-        if (moveFlags & MOVEFLAG_FLYING)
+        if (moveFlags & (MOVEFLAG_FLYING | MOVEFLAG_LEVITATING))
         {
             if (moveFlags & MOVEFLAG_BACKWARD /*&& speed_obj.flight >= speed_obj.flight_back*/)
                 return MOVE_FLIGHT_BACK;
@@ -51,16 +52,14 @@ namespace Movement
         return MOVE_RUN;
     }
 
-    int32 MoveSplineInit::Launch()
+    int32 MoveSplineInit<Unit*>::Launch()
     {
         MoveSpline& move_spline = *unit.movespline;
         TransportInfo* transportInfo = unit.GetTransportInfo();
 
-        Location real_position(unit.GetPositionX(), unit.GetPositionY(), unit.GetPositionZ(), unit.GetOrientation());
-
-        // If boarded use current local position
-        if (transportInfo)
-            transportInfo->GetLocalPosition(real_position.x, real_position.y, real_position.z, real_position.orientation);
+        Position real_position = transportInfo
+            ? transportInfo->GetLocalPosition()
+            : unit.GetPosition();
 
         // there is a big chane that current position is unknown if current state is not finalized, need compute it
         // this also allows calculate spline position and update map position in much greater intervals
@@ -69,8 +68,16 @@ namespace Movement
 
         if (args.path.empty())
         {
-            // should i do the things that user should do?
+            // form final position only for rotate
+            if (!args.flags.isFacing())
+                return 0;
             MoveTo(real_position);
+        }
+        else
+        {
+            // check path equivalence
+            if (!args.flags.isFacing() && args.path.size() == 2 && args.path[0] == args.path[1])
+                return 0;
         }
 
         // corrent first vertex
@@ -78,15 +85,23 @@ namespace Movement
         args.initialOrientation = real_position.orientation;
 
         uint32 moveFlags = unit.m_movementInfo.GetMovementFlags();
-        if (args.flags.walkmode)
-            moveFlags |= MOVEFLAG_WALK_MODE;
-        else
-            moveFlags &= ~MOVEFLAG_WALK_MODE;
-
         moveFlags |= (MOVEFLAG_SPLINE_ENABLED | MOVEFLAG_FORWARD);
 
-        if (args.velocity == 0.f)
-            args.velocity = unit.GetSpeed(SelectSpeedType(moveFlags));
+        if (moveFlags & MOVEFLAG_ROOT)
+            moveFlags &= ~MOVEFLAG_MASK_MOVING;
+
+        if (fabs(args.velocity) < M_NULL_F)
+        {
+            // Add or remove walk mode flag for select speed depending from call SetWalk()
+            // in spline initialization. Not need change the real unit move flags.
+            uint32 moveFlagsForSpeed = moveFlags;
+            if (args.flags.walkmode)
+                moveFlagsForSpeed |= MOVEFLAG_WALK_MODE;
+            else
+                moveFlagsForSpeed &= ~MOVEFLAG_WALK_MODE;
+
+            args.velocity = unit.GetSpeed(SelectSpeedType(moveFlagsForSpeed));
+        }
 
         if (!args.Validate(&unit))
             return 0;
@@ -110,7 +125,7 @@ namespace Movement
         return move_spline.Duration();
     }
 
-    void MoveSplineInit::Stop()
+    void MoveSplineInit<Unit*>::Stop()
     {
         MoveSpline& move_spline = *unit.movespline;
 
@@ -120,11 +135,9 @@ namespace Movement
 
         TransportInfo* transportInfo = unit.GetTransportInfo();
 
-        Location real_position(unit.GetPositionX(), unit.GetPositionY(), unit.GetPositionZ(), unit.GetOrientation());
-
-        // If boarded use current local position
-        if (transportInfo)
-            transportInfo->GetLocalPosition(real_position.x, real_position.y, real_position.z, real_position.orientation);
+        Position real_position = transportInfo
+            ? transportInfo->GetLocalPosition()
+            : unit.GetPosition();
 
         // there is a big chane that current position is unknown if current state is not finalized, need compute it
         // this also allows calculate spline position and update map position in much greater intervals
@@ -161,22 +174,69 @@ namespace Movement
         unit.SendMessageToSet(&data, true);
     }
 
-    MoveSplineInit::MoveSplineInit(Unit& m) : unit(m)
+    MoveSplineInit<Unit*>::MoveSplineInit(Unit& m) : unit(m)
     {
+        args.splineId = splineIdGen.NewId();
+
         // mix existing state into new
         args.flags.walkmode = unit.m_movementInfo.HasMovementFlag(MOVEFLAG_WALK_MODE);
-        args.flags.flying = unit.m_movementInfo.HasMovementFlag((MovementFlags)(MOVEFLAG_CAN_FLY | MOVEFLAG_FLYING | MOVEFLAG_LEVITATING));
+        args.flags.flying = unit.m_movementInfo.HasMovementFlag((MovementFlags)(MOVEFLAG_FLYING | MOVEFLAG_LEVITATING));
     }
 
-    void MoveSplineInit::SetFacing(const Unit* target)
+    void MoveSplineInit<Unit*>::SetFacing(const Unit* target)
     {
         args.flags.EnableFacingTarget();
         args.facing.target = target->GetObjectGuid().GetRawValue();
     }
 
-    void MoveSplineInit::SetFacing(float angle)
+    void MoveSplineInit<Unit*>::SetFacing(float angle)
     {
-        args.facing.angle = G3D::wrap(angle, 0.f, (float)G3D::twoPi());
+        args.facing.angle = G3D::wrap(angle, 0.0f, (float)G3D::twoPi());
         args.flags.EnableFacingAngle();
+    }
+
+    MoveSplineInit<GameObject*>::MoveSplineInit(GameObject& go) : gameobject(go)
+    {
+        args.splineId = splineIdGen.NewId();
+    }
+
+    int32 MoveSplineInit<GameObject*>::Launch()
+    {
+        MoveSpline& move_spline = *gameobject.movespline;
+        TransportInfo* transportInfo = gameobject.GetTransportInfo();
+
+        Position real_position = transportInfo
+            ? transportInfo->GetLocalPosition()
+            : gameobject.GetPosition();
+
+        // there is a big chane that current position is unknown if current state is not finalized, need compute it
+        // this also allows calculate spline position and update map position in much greater intervals
+        if (!move_spline.Finalized())
+            real_position = move_spline.ComputePosition();
+
+        if (args.path.empty())
+        {
+            // form final position only for rotate
+            if (!args.flags.isFacing())
+                return 0;
+            MoveTo(real_position);
+        }
+        else
+        {
+            // check path equivalence
+            if (!args.flags.isFacing() && args.path.size() == 2 && args.path[0] == args.path[1])
+                return 0;
+        }
+
+        // corrent first vertex
+        args.path[0] = real_position;
+        args.initialOrientation = real_position.orientation;
+
+        if (fabs(args.velocity) < M_NULL_F)
+            return 0;
+//            args.velocity = gameobject.GetSpeed();
+
+        move_spline.Initialize(args);
+        return move_spline.Duration();
     }
 }

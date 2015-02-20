@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,6 +26,7 @@
 #include "movement/MoveSpline.h"
 
 //----- Point Movement Generator
+
 template<class T>
 void PointMovementGenerator<T>::Initialize(T& unit)
 {
@@ -35,8 +36,8 @@ void PointMovementGenerator<T>::Initialize(T& unit)
     unit.StopMoving();
 
     unit.addUnitState(UNIT_STAT_ROAMING | UNIT_STAT_ROAMING_MOVE);
-    Movement::MoveSplineInit init(unit);
-    init.MoveTo(i_x, i_y, i_z, m_generatePath);
+    Movement::MoveSplineInit<Unit*> init(unit);
+    init.MoveTo(m_x, m_y, m_z, m_generatePath);
     init.Launch();
 }
 
@@ -64,7 +65,7 @@ void PointMovementGenerator<T>::Reset(T& unit)
 }
 
 template<class T>
-bool PointMovementGenerator<T>::Update(T& unit, const uint32& /*diff*/)
+bool PointMovementGenerator<T>::Update(T& unit, uint32 const&)
 {
     if (!&unit)
         return false;
@@ -90,15 +91,19 @@ template <>
 void PointMovementGenerator<Creature>::MovementInform(Creature& unit)
 {
     if (unit.AI())
-        unit.AI()->MovementInform(POINT_MOTION_TYPE, id);
+        unit.AI()->MovementInform(POINT_MOTION_TYPE, m_id);
 
     if (unit.IsTemporarySummon())
     {
         TemporarySummon* pSummon = (TemporarySummon*)(&unit);
         if (pSummon->GetSummonerGuid().IsCreatureOrVehicle())
+        {
             if (Creature* pSummoner = unit.GetMap()->GetCreature(pSummon->GetSummonerGuid()))
+            {
                 if (pSummoner->AI())
-                    pSummoner->AI()->SummonedMovementInform(&unit, POINT_MOTION_TYPE, id);
+                    pSummoner->AI()->SummonedMovementInform(&unit, POINT_MOTION_TYPE, m_id);
+            }
+        }
     }
 }
 
@@ -110,8 +115,8 @@ template void PointMovementGenerator<Player>::Interrupt(Player&);
 template void PointMovementGenerator<Creature>::Interrupt(Creature&);
 template void PointMovementGenerator<Player>::Reset(Player&);
 template void PointMovementGenerator<Creature>::Reset(Creature&);
-template bool PointMovementGenerator<Player>::Update(Player&, const uint32& diff);
-template bool PointMovementGenerator<Creature>::Update(Creature&, const uint32& diff);
+template bool PointMovementGenerator<Player>::Update(Player&, const uint32&);
+template bool PointMovementGenerator<Creature>::Update(Creature&, const uint32&);
 
 void AssistanceMovementGenerator::Finalize(Unit& unit)
 {
@@ -121,28 +126,6 @@ void AssistanceMovementGenerator::Finalize(Unit& unit)
     ((Creature*)&unit)->CallAssistance();
     if (unit.isAlive())
         unit.GetMotionMaster()->MoveSeekAssistanceDistract(sWorld.getConfig(CONFIG_UINT32_CREATURE_FAMILY_ASSISTANCE_DELAY));
-}
-
-bool EffectMovementGenerator::Update(Unit& unit, const uint32&)
-{
-    return !unit.movespline->Finalized();
-}
-
-void EffectMovementGenerator::Finalize(Unit& unit)
-{
-    if (unit.GetTypeId() != TYPEID_UNIT)
-        return;
-
-    if (((Creature&)unit).AI() && unit.movespline->Finalized())
-        ((Creature&)unit).AI()->MovementInform(EFFECT_MOTION_TYPE, m_Id);
-    // Need restore previous movement since we have no proper states system
-    if (unit.isAlive() && !unit.hasUnitState(UNIT_STAT_CONFUSED | UNIT_STAT_FLEEING | UNIT_STAT_NO_COMBAT_MOVEMENT))
-    {
-        if (Unit* victim = unit.getVictim())
-            unit.GetMotionMaster()->MoveChase(victim);
-        else
-            unit.GetMotionMaster()->Initialize();
-    }
 }
 
 void FlyOrLandMovementGenerator::Initialize(Unit& unit)
@@ -155,9 +138,88 @@ void FlyOrLandMovementGenerator::Initialize(Unit& unit)
     float x, y, z;
     GetDestination(x, y, z);
     unit.addUnitState(UNIT_STAT_ROAMING | UNIT_STAT_ROAMING_MOVE);
-    Movement::MoveSplineInit init(unit);
+    Movement::MoveSplineInit<Unit*> init(unit);
     init.SetFly();
-    init.SetAnimation((m_liftOff ? Movement::FlyToGround : Movement::ToGround));
+    init.SetAnimation(m_liftOff ? Movement::FlyToGround : Movement::ToGround);
     init.MoveTo(x, y, z, false);
+    init.Launch();
+}
+
+//----- Effect Movement Generator
+
+void EffectMovementGenerator::Finalize(Unit& unit)
+{
+    if (unit.GetTypeId() != TYPEID_UNIT)
+        return;
+
+    if (((Creature&)unit).AI() && unit.movespline->Finalized())
+        ((Creature&)unit).AI()->MovementInform(EFFECT_MOTION_TYPE, m_id);
+}
+
+bool EffectMovementGenerator::Update(Unit& unit, uint32 const&)
+{
+    return !unit.movespline->Finalized();
+}
+
+void EjectMovementGenerator::Initialize(Unit& unit)
+{
+    if (unit.GetTypeId() == TYPEID_PLAYER)
+        ((Player&)unit).SetMover(&unit);
+}
+
+void EjectMovementGenerator::Finalize(Unit& unit)
+{
+    if (unit.GetTypeId() == TYPEID_UNIT && ((Creature&)unit).AI() && unit.movespline->Finalized())
+        ((Creature&)unit).AI()->MovementInform(EFFECT_MOTION_TYPE, m_id);
+
+    if (unit.hasUnitState(UNIT_STAT_ON_VEHICLE))
+    {
+        unit.clearUnitState(UNIT_STAT_ON_VEHICLE);
+        unit.m_movementInfo.ClearTransportData();
+
+        if (unit.GetTypeId() == TYPEID_PLAYER)
+            ((Player&)unit).SetMover(&unit);
+    }
+
+    unit.m_movementInfo.SetMovementFlags(MOVEFLAG_NONE);
+    unit.StopMoving(true);
+}
+
+void JumpMovementGenerator::Initialize(Unit& unit)
+{
+    if (unit.hasUnitState(UNIT_STAT_CAN_NOT_REACT | UNIT_STAT_NOT_MOVE))
+        return;
+
+    unit.StopMoving();
+
+    Movement::MoveSplineInit<Unit*> init(unit);
+    init.MoveTo(m_x, m_y, m_z);
+    init.SetParabolic(m_maxHeight, 0.0f);
+    init.SetVelocity(m_horizontalSpeed);
+    init.Launch();
+}
+
+void MoveToDestMovementGenerator::Initialize(Unit& unit)
+{
+    if (unit.hasUnitState(UNIT_STAT_CAN_NOT_REACT | UNIT_STAT_NOT_MOVE))
+        return;
+
+    Movement::MoveSplineInit<Unit*> init(unit);
+    init.MoveTo(m_x, m_y, m_z, bool(m_target), bool(m_target), m_straightLine);
+    if (m_maxHeight > M_NULL_F)
+        init.SetParabolic(m_maxHeight, 0.0f);
+    init.SetVelocity(m_horizontalSpeed);
+    m_target ? init.SetFacing(m_target) : init.SetFacing(m_o);
+    init.Launch();
+}
+
+void MoveWithSpeedMovementGenerator::Initialize(Unit& unit)
+{
+    if (unit.hasUnitState(UNIT_STAT_CAN_NOT_REACT | UNIT_STAT_NOT_MOVE))
+        return;
+
+    Movement::MoveSplineInit<Unit*> init(unit);
+    init.MoveTo(m_x, m_y, m_z, m_generatePath, m_forceDestination);
+    init.SetVelocity(m_speed);
     init.Launch();
 }

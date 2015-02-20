@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@
 #define MANGOS_MOTIONMASTER_H
 
 #include "Common.h"
+#include "StateMgrImpl.h"
 #include <stack>
 #include <vector>
 
@@ -29,90 +30,35 @@ class Unit;
 // Creature Entry ID used for waypoints show, visible only for GMs
 #define VISUAL_WAYPOINT 1
 
-// values 0 ... MAX_DB_MOTION_TYPE-1 used in DB
-enum MovementGeneratorType
+class MANGOS_DLL_SPEC MotionMaster
 {
-    IDLE_MOTION_TYPE                = 0,                    // IdleMovementGenerator.h
-    RANDOM_MOTION_TYPE              = 1,                    // RandomMovementGenerator.h
-    WAYPOINT_MOTION_TYPE            = 2,                    // WaypointMovementGenerator.h
-    MAX_DB_MOTION_TYPE              = 3,                    // *** this and below motion types can't be set in DB.
-
-    CONFUSED_MOTION_TYPE            = 4,                    // ConfusedMovementGenerator.h
-    CHASE_MOTION_TYPE               = 5,                    // TargetedMovementGenerator.h
-    HOME_MOTION_TYPE                = 6,                    // HomeMovementGenerator.h
-    FLIGHT_MOTION_TYPE              = 7,                    // WaypointMovementGenerator.h
-    POINT_MOTION_TYPE               = 8,                    // PointMovementGenerator.h
-    FLEEING_MOTION_TYPE             = 9,                    // FleeingMovementGenerator.h
-    DISTRACT_MOTION_TYPE            = 10,                   // IdleMovementGenerator.h
-    ASSISTANCE_MOTION_TYPE          = 11,                   // PointMovementGenerator.h (first part of flee for assistance)
-    ASSISTANCE_DISTRACT_MOTION_TYPE = 12,                   // IdleMovementGenerator.h (second part of flee for assistance)
-    TIMED_FLEEING_MOTION_TYPE       = 13,                   // FleeingMovementGenerator.h (alt.second part of flee for assistance)
-    FOLLOW_MOTION_TYPE              = 14,                   // TargetedMovementGenerator.h
-    EFFECT_MOTION_TYPE              = 15,
-
-    EXTERNAL_WAYPOINT_MOVE          = 256,                  // Only used in CreatureAI::MovementInform when a waypoint is reached. The pathId >= 0 is added as additonal value
-    EXTERNAL_WAYPOINT_MOVE_START    = 512,                  // Only used in CreatureAI::MovementInform when a waypoint is started. The pathId >= 0 is added as additional value
-    EXTERNAL_WAYPOINT_FINISHED_LAST = 1024,                 // Only used in CreatureAI::MovementInform when the waittime of the last wp is finished The pathId >= 0 is added as additional value
-};
-
-enum MMCleanFlag
-{
-    MMCF_NONE   = 0,
-    MMCF_UPDATE = 1,                                        // Clear or Expire called from update
-    MMCF_RESET  = 2                                         // Flag if need top()->Reset()
-};
-
-class MANGOS_DLL_SPEC MotionMaster : private std::stack<MovementGenerator*>
-{
-    private:
-        typedef std::stack<MovementGenerator*> Impl;
-        typedef std::vector<MovementGenerator*> ExpireList;
-
     public:
-        explicit MotionMaster(Unit* unit) : m_owner(unit), m_expList(NULL), m_cleanFlag(MMCF_NONE) {}
+
+        explicit MotionMaster(Unit *unit);
         ~MotionMaster();
 
         void Initialize();
-
-        MovementGenerator const* GetCurrent() const { return top(); }
-
-        using Impl::top;
-        using Impl::empty;
-
-        typedef Impl::container_type::const_iterator const_iterator;
-        const_iterator begin() const { return Impl::c.begin(); }
-        const_iterator end() const { return Impl::c.end(); }
-
-        void UpdateMotion(uint32 diff);
-        void Clear(bool reset = true, bool all = false)
-        {
-            if (m_cleanFlag & MMCF_UPDATE)
-                DelayedClean(reset, all);
-            else
-                DirectClean(reset, all);
-        }
-        void MovementExpired(bool reset = true)
-        {
-            if (m_cleanFlag & MMCF_UPDATE)
-                DelayedExpire(reset);
-            else
-                DirectExpire(reset);
-        }
+        void Clear(bool reset = true, bool all = false);
+        void MovementExpired(bool reset = true) { Clear(); }
 
         void MoveIdle();
+        void MoveRandom(float radius = 5.0f);
         void MoveRandomAroundPoint(float x, float y, float z, float radius, float verticalZ = 0.0f);
         void MoveTargetedHome();
         void MoveFollow(Unit* target, float dist, float angle);
         void MoveChase(Unit* target, float dist = 0.0f, float angle = 0.0f);
         void MoveConfused();
         void MoveFleeing(Unit* enemy, uint32 timeLimit = 0);
-        void MovePoint(uint32 id, float x, float y, float z, bool generatePath = true);
-        void MoveSeekAssistance(float x, float y, float z);
+        void MovePoint(uint32 id, float x,float y,float z, bool generatePath = true, bool lowPriority = false);
+        void MoveSeekAssistance(float x,float y,float z);
         void MoveSeekAssistanceDistract(uint32 timer);
         void MoveWaypoint(int32 id = 0, uint32 source = 0, uint32 initialDelay = 0, uint32 overwriteEntry = 0);
-        void MoveTaxiFlight(uint32 path, uint32 pathnode);
         void MoveDistract(uint32 timeLimit);
         void MoveJump(float x, float y, float z, float horizontalSpeed, float max_height, uint32 id = 0);
+        void MoveToDestination(float x, float y, float z, float o, Unit* target, float horizontalSpeed, float max_height, uint32 id = 0, bool straightLine = false);
+        void MoveSkyDiving(float x, float y, float z, float o, float horizontalSpeed, float max_height, bool eject = false);
+        void MoveBoardVehicle(float x, float y, float z, float o, float horizontalSpeed, float max_height);
+        void MoveWithSpeed(float x, float y, float z, float speed, bool generatePath = true, bool forceDestination = false);
         void MoveFall();
         void MoveFlyOrLand(uint32 id, float x, float y, float z, bool liftOff);
 
@@ -123,19 +69,21 @@ class MANGOS_DLL_SPEC MotionMaster : private std::stack<MovementGenerator*>
 
         uint32 getLastReachedWaypoint() const;
         void GetWaypointPathInformation(std::ostringstream& oss) const;
-        bool GetDestination(float& x, float& y, float& z);
+
+        class UnitStateMgr* GetUnitStateMgr();
+        MovementGenerator*  CurrentMovementGenerator();
+        Unit* GetOwner() { return m_owner; };
+        bool  empty();
+
+        bool GetDestination(float &x, float &y, float &z);
 
     private:
-        void Mutate(MovementGenerator* m);                  // use Move* functions instead
+        void Mutate(MovementGenerator* mgen, UnitActionId slot);                  // use Move* functions instead
 
-        void DirectClean(bool reset, bool all);
-        void DelayedClean(bool reset, bool all);
-
-        void DirectExpire(bool reset);
-        void DelayedExpire(bool reset);
-
-        Unit*       m_owner;
-        ExpireList* m_expList;
-        uint8       m_cleanFlag;
+        Unit* m_owner;
+        uint8 m_cleanFlag;
 };
+
+#define DEFAULT_WALK_SPEED 24.0f
+
 #endif

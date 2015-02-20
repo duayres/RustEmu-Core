@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,10 +36,10 @@ namespace MaNGOS
     {
         Camera& i_camera;
         UpdateData i_data;
-        GuidSet i_clientGUIDs;
-        std::set<WorldObject*> i_visibleNow;
+        GuidSet i_clientGuids;
+        WorldObjectSet i_visibleNow;
 
-        explicit VisibleNotifier(Camera& c) : i_camera(c), i_clientGUIDs(c.GetOwner()->m_clientGUIDs) {}
+        explicit VisibleNotifier(Camera& c) : i_camera(c), i_clientGuids(c.GetOwner()->GetClientGuids()) {}
         template<class T> void Visit(GridRefManager<T>& m);
         void Visit(CameraMapType& /*m*/) {}
         void Notify(void);
@@ -120,6 +120,7 @@ namespace MaNGOS
         void Visit(CorpseMapType&) {}
         void Visit(CameraMapType&) {}
         void Visit(CreatureMapType&);
+        void Visit(GameObjectMapType&);
     };
 
     struct PlayerRelocationNotifier
@@ -166,7 +167,7 @@ namespace MaNGOS
 
     /* Model Searcher class:
     template<class Check>
-    struct SomeSearcher
+    struct MANGOS_DLL_DECL SomeSearcher
     {
         ResultType& i_result;
         Check & i_check;
@@ -512,11 +513,8 @@ namespace MaNGOS
         void Visit(CameraMapType& m)
         {
             for (CameraMapType::iterator itr = m.begin(); itr != m.end(); ++itr)
-            {
-                Camera* camera = itr->getSource();
-                if (camera->GetBody()->InSamePhase(i_searcher) && camera->GetBody()->IsWithinDist(i_searcher, i_dist))
-                    i_do(camera->GetOwner());
-            }
+                if (itr->getSource()->GetBody()->InSamePhase(i_searcher) && itr->getSource()->GetBody()->IsWithinDist(i_searcher, i_dist))
+                    i_do(itr->getSource()->GetOwner());
         }
         template<class NOT_INTERESTED> void Visit(GridRefManager<NOT_INTERESTED>&) {}
     };
@@ -541,62 +539,53 @@ namespace MaNGOS
     */
 
     // WorldObject check classes
-    class NearestCorpseInObjectRangeCheck
-    {
-    public:
-        NearestCorpseInObjectRangeCheck(WorldObject const& obj, float range)
-            : i_obj(obj), i_range(range) {}
-        WorldObject const& GetFocusObject() const { return i_obj; }
-        bool operator()(Creature* u)
-        {
-            if (u->GetObjectGuid() != i_obj.GetObjectGuid() &&
-                (!u->isAlive() || u->IsCorpse()) &&
-                !u->IsDeadByDefault() &&
-                (u->GetCreatureTypeMask() & CREATURE_TYPEMASK_MECHANICAL_OR_ELEMENTAL) == 0 &&
-                i_obj.IsWithinDistInMap(u, i_range))
-            {
-                i_range = i_obj.GetDistance(u);         // use found unit range as new range limit for next check
-                return true;
-            }
-            return false;
-        }
-        bool operator()(Player* u)
-        {
-            if (!u->isAlive() && !u->IsTaxiFlying() && i_obj.IsWithinDistInMap(u, i_range))
-            {
-                i_range = i_obj.GetDistance(u);         // use found unit range as new range limit for next check
-                return true;
-            }
-            return false;
-        }
-        bool operator()(Corpse* u);
-        float GetLastRange() const { return i_range; }
-    private:
-        WorldObject const& i_obj;
-        float  i_range;
-
-        // prevent clone this object
-        NearestCorpseInObjectRangeCheck(NearestCorpseInObjectRangeCheck const&);
-    };
-
-    class ExplodeCorpseObjectCheck
+    class RaiseDeadObjectCheck
     {
         public:
-            ExplodeCorpseObjectCheck(WorldObject const* fobj, float range) : i_fobj(fobj), i_range(range) {}
+            RaiseDeadObjectCheck(WorldObject const* fobj, float range, uint32 corpseTypeMask) : i_fobj(fobj), i_range(range), i_typeMask(corpseTypeMask) {}
             WorldObject const& GetFocusObject() const { return *i_fobj; }
             bool operator()(Player* u)
             {
-                if (u->getDeathState() != CORPSE || u->IsTaxiFlying() ||
-                        u->HasAuraType(SPELL_AURA_GHOST) || (u->GetDisplayId() != u->GetNativeDisplayId()))
+                if (!u->IsInWorld() || u->isAlive() || u->IsTaxiFlying())
                     return false;
 
-                return i_fobj->IsWithinDistInMap(u, i_range);
+                if (i_fobj->IsWithinDistInMap(u, i_range))
+                {
+                    i_range = i_fobj->GetDistance(u);         // use found unit range as new range limit for next check
+                    return true;
+                }
+                return false;
             }
+            bool operator()(Corpse* u);
             bool operator()(Creature* u)
             {
-                if (u->getDeathState() != CORPSE || u->IsTaxiFlying() || u->IsDeadByDefault() ||
-                        (u->GetDisplayId() != u->GetNativeDisplayId()) ||
-                        (u->GetCreatureTypeMask() & CREATURE_TYPEMASK_MECHANICAL_OR_ELEMENTAL) != 0)
+                if (!u->IsInWorld() || u->isAlive() || u->IsDeadByDefault() ||
+                   ((i_typeMask && !(u->GetCreatureTypeMask() & i_typeMask)) ||
+                   (i_typeMask == CREATURE_TYPEMASK_NONE && !(u->GetCreatureTypeMask() & CREATURE_TYPEMASK_HUMANOID_OR_UNDEAD))))
+                    return false;
+
+                if (i_fobj->IsWithinDistInMap(u, i_range))
+                {
+                    i_range = i_fobj->GetDistance(u);         // use found unit range as new range limit for next check
+                    return true;
+                }
+                return false;
+            }
+            template<class NOT_INTERESTED> bool operator()(NOT_INTERESTED*) { return false; }
+        private:
+            WorldObject const* i_fobj;
+            float i_range;
+            uint32 i_typeMask;
+    };
+
+    class RaiseAllyObjectCheck
+    {
+        public:
+            RaiseAllyObjectCheck(WorldObject const* fobj, float range, uint32 corpseTypeMask = 0) : i_fobj(fobj), i_range(range) {}
+            WorldObject const& GetFocusObject() const { return *i_fobj; }
+            bool operator()(Player* u)
+            {
+                if (u->isAlive() || u->IsTaxiFlying() || !i_fobj->IsFriendlyTo(u))
                     return false;
 
                 return i_fobj->IsWithinDistInMap(u, i_range);
@@ -607,100 +596,43 @@ namespace MaNGOS
             float i_range;
     };
 
-    class RaiseDeadObjectCheck
-    {
-    public:
-        RaiseDeadObjectCheck(WorldObject const* fobj, float range, uint32 corpseTypeMask) : i_fobj(fobj), i_range(range), i_typeMask(corpseTypeMask) {}
-        WorldObject const& GetFocusObject() const { return *i_fobj; }
-        bool operator()(Player* u)
-        {
-            if (!u->IsInWorld() || u->isAlive() || u->IsTaxiFlying())
-                return false;
-
-            if (i_fobj->IsWithinDistInMap(u, i_range))
-            {
-                i_range = i_fobj->GetDistance(u);         // use found unit range as new range limit for next check
-                return true;
-            }
-            return false;
-        }
-        bool operator()(Corpse* u);
-        bool operator()(Creature* u)
-        {
-            if (!u->IsInWorld() || u->isAlive() || u->IsDeadByDefault() ||
-                ((i_typeMask && !(u->GetCreatureTypeMask() & i_typeMask)) ||
-                (i_typeMask == CREATURE_TYPEMASK_NONE && !(u->GetCreatureTypeMask() & CREATURE_TYPEMASK_HUMANOID_OR_UNDEAD))))
-                return false;
-
-            if (i_fobj->IsWithinDistInMap(u, i_range))
-            {
-                i_range = i_fobj->GetDistance(u);         // use found unit range as new range limit for next check
-                return true;
-            }
-            return false;
-        }
-        template<class NOT_INTERESTED> bool operator()(NOT_INTERESTED*) { return false; }
-    private:
-        WorldObject const* i_fobj;
-        float i_range;
-        uint32 i_typeMask;
-    };
-
-    class RaiseAllyObjectCheck
-    {
-    public:
-        RaiseAllyObjectCheck(WorldObject const* fobj, float range, uint32 corpseTypeMask = 0) : i_fobj(fobj), i_range(range) {}
-        WorldObject const& GetFocusObject() const { return *i_fobj; }
-        bool operator()(Player* u)
-        {
-            if (u->isAlive() || u->IsTaxiFlying() || !i_fobj->IsFriendlyTo(u))
-                return false;
-
-            return i_fobj->IsWithinDistInMap(u, i_range);
-        }
-        template<class NOT_INTERESTED> bool operator()(NOT_INTERESTED*) { return false; }
-    private:
-        WorldObject const* i_fobj;
-        float i_range;
-    };
-
     class CannibalizeObjectCheck
     {
-    public:
-        CannibalizeObjectCheck(WorldObject const* fobj, float range, uint32 corpseTypeMask) : i_fobj(fobj), i_range(range), i_typeMask(corpseTypeMask) {}
-        WorldObject const& GetFocusObject() const { return *i_fobj; }
-        bool operator()(Player* u)
-        {
-            if (!u->IsInWorld() || i_fobj->IsFriendlyTo(u) || u->isAlive() || u->IsTaxiFlying() ||
-                u->GetObjectGuid() == i_fobj->GetObjectGuid())
-                return false;
-
-            if (i_fobj->IsWithinDistInMap(u, i_range))
+        public:
+            CannibalizeObjectCheck(WorldObject const* fobj, float range, uint32 corpseTypeMask) : i_fobj(fobj), i_range(range), i_typeMask(corpseTypeMask) {}
+            WorldObject const& GetFocusObject() const { return *i_fobj; }
+            bool operator()(Player* u)
             {
-                i_range = i_fobj->GetDistance(u);         // use found unit range as new range limit for next check
-                return true;
-            }
-            return false;
-        }
-        bool operator()(Corpse* u);
-        bool operator()(Creature* u)
-        {
-            if (!u->IsInWorld() || i_fobj->IsFriendlyTo(u) || u->isAlive() || u->GetObjectGuid() == i_fobj->GetObjectGuid() ||
-                !(u->GetCreatureTypeMask() & i_typeMask))
-                return false;
+                if (!u->IsInWorld() || i_fobj->IsFriendlyTo(u) || u->isAlive() || u->IsTaxiFlying() ||
+                    u->GetObjectGuid() == i_fobj->GetObjectGuid())
+                    return false;
 
-            if (i_fobj->IsWithinDistInMap(u, i_range))
-            {
-                i_range = i_fobj->GetDistance(u);         // use found unit range as new range limit for next check
-                return true;
+                if (i_fobj->IsWithinDistInMap(u, i_range))
+                {
+                    i_range = i_fobj->GetDistance(u);         // use found unit range as new range limit for next check
+                    return true;
+                }
+                return false;
             }
-            return false;
-        }
-        template<class NOT_INTERESTED> bool operator()(NOT_INTERESTED*) { return false; }
-    private:
-        WorldObject const* i_fobj;
-        float i_range;
-        uint32 i_typeMask;
+            bool operator()(Corpse* u);
+            bool operator()(Creature* u)
+            {
+                if (!u->IsInWorld() || i_fobj->IsFriendlyTo(u) || u->isAlive() || u->GetObjectGuid() == i_fobj->GetObjectGuid() ||
+                        !(u->GetCreatureTypeMask() & i_typeMask))
+                    return false;
+
+                if (i_fobj->IsWithinDistInMap(u, i_range))
+                {
+                    i_range = i_fobj->GetDistance(u);         // use found unit range as new range limit for next check
+                    return true;
+                }
+                return false;
+            }
+            template<class NOT_INTERESTED> bool operator()(NOT_INTERESTED*) { return false; }
+        private:
+            WorldObject const* i_fobj;
+            float i_range;
+            uint32 i_typeMask;
     };
 
     // WorldObject do classes
@@ -724,14 +656,13 @@ namespace MaNGOS
             WorldObject const& GetFocusObject() const { return *i_unit; }
             bool operator()(GameObject* go) const
             {
-                GameObjectInfo const* goInfo = go->GetGOInfo();
-                if (goInfo->type != GAMEOBJECT_TYPE_SPELL_FOCUS)
+                if (go->GetGOInfo()->type != GAMEOBJECT_TYPE_SPELL_FOCUS)
                     return false;
 
-                if (goInfo->spellFocus.focusId != i_focusId)
+                if (go->GetGOInfo()->spellFocus.focusId != i_focusId)
                     return false;
 
-                float dist = (float)goInfo->spellFocus.dist;
+                float dist = (float)go->GetGOInfo()->spellFocus.dist;
 
                 return go->IsWithinDistInMap(i_unit, dist);
             }
@@ -851,38 +782,6 @@ namespace MaNGOS
             GameObjectEntryInPosRangeCheck(GameObjectEntryInPosRangeCheck const&);
     };
 
-    // Success at gameobject of type in range of provided xyz
-    class GameObjectTypeInPosRangeCheck
-    {
-        public:
-            GameObjectTypeInPosRangeCheck(Unit const& obj, GameobjectTypes type, float x, float y, float z, float range, bool onlyHostile, bool onlyFriendly)
-                : i_obj(obj), i_type(type), i_x(x), i_y(y), i_z(z), i_range(range), i_onlyHostile(onlyHostile), i_onlyFriendly(onlyFriendly) {}
-
-            WorldObject const& GetFocusObject() const { return i_obj; }
-
-            bool operator()(GameObject* go)
-            {
-                if (go->GetGoType() == i_type
-                        && (!i_onlyHostile || go->IsHostileTo(&i_obj)) && (!i_onlyFriendly || go->IsFriendlyTo(&i_obj))
-                        && go->IsWithinDist3d(i_x, i_y, i_z, i_range))
-                    return true;
-
-                return false;
-            }
-
-            float GetLastRange() const { return i_range; }
-
-        private:
-            Unit const& i_obj;
-            GameobjectTypes i_type;
-            float i_x, i_y, i_z;
-            float i_range;
-            bool i_onlyHostile, i_onlyFriendly;
-
-            // prevent clone this object
-            GameObjectTypeInPosRangeCheck(GameObjectTypeInPosRangeCheck const&);
-    };
-
     // Unit checks
 
     class MostHPMissingInRangeCheck
@@ -954,8 +853,7 @@ namespace MaNGOS
             WorldObject const& GetFocusObject() const { return *i_obj; }
             bool operator()(Unit* u)
             {
-                if (u->isAlive() && (i_controlledByPlayer ? !i_obj->IsFriendlyTo(u) : i_obj->IsHostileTo(u))
-                        && i_obj->IsWithinDistInMap(u, i_range))
+                if (u->isAlive() && i_obj->IsWithinDistInMap(u, i_range) && (i_controlledByPlayer ? !i_obj->IsFriendlyTo(u) : i_obj->IsHostileTo(u)))
                     return true;
                 else
                     return false;
@@ -1023,12 +921,17 @@ namespace MaNGOS
     class NearestAttackableUnitInObjectRangeCheck
     {
         public:
-            NearestAttackableUnitInObjectRangeCheck(WorldObject const* obj, Unit const* funit, float range) : i_obj(obj), i_funit(funit), i_range(range) {}
+            NearestAttackableUnitInObjectRangeCheck(WorldObject const* obj, float range) : i_obj(obj), i_range(range)
+            {
+                i_targetForPlayer = i_obj->IsControlledByPlayer();
+            }
             WorldObject const& GetFocusObject() const { return *i_obj; }
             bool operator()(Unit* u)
             {
-                if (u->isTargetableForAttack() && i_obj->IsWithinDistInMap(u, i_range) &&
-                        !i_funit->IsFriendlyTo(u) && u->isVisibleForOrDetect(i_funit, i_funit, false))
+                if (u->isTargetableForAttack()
+                    && i_obj->IsWithinDistInMap(u, i_range)
+                    && (i_targetForPlayer ? !i_obj->IsFriendlyTo(u) : i_obj->IsHostileTo(u))
+                    && (i_obj->GetTypeId() != TYPEID_UNIT || u->isVisibleForOrDetect((Unit*)i_obj, (Unit*)i_obj, false)))
                 {
                     i_range = i_obj->GetDistance(u);        // use found unit range as new range limit for next check
                     return true;
@@ -1038,8 +941,8 @@ namespace MaNGOS
             }
         private:
             WorldObject const* i_obj;
-            Unit const* i_funit;
-            float i_range;
+            bool               i_targetForPlayer;
+            float              i_range;
 
             // prevent clone this object
             NearestAttackableUnitInObjectRangeCheck(NearestAttackableUnitInObjectRangeCheck const&);
@@ -1052,7 +955,7 @@ namespace MaNGOS
                 : i_obj(obj), i_originalCaster(originalCaster), i_range(range)
             {
                 i_targetForUnit = i_originalCaster->isType(TYPEMASK_UNIT);
-                i_targetForPlayer = (i_originalCaster->GetTypeId() == TYPEID_PLAYER);
+                i_targetForPlayer = (i_originalCaster->IsVehicle() ? ((Unit*)i_originalCaster)->GetCharmerOrOwnerOrSelf()->GetTypeId() == TYPEID_PLAYER : i_originalCaster->GetTypeId() == TYPEID_PLAYER);
             }
             WorldObject const& GetFocusObject() const { return *i_obj; }
             bool operator()(Unit* u)
@@ -1217,13 +1120,13 @@ namespace MaNGOS
     class NearestCreatureEntryWithLiveStateInObjectRangeCheck
     {
         public:
-            NearestCreatureEntryWithLiveStateInObjectRangeCheck(WorldObject const& obj, uint32 entry, bool onlyAlive, bool onlyDead, float range, bool excludeSelf = false)
+            NearestCreatureEntryWithLiveStateInObjectRangeCheck(WorldObject const& obj, uint32 entry, bool onlyAlive, bool onlyDead, float range, bool excludeSelf = true)
                 : i_obj(obj), i_entry(entry), i_onlyAlive(onlyAlive), i_onlyDead(onlyDead), i_excludeSelf(excludeSelf), i_range(range) {}
             WorldObject const& GetFocusObject() const { return i_obj; }
             bool operator()(Creature* u)
             {
                 if (u->GetEntry() == i_entry && ((i_onlyAlive && u->isAlive()) || (i_onlyDead && u->IsCorpse()) || (!i_onlyAlive && !i_onlyDead))
-                        && (!i_excludeSelf || &i_obj != u) && i_obj.IsWithinDistInMap(u, i_range))
+                        && (!i_excludeSelf || (u->GetObjectGuid() != i_obj.GetObjectGuid())) && i_obj.IsWithinDistInMap(u, i_range))
                 {
                     i_range = i_obj.GetDistance(u);         // use found unit range as new range limit for next check
                     return true;
@@ -1241,6 +1144,86 @@ namespace MaNGOS
 
             // prevent clone this object
             NearestCreatureEntryWithLiveStateInObjectRangeCheck(NearestCreatureEntryWithLiveStateInObjectRangeCheck const&);
+    };
+
+    class NearestCorpseInObjectRangeCheck
+    {
+        public:
+            NearestCorpseInObjectRangeCheck(WorldObject const& obj, float range)
+                : i_obj(obj), i_range(range) {}
+            WorldObject const& GetFocusObject() const { return i_obj; }
+            bool operator()(Creature* u)
+            {
+                if (u->GetObjectGuid() != i_obj.GetObjectGuid() &&
+                    (!u->isAlive() || u->IsCorpse()) &&
+                    !u->IsDeadByDefault() &&
+                    (u->GetCreatureTypeMask() & CREATURE_TYPEMASK_MECHANICAL_OR_ELEMENTAL) == 0 &&
+                    i_obj.IsWithinDistInMap(u, i_range))
+                {
+                    i_range = i_obj.GetDistance(u);         // use found unit range as new range limit for next check
+                    return true;
+                }
+                return false;
+            }
+            bool operator()(Player* u)
+            {
+                if (!u->isAlive() && !u->IsTaxiFlying() && i_obj.IsWithinDistInMap(u, i_range))
+                {
+                    i_range = i_obj.GetDistance(u);         // use found unit range as new range limit for next check
+                    return true;
+                }
+                return false;
+            }
+            bool operator()(Corpse* u);
+            float GetLastRange() const { return i_range; }
+        private:
+            WorldObject const& i_obj;
+            float  i_range;
+
+            // prevent clone this object
+            NearestCorpseInObjectRangeCheck(NearestCorpseInObjectRangeCheck const&);
+    };
+
+    class GameObjectInRangeCheck
+    {
+        public:
+            GameObjectInRangeCheck(WorldObject const* _obj, float _x, float _y, float _z, float _range):
+              i_obj(_obj), x(_x), y(_y), z(_z), range(_range) {}
+
+            WorldObject const& GetFocusObject() const { return *i_obj; }
+
+            bool operator() (GameObject* go)
+            {
+                return go->IsInRange(x, y, z, range);
+            }
+
+        private:
+            WorldObject const* i_obj;
+            float x, y, z, range;
+
+            // prevent cloning this object
+            GameObjectInRangeCheck(GameObjectInRangeCheck const&);
+    };
+
+    class AllGameObjectsWithEntryInRange
+    {
+        public:
+            AllGameObjectsWithEntryInRange(const WorldObject* pObject, uint32 uiEntry, float fMaxRange) : m_pObject(pObject), m_uiEntry(uiEntry), m_fRange(fMaxRange) {}
+            WorldObject const& GetFocusObject() const { return *m_pObject; }
+            bool operator() (GameObject* pGo)
+            {
+                if (pGo->GetEntry() == m_uiEntry && m_pObject->IsWithinDist(pGo,m_fRange,false))
+                    return true;
+
+                return false;
+            }
+        private:
+            const WorldObject* m_pObject;
+            uint32 m_uiEntry;
+            float m_fRange;
+
+            // prevent clone this object
+            AllGameObjectsWithEntryInRange(AllGameObjectsWithEntryInRange const&);
     };
 
     class AllCreaturesOfEntryInRangeCheck
@@ -1267,75 +1250,34 @@ namespace MaNGOS
 
     class AllIdenticalObjectsInRangeCheck
     {
-    public:
-        AllIdenticalObjectsInRangeCheck(const WorldObject* pObject, float fMaxRange) : m_pObject(pObject), m_fRange(fMaxRange) {}
-        WorldObject const& GetFocusObject() const { return *m_pObject; }
-        bool operator() (WorldObject* pObject)
-        {
-            if (pObject->GetObjectGuid() == m_pObject->GetObjectGuid())
+        public:
+            AllIdenticalObjectsInRangeCheck(const WorldObject* pObject, float fMaxRange) : m_pObject(pObject), m_fRange(fMaxRange) {}
+            WorldObject const& GetFocusObject() const { return *m_pObject; }
+            bool operator() (WorldObject* pObject)
+            {
+                if (pObject->GetObjectGuid() == m_pObject->GetObjectGuid())
+                    return false;
+
+                if (!pObject->GetObjectGuid().HasEntry() || !m_pObject->GetObjectGuid().HasEntry())
+                    return false;
+
+                if (pObject->GetObjectGuid().GetEntry() != m_pObject->GetObjectGuid().GetEntry())
+                    return false;
+
+                if (m_pObject->IsWithinDist(pObject,m_fRange,false))
+                    return true;
+
                 return false;
+            }
 
-            if (!pObject->GetObjectGuid().HasEntry() || !m_pObject->GetObjectGuid().HasEntry())
-                return false;
+        private:
+            const WorldObject* m_pObject;
+            float m_fRange;
 
-            if (pObject->GetObjectGuid().GetEntry() != m_pObject->GetObjectGuid().GetEntry())
-                return false;
-
-            if (m_pObject->IsWithinDist(pObject, m_fRange, false))
-                return true;
-
-            return false;
-        }
-
-    private:
-        const WorldObject* m_pObject;
-        float m_fRange;
-
-        // prevent clone this object
-        AllIdenticalObjectsInRangeCheck(AllIdenticalObjectsInRangeCheck const&);
+            // prevent clone this object
+            AllIdenticalObjectsInRangeCheck(AllIdenticalObjectsInRangeCheck const&);
     };
 
-    class GameObjectInRangeCheck
-    {
-    public:
-        GameObjectInRangeCheck(WorldObject const* _obj, float _x, float _y, float _z, float _range) :
-            i_obj(_obj), x(_x), y(_y), z(_z), range(_range) {}
-
-        WorldObject const& GetFocusObject() const { return *i_obj; }
-
-        bool operator() (GameObject* go)
-        {
-            return go->IsInRange(x, y, z, range);
-        }
-
-    private:
-        WorldObject const* i_obj;
-        float x, y, z, range;
-
-        // prevent cloning this object
-        GameObjectInRangeCheck(GameObjectInRangeCheck const&);
-    };
-
-    class AllGameObjectsWithEntryInRange
-    {
-    public:
-        AllGameObjectsWithEntryInRange(const WorldObject* pObject, uint32 uiEntry, float fMaxRange) : m_pObject(pObject), m_uiEntry(uiEntry), m_fRange(fMaxRange) {}
-        WorldObject const& GetFocusObject() const { return *m_pObject; }
-        bool operator() (GameObject* pGo)
-        {
-            if (pGo->GetEntry() == m_uiEntry && m_pObject->IsWithinDist(pGo, m_fRange, false))
-                return true;
-
-            return false;
-        }
-    private:
-        const WorldObject* m_pObject;
-        uint32 m_uiEntry;
-        float m_fRange;
-
-        // prevent clone this object
-        AllGameObjectsWithEntryInRange(AllGameObjectsWithEntryInRange const&);
-    };
 
     // Player checks and do
 

@@ -457,7 +457,7 @@ struct npc_graufAI : public ScriptedAI
             {
                 m_creature->SetLevitate(true);
                 m_creature->SetWalk(false);
-                m_creature->SetByteValue(UNIT_FIELD_BYTES_1, 3, UNIT_BYTE1_FLAG_FLY_ANIM);
+                m_creature->SetByteValue(UNIT_FIELD_BYTES_1, 3, UNIT_BYTE1_FLAG_HOVER);
                 m_creature->GetMotionMaster()->MoveWaypoint();
                 m_uiFlightDelayTimer = 0;
             }

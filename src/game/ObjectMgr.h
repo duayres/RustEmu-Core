@@ -36,6 +36,7 @@
 #include "ObjectAccessor.h"
 #include "ObjectGuid.h"
 #include "Policies/Singleton.h"
+#include "Vehicle.h"
 
 #include <string>
 #include <map>
@@ -45,6 +46,7 @@ class Group;
 class ArenaTeam;
 class Item;
 class SQLStorage;
+class MOTransport;
 
 struct GameTele
 {
@@ -807,7 +809,6 @@ class ObjectMgr
 
         void LoadNPCSpellClickSpells();
         void LoadSpellTemplate();
-        void LoadCreatureTemplateSpells();
 
         void LoadGameTele();
 
@@ -824,6 +825,14 @@ class ObjectMgr
         void LoadActiveEntities(Map* _map);
 
         void LoadVehicleAccessory();
+
+        void LoadTransports(Map* map);
+        void LoadTransports();
+        typedef UNORDERED_SET<MOTransport*> TransportSet;
+        TransportSet const& GetTransports() { return m_Transports; };
+
+        MOTransport* GetTransportByGuid(ObjectGuid const& guid);
+        MOTransport const* GetTransportByGOMapId(uint32 mapid) const;
 
         std::string GeneratePetName(uint32 entry);
         uint32 GetBaseXP(uint32 level) const;
@@ -1331,6 +1340,8 @@ class ObjectMgr
         DungeonEncounterMap m_DungeonEncounters;
 
         CreatureModelRaceMap    m_mCreatureModelRaceMap;
+
+        TransportSet m_Transports;
 
         CacheNpcTextIdMap m_mCacheNpcTextIdMap;
         CacheVendorItemMap m_mCacheVendorTemplateItemMap;

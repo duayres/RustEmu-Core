@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,18 +20,17 @@
 #define MANGOSSERVER_PACKET_BUILDER_H
 
 class ByteBuffer;
-class WorldPacket;
 
 namespace Movement
 {
     class MoveSpline;
     class PacketBuilder
     {
-            static void WriteCommonMonsterMovePart(const MoveSpline& mov, WorldPacket& data);
+            static void WriteCommonMonsterMovePart(const MoveSpline& mov, ByteBuffer& data);
         public:
-
-            static void WriteMonsterMove(const MoveSpline& mov, WorldPacket& data);
+            static void WriteMonsterMove(const MoveSpline& mov, ByteBuffer& data);
             static void WriteCreate(const MoveSpline& mov, ByteBuffer& data);
     };
 }
+
 #endif // MANGOSSERVER_PACKET_BUILDER_H

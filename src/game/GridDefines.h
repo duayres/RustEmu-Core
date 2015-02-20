@@ -28,6 +28,7 @@ class Corpse;
 class Creature;
 class DynamicObject;
 class GameObject;
+class WorldObject;
 class Pet;
 class Player;
 class Camera;
@@ -73,6 +74,8 @@ typedef NGrid<MAX_NUMBER_OF_CELLS, Player, AllWorldObjectTypes, AllGridObjectTyp
 
 typedef TypeMapContainer<AllGridObjectTypes> GridTypeMapContainer;
 typedef TypeMapContainer<AllWorldObjectTypes> WorldTypeMapContainer;
+
+typedef UNORDERED_SET<WorldObject*>     WorldObjectSet;
 
 template<const unsigned int LIMIT>
 struct CoordPair

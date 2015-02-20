@@ -113,17 +113,16 @@ void WorldSession::SendTaxiMenu(Creature* unit)
 
 void WorldSession::SendDoFlight(uint32 mountDisplayId, uint32 path, uint32 pathNode)
 {
-    // remove fake death
-    if (GetPlayer()->hasUnitState(UNIT_STAT_DIED))
-        GetPlayer()->RemoveSpellsCausingAura(SPELL_AURA_FEIGN_DEATH);
-
-    while (GetPlayer()->GetMotionMaster()->GetCurrentMovementGeneratorType() == FLIGHT_MOTION_TYPE)
-        GetPlayer()->GetMotionMaster()->MovementExpired(false);
-
-    if (mountDisplayId)
-        GetPlayer()->Mount(mountDisplayId);
-
-    GetPlayer()->GetMotionMaster()->MoveTaxiFlight(path, pathNode);
+    if (path < sTaxiPathNodesByPath.size())
+    {
+        DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "WorldSession::SendDoFlight %s taxi to (Path %u node %u, mount %u)", GetPlayer()->GetGuidStr().c_str(), path, pathNode, mountDisplayId);
+        GetPlayer()->GetUnitStateMgr().PushAction(UNIT_ACTION_TAXI, GetPlayer()->GetUnitStateMgr().CreateStandartState(UNIT_ACTION_TAXI, mountDisplayId, path, pathNode));
+    }
+    else
+    {
+        sLog.outError("WorldSession::SendDoFlight %s attempt taxi to (nonexistent Path %u node %u)",
+            GetPlayer()->GetGuidStr().c_str(), path, pathNode);
+    }
 }
 
 bool WorldSession::SendLearnNewTaxiNode(Creature* unit)
@@ -215,10 +214,10 @@ void WorldSession::HandleMoveSplineDoneOpcode(WorldPacket& recv_data)
     // far teleport case
     if (curDestNode && curDestNode->map_id != GetPlayer()->GetMapId())
     {
-        if (GetPlayer()->GetMotionMaster()->GetCurrentMovementGeneratorType() == FLIGHT_MOTION_TYPE)
+        if (GetPlayer()->IsInUnitState(UNIT_ACTION_TAXI))
         {
             // short preparations to continue flight
-            FlightPathMovementGenerator* flight = (FlightPathMovementGenerator*)(GetPlayer()->GetMotionMaster()->top());
+            FlightPathMovementGenerator* flight = (FlightPathMovementGenerator*)(GetPlayer()->GetMotionMaster()->CurrentMovementGenerator());
 
             flight->Interrupt(*GetPlayer());                // will reset at map landing
 
@@ -226,7 +225,7 @@ void WorldSession::HandleMoveSplineDoneOpcode(WorldPacket& recv_data)
             TaxiPathNodeEntry const& node = flight->GetPath()[flight->GetCurrentNode()];
             flight->SkipCurrentNode();
 
-            GetPlayer()->TeleportTo(curDestNode->map_id, node.x, node.y, node.z, GetPlayer()->GetOrientation());
+            GetPlayer()->TeleportTo(curDestNode->map_id,node.x,node.y,node.z,GetPlayer()->GetOrientation(), TELE_TO_NODELAY);
         }
         return;
     }

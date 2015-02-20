@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,35 +38,41 @@ void HomeMovementGenerator<Creature>::_setTargetLocation(Creature& owner)
     if (owner.hasUnitState(UNIT_STAT_NOT_MOVE))
         return;
 
-    Movement::MoveSplineInit init(owner);
+    Movement::MoveSplineInit<Unit*> init(owner);
     float x, y, z, o;
+
     // at apply we can select more nice return points base at current movegen
-    if (owner.GetMotionMaster()->empty() || !owner.GetMotionMaster()->top()->GetResetPosition(owner, x, y, z, o))
+    if (owner.GetMotionMaster()->empty() || !owner.GetMotionMaster()->CurrentMovementGenerator()->GetResetPosition(owner, x, y, z, o))
         owner.GetRespawnCoord(x, y, z, &o);
 
     init.SetFacing(o);
     init.MoveTo(x, y, z, true);
-    init.SetWalk(false);
+    init.SetSmooth(); // fix broken fly movement for old creatures
+    //init.SetWalk(false);
+    // hack for old creatures with bugged fly animation
+    bool bSetWalk = (owner.GetTypeId() == TYPEID_UNIT && owner.IsLevitating() && owner.GetFloatValue(UNIT_FIELD_HOVERHEIGHT) == 0.0f);
+    init.SetWalk(bSetWalk);
     init.Launch();
 
-    arrived = false;
+    m_arrived = false;
     owner.clearUnitState(UNIT_STAT_ALL_DYN_STATES);
 }
 
-bool HomeMovementGenerator<Creature>::Update(Creature& owner, const uint32& /*time_diff*/)
+bool HomeMovementGenerator<Creature>::Update(Creature& owner, const uint32& time_diff)
 {
-    arrived = owner.movespline->Finalized();
-    return !arrived;
+    m_arrived = owner.movespline->Finalized();
+    return !m_arrived;
 }
 
 void HomeMovementGenerator<Creature>::Finalize(Creature& owner)
 {
-    if (arrived)
+    if (m_arrived)
     {
         if (owner.GetTemporaryFactionFlags() & TEMPFACTION_RESTORE_REACH_HOME)
             owner.ClearTemporaryFaction();
 
         owner.SetWalk(!owner.hasUnitState(UNIT_STAT_RUNNING_STATE) && !owner.IsLevitating(), false);
+        owner.SetHealthPercent(100.0f);
         owner.LoadCreatureAddon(true);
         owner.AI()->JustReachedHome();
     }

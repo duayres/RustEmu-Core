@@ -1793,8 +1793,8 @@ bool ScriptAction::HandleScriptStep()
                 if (m_script->textId[0] && !LogIfNotCreature(pSource))
                 {
                     Creature* cSource = static_cast<Creature*>(pSource);
-                    if (cSource->GetMotionMaster()->GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
-                        (static_cast<WaypointMovementGenerator<Creature>* >(cSource->GetMotionMaster()->top()))->AddToWaypointPauseTime(m_script->textId[0]);
+                    if (cSource->IsInUnitState(UNIT_ACTION_DOWAYPOINTS))
+                        (static_cast<WaypointMovementGenerator<Creature>* >(cSource->GetMotionMaster()->CurrentMovementGenerator()))->AddToWaypointPauseTime(m_script->textId[0]);
                 }
 
                 return true;
@@ -1886,7 +1886,7 @@ bool ScriptAction::HandleScriptStep()
             if (m_script->setFacing.resetFacing)
             {
                 float x,y,z,o;
-                if (pCSource->GetMotionMaster()->empty() || !pCSource->GetMotionMaster()->top()->GetResetPosition(*pCSource, x, y, z, o))
+                if (pCSource->GetMotionMaster()->empty() || !pCSource->GetMotionMaster()->CurrentMovementGenerator()->GetResetPosition(*pCSource, x, y, z, o))
                     pCSource->GetRespawnCoord(x, y, z, &o);
                 pCSource->SetFacingTo(o);
 
@@ -1926,8 +1926,10 @@ bool ScriptAction::HandleScriptStep()
                 else
                     orientation = m_script->o;
 
-                pSource->GetRandomPoint(pTarget->GetPositionX(), pTarget->GetPositionY(), pTarget->GetPositionZ(), m_script->moveDynamic.maxDist, x, y, z,
-                                        m_script->moveDynamic.minDist, (orientation == 0.0f ? NULL : &orientation));
+                float dist = urand(m_script->moveDynamic.minDist, m_script->moveDynamic.maxDist);
+
+                pSource->GetRandomPoint(pTarget->GetPositionX(), pTarget->GetPositionY(), pTarget->GetPositionZ(), dist, x, y, z);      
+
                 z = std::max(z, pTarget->GetPositionZ());
                 pSource->UpdateAllowedPositionZ(x, y, z);
             }

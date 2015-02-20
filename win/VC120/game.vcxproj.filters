@@ -565,6 +565,12 @@
     <ClCompile Include="..\..\src\game\BattleGround\BattleGroundWS.cpp">
       <Filter>BattleGround</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\game\WorldLocation.cpp">
+      <Filter>World/Handlers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\game\StateMgr.cpp">
+      <Filter>World/Handlers</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\game\AccountMgr.h">
@@ -1077,6 +1083,15 @@
     </ClInclude>
     <ClInclude Include="..\..\src\game\BattleGround\BattleGroundSA.h">
       <Filter>BattleGround</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\game\WorldLocation.h">
+      <Filter>World/Handlers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\game\StateMgr.h">
+      <Filter>World/Handlers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\game\StateMgrImpl.h">
+      <Filter>World/Handlers</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

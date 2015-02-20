@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@
 
 #include "spline.h"
 #include "MoveSplineInitArgs.h"
+#include "WorldLocation.h"
 
 namespace Movement
 {
@@ -31,16 +32,6 @@ namespace Movement
         MonsterMoveFacingSpot = 2,
         MonsterMoveFacingTarget = 3,
         MonsterMoveFacingAngle = 4
-    };
-
-    struct Location : public Vector3
-    {
-        Location() : orientation(0) {}
-        Location(float x, float y, float z, float o) : Vector3(x, y, z), orientation(o) {}
-        Location(const Vector3& v) : Vector3(v), orientation(0) {}
-        Location(const Vector3& v, float o) : Vector3(v), orientation(o) {}
-
-        float orientation;
     };
 
     // MoveSpline represents smooth catmullrom or linear curve and point that moves belong it
@@ -80,26 +71,25 @@ namespace Movement
             void init_spline(const MoveSplineInitArgs& args);
         protected:
 
-            const MySpline::ControlArray& getPath() const { return spline.getPoints();}
+            const MySpline::ControlArray& getPath() const { return spline.getPoints(); }
             void computeParabolicElevation(float& el) const;
             void computeFallElevation(float& el) const;
 
             UpdateResult _updateState(int32& ms_time_diff);
-            int32 next_timestamp() const { return spline.length(point_Idx + 1);}
-            int32 segment_time_elapsed() const { return next_timestamp() - time_passed;}
-            int32 timeElapsed() const { return Duration() - time_passed;}
+            int32 next_timestamp() const { return spline.length(point_Idx + 1); }
+            int32 segment_time_elapsed() const { return next_timestamp() - time_passed; }
             int32 timePassed() const { return time_passed;}
 
         public:
             const MySpline& _Spline() const { return spline;}
-            int32 _currentSplineIdx() const { return point_Idx;}
+            int32 _currentSplineIdx() const { return point_Idx; }
             void _Finalize();
             void _Interrupt() { splineflags.done = true;}
 
         public:
 
             void Initialize(const MoveSplineInitArgs&);
-            bool Initialized() const { return !spline.empty();}
+            bool Initialized() const { return !spline.empty(); }
 
             explicit MoveSpline();
 
@@ -119,16 +109,17 @@ namespace Movement
                 while (difftime > 0);
             }
 
-            Location ComputePosition() const;
+            Position ComputePosition() const;
 
-            uint32 GetId() const { return m_Id;}
+            uint32 GetId() const { return m_Id; }
             bool Finalized() const { return splineflags.done; }
-            bool isCyclic() const { return splineflags.cyclic;}
-            const Vector3 FinalDestination() const { return Initialized() ? spline.getPoint(spline.last()) : Vector3();}
-            const Vector3 CurrentDestination() const { return Initialized() ? spline.getPoint(point_Idx + 1) : Vector3();}
+            bool isCyclic() const { return splineflags.cyclic; }
+            const Vector3 FinalDestination() const { return Initialized() ? spline.getPoint(spline.last()) : Vector3(); }
+            const Vector3 CurrentDestination() const { return Initialized() ? spline.getPoint(point_Idx + 1) : Vector3(); }
             int32 currentPathIdx() const;
 
-            int32 Duration() const { return spline.length();}
+            int32 Duration() const { return Initialized() ? spline.length() : 0; }
+            int32 timeElapsed() const { return Duration() - time_passed; }
 
             std::string ToString() const;
     };

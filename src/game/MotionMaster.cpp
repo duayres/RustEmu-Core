@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,6 +17,9 @@
  */
 
 #include "MotionMaster.h"
+#include "CreatureAISelector.h"
+#include "Creature.h"
+#include "Pet.h"
 #include "ConfusedMovementGenerator.h"
 #include "FleeingMovementGenerator.h"
 #include "HomeMovementGenerator.h"
@@ -27,11 +30,7 @@
 #include "RandomMovementGenerator.h"
 #include "movement/MoveSpline.h"
 #include "movement/MoveSplineInit.h"
-#include "Map.h"
-#include "CreatureAISelector.h"
-#include "Creature.h"
 #include "CreatureLinkingMgr.h"
-#include "Pet.h"
 #include "DBCStores.h"
 
 #include <cassert>
@@ -46,297 +45,156 @@ void MotionMaster::Initialize()
     // stop current move
     m_owner->StopMoving();
 
-    // clear ALL movement generators (including default)
-    Clear(false, true);
+    Clear(false, false);
 
     // set new default movement generator
-    if (m_owner->GetTypeId() == TYPEID_UNIT && !m_owner->hasUnitState(UNIT_STAT_CONTROLLED))
+    if (m_owner->GetTypeId() == TYPEID_UNIT /*&& !m_owner->hasUnitState(UNIT_STAT_CONTROLLED)*/)
     {
         MovementGenerator* movement = FactorySelector::selectMovementGenerator((Creature*)m_owner);
-        push(movement == NULL ? &si_idleMovement : movement);
-        top()->Initialize(*m_owner);
-        if (top()->GetMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
-            (static_cast<WaypointMovementGenerator<Creature>*>(top()))->InitializeWaypointPath(*((Creature*)(m_owner)), 0, PATH_NO_PATH, 0, 0);
+        if (movement)
+            Mutate(movement, UNIT_ACTION_DOWAYPOINTS);
+
+        if (CurrentMovementGenerator()->GetMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
+            (static_cast<WaypointMovementGenerator<Creature>*>(CurrentMovementGenerator()))->InitializeWaypointPath(*((Creature*)(m_owner)), 0, PATH_NO_PATH, 0, 0);
     }
-    else
-        push(&si_idleMovement);
 }
 
 MotionMaster::~MotionMaster()
 {
-    // just deallocate movement generator, but do not Finalize since it may access to already deallocated owner's memory
-    while (!empty())
-    {
-        MovementGenerator* m = top();
-        pop();
-        if (!isStatic(m))
-            delete m;
-    }
-}
-
-void MotionMaster::UpdateMotion(uint32 diff)
-{
-    if (m_owner->hasUnitState(UNIT_STAT_CAN_NOT_MOVE))
-        return;
-
-    MANGOS_ASSERT(!empty());
-    m_cleanFlag |= MMCF_UPDATE;
-
-    if (!top()->Update(*m_owner, diff))
-    {
-        m_cleanFlag &= ~MMCF_UPDATE;
-        MovementExpired();
-    }
-    else
-        m_cleanFlag &= ~MMCF_UPDATE;
-
-    if (m_expList)
-    {
-        for (size_t i = 0; i < m_expList->size(); ++i)
-        {
-            MovementGenerator* mg = (*m_expList)[i];
-            if (!isStatic(mg))
-                delete mg;
-        }
-
-        delete m_expList;
-        m_expList = NULL;
-
-        if (empty())
-            Initialize();
-
-        if (m_cleanFlag & MMCF_RESET)
-        {
-            top()->Reset(*m_owner);
-            m_cleanFlag &= ~MMCF_RESET;
-        }
-    }
-}
-
-void MotionMaster::DirectClean(bool reset, bool all)
-{
-    while (all ? !empty() : size() > 1)
-    {
-        MovementGenerator* curr = top();
-        pop();
-        curr->Finalize(*m_owner);
-
-        if (!isStatic(curr))
-            delete curr;
-    }
-
-    if (!all && reset)
-    {
-        MANGOS_ASSERT(!empty());
-        top()->Reset(*m_owner);
-    }
-}
-
-void MotionMaster::DelayedClean(bool reset, bool all)
-{
-    if (reset)
-        m_cleanFlag |= MMCF_RESET;
-    else
-        m_cleanFlag &= ~MMCF_RESET;
-
-    if (empty() || (!all && size() == 1))
-        return;
-
-    if (!m_expList)
-        m_expList = new ExpireList();
-
-    while (all ? !empty() : size() > 1)
-    {
-        MovementGenerator* curr = top();
-        pop();
-        curr->Finalize(*m_owner);
-
-        if (!isStatic(curr))
-            m_expList->push_back(curr);
-    }
-}
-
-void MotionMaster::DirectExpire(bool reset)
-{
-    if (empty() || size() == 1)
-        return;
-
-    MovementGenerator* curr = top();
-    pop();
-
-    // also drop stored under top() targeted motions
-    while (!empty() && (top()->GetMovementGeneratorType() == CHASE_MOTION_TYPE || top()->GetMovementGeneratorType() == FOLLOW_MOTION_TYPE))
-    {
-        MovementGenerator* temp = top();
-        pop();
-        temp->Finalize(*m_owner);
-        delete temp;
-    }
-
-    // Store current top MMGen, as Finalize might push a new MMGen
-    MovementGenerator* nowTop = empty() ? NULL : top();
-    // it can add another motions instead
-    curr->Finalize(*m_owner);
-
-    if (!isStatic(curr))
-        delete curr;
-
-    if (empty())
-        Initialize();
-
-    // Prevent reseting possible new pushed MMGen
-    if (reset && top() == nowTop)
-        top()->Reset(*m_owner);
-}
-
-void MotionMaster::DelayedExpire(bool reset)
-{
-    if (reset)
-        m_cleanFlag |= MMCF_RESET;
-    else
-        m_cleanFlag &= ~MMCF_RESET;
-
-    if (empty() || size() == 1)
-        return;
-
-    MovementGenerator* curr = top();
-    pop();
-
-    if (!m_expList)
-        m_expList = new ExpireList();
-
-    // also drop stored under top() targeted motions
-    while (!empty() && (top()->GetMovementGeneratorType() == CHASE_MOTION_TYPE || top()->GetMovementGeneratorType() == FOLLOW_MOTION_TYPE))
-    {
-        MovementGenerator* temp = top();
-        pop();
-        temp ->Finalize(*m_owner);
-        m_expList->push_back(temp);
-    }
-
-    curr->Finalize(*m_owner);
-
-    if (!isStatic(curr))
-        m_expList->push_back(curr);
 }
 
 void MotionMaster::MoveIdle()
 {
-    if (empty() || !isStatic(top()))
-        push(&si_idleMovement);
+    GetUnitStateMgr()->DropAllStates();
+}
+
+void MotionMaster::MoveRandom(float radius)
+{
+    // Wrapper for MoveRandomAroundPoint for move around current point.
+    float x, y, z;
+    m_owner->GetPosition(x, y, z);
+    MoveRandomAroundPoint(x, y, z, radius);
 }
 
 void MotionMaster::MoveRandomAroundPoint(float x, float y, float z, float radius, float verticalZ)
 {
     if (m_owner->GetTypeId() == TYPEID_PLAYER)
     {
-        sLog.outError("%s attempt to move random.", m_owner->GetGuidStr().c_str());
+        sLog.outError("MotionMaster: %s attempt to move random.", m_owner->GetGuidStr().c_str());
     }
     else
     {
-        DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s move random.", m_owner->GetGuidStr().c_str());
-        Mutate(new RandomMovementGenerator<Creature>(x, y, z, radius, verticalZ));
+        DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "MotionMaster: %s move random.", m_owner->GetGuidStr().c_str());
+        Mutate(new RandomMovementGenerator<Creature>(x, y, z, radius, verticalZ), UNIT_ACTION_DOWAYPOINTS);
     }
 }
 
 void MotionMaster::MoveTargetedHome()
 {
-    if (m_owner->hasUnitState(UNIT_STAT_LOST_CONTROL))
-        return;
-
-    Clear(false);
+   // if (m_owner->hasUnitState(UNIT_STAT_LOST_CONTROL))
+       // return;
 
     if (m_owner->GetTypeId() == TYPEID_UNIT && !((Creature*)m_owner)->GetCharmerOrOwnerGuid())
     {
         // Manual exception for linked mobs
         if (m_owner->IsLinkingEventTrigger() && m_owner->GetMap()->GetCreatureLinkingHolder()->TryFollowMaster((Creature*)m_owner))
-            DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s refollowed linked master", m_owner->GetGuidStr().c_str());
+            DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "MotionMaster: %s refollowed linked master", m_owner->GetGuidStr().c_str());
         else
         {
-            DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s targeted home", m_owner->GetGuidStr().c_str());
-            Mutate(new HomeMovementGenerator<Creature>());
+            DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "MotionMaster: %s targeted home", m_owner->GetGuidStr().c_str());
+            Mutate(new HomeMovementGenerator<Creature>(), UNIT_ACTION_HOME);
         }
     }
     else if (m_owner->GetTypeId() == TYPEID_UNIT && ((Creature*)m_owner)->GetCharmerOrOwnerGuid())
     {
         if (Unit* target = ((Creature*)m_owner)->GetCharmerOrOwner())
         {
-            DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s follow to %s", m_owner->GetGuidStr().c_str(), target->GetGuidStr().c_str());
-            Mutate(new FollowMovementGenerator<Creature>(*target, PET_FOLLOW_DIST, PET_FOLLOW_ANGLE));
+            DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "MotionMaster: %s follow to %s", m_owner->GetGuidStr().c_str(), target->GetGuidStr().c_str());
+
+            float angle = ((Creature*)m_owner)->IsPet() ? ((Pet*)m_owner)->GetPetFollowAngle() : PET_FOLLOW_ANGLE;
+            switch (((Creature*)m_owner)->GetCharmState(CHARM_STATE_COMMAND))
+            {
+                case COMMAND_STAY:
+                    MoveIdle();
+                    m_owner->StopMoving(true);
+                    break;
+                case COMMAND_FOLLOW:
+                case COMMAND_ATTACK:
+                default:
+                    MoveFollow(target, PET_FOLLOW_DIST, angle);
+                    break;
+            }
         }
         else
-        {
             DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s attempt but fail to follow owner", m_owner->GetGuidStr().c_str());
-        }
     }
     else
-        sLog.outError("%s attempt targeted home", m_owner->GetGuidStr().c_str());
+        sLog.outError("MotionMaster: %s attempt targeted home", m_owner->GetGuidStr().c_str());
 }
 
 void MotionMaster::MoveConfused()
 {
-    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s move confused", m_owner->GetGuidStr().c_str());
+    // ignore movement request if owner has disable move flag
+    if (m_owner->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_DISABLE_MOVE))
+        return;
+
+    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "MotionMaster: %s move confused", m_owner->GetGuidStr().c_str());
 
     if (m_owner->GetTypeId() == TYPEID_PLAYER)
-        Mutate(new ConfusedMovementGenerator<Player>());
+        Mutate(new ConfusedMovementGenerator<Player>(), UNIT_ACTION_CONFUSED);
     else
-        Mutate(new ConfusedMovementGenerator<Creature>());
+        Mutate(new ConfusedMovementGenerator<Creature>(), UNIT_ACTION_CONFUSED);
 }
 
 void MotionMaster::MoveChase(Unit* target, float dist, float angle)
 {
-    // ignore movement request if target not exist
-    if (!target)
+    // ignore movement request if target not exist or owner has disable move flag
+    if (!target || target == m_owner || m_owner->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_DISABLE_MOVE))
         return;
 
-    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s chase to %s", m_owner->GetGuidStr().c_str(), target->GetGuidStr().c_str());
+    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "MotionMaster: %s chase to %s", m_owner->GetGuidStr().c_str(), target->GetGuidStr().c_str());
 
     if (m_owner->GetTypeId() == TYPEID_PLAYER)
-        Mutate(new ChaseMovementGenerator<Player>(*target, dist, angle));
+        Mutate(new ChaseMovementGenerator<Player>(*target, dist, angle), UNIT_ACTION_CHASE);
     else
-        Mutate(new ChaseMovementGenerator<Creature>(*target, dist, angle));
+        Mutate(new ChaseMovementGenerator<Creature>(*target, dist, angle), UNIT_ACTION_CHASE);
 }
 
 void MotionMaster::MoveFollow(Unit* target, float dist, float angle)
 {
-    if (m_owner->hasUnitState(UNIT_STAT_LOST_CONTROL))
+    // ignore movement request if target not exist or owner has disable move flag
+    if (!target || target == m_owner || m_owner->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_DISABLE_MOVE))
         return;
 
-    Clear();
-
-    // ignore movement request if target not exist
-    if (!target)
-        return;
-
-    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s follow to %s", m_owner->GetGuidStr().c_str(), target->GetGuidStr().c_str());
+    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "MotionMaster: %s follow to %s", m_owner->GetGuidStr().c_str(), target->GetGuidStr().c_str());
 
     if (m_owner->GetTypeId() == TYPEID_PLAYER)
-        Mutate(new FollowMovementGenerator<Player>(*target, dist, angle));
+        Mutate(new FollowMovementGenerator<Player>(*target, dist, angle), UNIT_ACTION_DOWAYPOINTS);
     else
-        Mutate(new FollowMovementGenerator<Creature>(*target, dist, angle));
+        Mutate(new FollowMovementGenerator<Creature>(*target, dist, angle), UNIT_ACTION_DOWAYPOINTS);
 }
 
-void MotionMaster::MovePoint(uint32 id, float x, float y, float z, bool generatePath)
+void MotionMaster::MovePoint(uint32 id, float x, float y, float z, bool generatePath /*= true*/, bool lowPriority /*= false*/)
 {
-    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s targeted point (Id: %u X: %f Y: %f Z: %f)", m_owner->GetGuidStr().c_str(), id, x, y, z);
+    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "MotionMaster: %s targeted point (Id: %u X: %f Y: %f Z: %f)", m_owner->GetGuidStr().c_str(), id, x, y, z);
 
     if (m_owner->GetTypeId() == TYPEID_PLAYER)
-        Mutate(new PointMovementGenerator<Player>(id, x, y, z, generatePath));
+        Mutate(new PointMovementGenerator<Player>(id, x, y, z, generatePath), lowPriority ? UNIT_ACTION_DOWAYPOINTS : UNIT_ACTION_ASSISTANCE);
     else
-        Mutate(new PointMovementGenerator<Creature>(id, x, y, z, generatePath));
+        Mutate(new PointMovementGenerator<Creature>(id, x, y, z, generatePath), lowPriority ? UNIT_ACTION_DOWAYPOINTS : UNIT_ACTION_ASSISTANCE);
 }
 
 void MotionMaster::MoveSeekAssistance(float x, float y, float z)
 {
     if (m_owner->GetTypeId() == TYPEID_PLAYER)
     {
-        sLog.outError("%s attempt to seek assistance", m_owner->GetGuidStr().c_str());
+        sLog.outError("MotionMaster: %s attempt to seek assistance", m_owner->GetGuidStr().c_str());
     }
     else
     {
-        DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s seek assistance (X: %f Y: %f Z: %f)",
-                         m_owner->GetGuidStr().c_str(), x, y, z);
-        Mutate(new AssistanceMovementGenerator(x, y, z));
+        DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "MotionMaster: %s seek assistance (X: %f Y: %f Z: %f)",
+            m_owner->GetGuidStr().c_str(), x, y, z);
+        Mutate(new AssistanceMovementGenerator(x,y,z), UNIT_ACTION_ASSISTANCE);
     }
 }
 
@@ -344,31 +202,32 @@ void MotionMaster::MoveSeekAssistanceDistract(uint32 time)
 {
     if (m_owner->GetTypeId() == TYPEID_PLAYER)
     {
-        sLog.outError("%s attempt to call distract after assistance", m_owner->GetGuidStr().c_str());
+        sLog.outError("MotionMaster: %s attempt to call distract after assistance", m_owner->GetGuidStr().c_str());
     }
     else
     {
-        DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s is distracted after assistance call (Time: %u)",
-                         m_owner->GetGuidStr().c_str(), time);
-        Mutate(new AssistanceDistractMovementGenerator(time));
+        DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "MotionMaster: %s is distracted after assistance call (Time: %u)",
+            m_owner->GetGuidStr().c_str(), time);
+        Mutate(new AssistanceDistractMovementGenerator(time), UNIT_ACTION_ASSISTANCE);
     }
 }
 
 void MotionMaster::MoveFleeing(Unit* enemy, uint32 time)
 {
-    if (!enemy)
+    // ignore movement request if enemy not exist or owner has disable move flag
+    if (!enemy || m_owner->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_DISABLE_MOVE))
         return;
 
-    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s flee from %s", m_owner->GetGuidStr().c_str(), enemy->GetGuidStr().c_str());
+    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "MotionMaster: %s flee from %s", m_owner->GetGuidStr().c_str(), enemy->GetGuidStr().c_str());
 
     if (m_owner->GetTypeId() == TYPEID_PLAYER)
-        Mutate(new FleeingMovementGenerator<Player>(enemy->GetObjectGuid()));
+        Mutate(new FleeingMovementGenerator<Player>(enemy->GetObjectGuid()), UNIT_ACTION_FEARED);
     else
     {
         if (time)
-            Mutate(new TimedFleeingMovementGenerator(enemy->GetObjectGuid(), time));
+            Mutate(new TimedFleeingMovementGenerator(enemy->GetObjectGuid(), time), UNIT_ACTION_FEARED);
         else
-            Mutate(new FleeingMovementGenerator<Creature>(enemy->GetObjectGuid()));
+            Mutate(new FleeingMovementGenerator<Creature>(enemy->GetObjectGuid()), UNIT_ACTION_FEARED);
     }
 }
 
@@ -378,136 +237,70 @@ void MotionMaster::MoveWaypoint(int32 id /*=0*/, uint32 source /*=0==PATH_NO_PAT
     {
         if (GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
         {
-            sLog.outError("Creature %s (Entry %u) attempt to MoveWaypoint() but creature is already using waypoint", m_owner->GetGuidStr().c_str(), m_owner->GetEntry());
+            sLog.outError("MotionMaster: %s attempt to MoveWaypoint() but creature is already using waypoint", m_owner->GetGuidStr().c_str());
             return;
         }
 
         Creature* creature = (Creature*)m_owner;
 
+        //DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "MotionMaster: %s start MoveWaypoint()", m_owner->GetGuidStr().c_str());
+        //Mutate(new WaypointMovementGenerator<Creature>(*creature), UNIT_ACTION_DOWAYPOINTS);
+
         DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s start MoveWaypoint()", m_owner->GetGuidStr().c_str());
         WaypointMovementGenerator<Creature>* newWPMMgen = new WaypointMovementGenerator<Creature>(*creature);
-        Mutate(newWPMMgen);
+        Mutate(newWPMMgen, UNIT_ACTION_DOWAYPOINTS);
         newWPMMgen->InitializeWaypointPath(*creature, id, (WaypointPathOrigin)source, initialDelay, overwriteEntry);
     }
     else
     {
-        sLog.outError("Non-creature %s attempt to MoveWaypoint()", m_owner->GetGuidStr().c_str());
-    }
-}
-
-void MotionMaster::MoveTaxiFlight(uint32 path, uint32 pathnode)
-{
-    if (m_owner->GetTypeId() == TYPEID_PLAYER)
-    {
-        if (path < sTaxiPathNodesByPath.size())
-        {
-            DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s taxi to (Path %u node %u)", m_owner->GetGuidStr().c_str(), path, pathnode);
-            FlightPathMovementGenerator* mgen = new FlightPathMovementGenerator(sTaxiPathNodesByPath[path], pathnode);
-            Mutate(mgen);
-        }
-        else
-        {
-            sLog.outError("%s attempt taxi to (nonexistent Path %u node %u)",
-                          m_owner->GetGuidStr().c_str(), path, pathnode);
-        }
-    }
-    else
-    {
-        sLog.outError("%s attempt taxi to (Path %u node %u)",
-                      m_owner->GetGuidStr().c_str(), path, pathnode);
+        sLog.outError("MotionMaster: Non-creature %s attempt to MoveWaypoint()", m_owner->GetGuidStr().c_str());
     }
 }
 
 void MotionMaster::MoveDistract(uint32 timer)
 {
-    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s distracted (timer: %u)", m_owner->GetGuidStr().c_str(), timer);
+    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "MotionMaster: %s distracted (timer: %u)", m_owner->GetGuidStr().c_str(), timer);
     DistractMovementGenerator* mgen = new DistractMovementGenerator(timer);
-    Mutate(mgen);
+    Mutate(mgen, UNIT_ACTION_EFFECT);
 }
 
-void MotionMaster::MoveFlyOrLand(uint32 id, float x, float y, float z, bool liftOff)
+void MotionMaster::Mutate(MovementGenerator* mgen, UnitActionId stateId)
 {
-    if (m_owner->GetTypeId() != TYPEID_UNIT)
-        return;
-
-    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s targeted point for %s (Id: %u X: %f Y: %f Z: %f)", m_owner->GetGuidStr().c_str(), liftOff ? "liftoff" : "landing", id, x, y, z);
-    Mutate(new FlyOrLandMovementGenerator(id, x, y, z, liftOff));
-}
-
-void MotionMaster::Mutate(MovementGenerator* m)
-{
-    if (!empty())
-    {
-        switch (top()->GetMovementGeneratorType())
-        {
-                // HomeMovement is not that important, delete it if meanwhile a new comes
-            case HOME_MOTION_TYPE:
-                // DistractMovement interrupted by any other movement
-            case DISTRACT_MOTION_TYPE:
-            case EFFECT_MOTION_TYPE:
-                MovementExpired(false);
-            default:
-                break;
-        }
-
-        if (!empty())
-            top()->Interrupt(*m_owner);
-    }
-
-    m->Initialize(*m_owner);
-    push(m);
+    GetUnitStateMgr()->PushAction(stateId, mgen);
 }
 
 void MotionMaster::propagateSpeedChange()
 {
-    Impl::container_type::iterator it = Impl::c.begin();
-    for (; it != end(); ++it)
-    {
-        (*it)->unitSpeedChanged();
-    }
+    GetUnitStateMgr()->CurrentAction()->UnitSpeedChanged();
 }
 
 bool MotionMaster::SetNextWaypoint(uint32 pointId)
 {
-    for (Impl::container_type::reverse_iterator rItr = Impl::c.rbegin(); rItr != Impl::c.rend(); ++rItr)
-    {
-        if ((*rItr)->GetMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
-            return (static_cast<WaypointMovementGenerator<Creature>*>(*rItr))->SetNextWaypoint(pointId);
-    }
+    if (ActionInfo* action = const_cast<MotionMaster*>(this)->GetUnitStateMgr()->GetAction(UNIT_ACTION_DOWAYPOINTS))
+        return static_cast<WaypointMovementGenerator<Creature>*>(&*(action->Action()))->SetNextWaypoint(pointId);
     return false;
 }
 
 uint32 MotionMaster::getLastReachedWaypoint() const
 {
-    for (Impl::container_type::const_reverse_iterator rItr = Impl::c.rbegin(); rItr != Impl::c.rend(); ++rItr)
-    {
-        if ((*rItr)->GetMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
-            return (static_cast<WaypointMovementGenerator<Creature>*>(*rItr))->getLastReachedWaypoint();
-    }
+    if (ActionInfo* action = const_cast<MotionMaster*>(this)->GetUnitStateMgr()->GetAction(UNIT_ACTION_DOWAYPOINTS))
+        return static_cast<WaypointMovementGenerator<Creature>*>(&*(action->Action()))->getLastReachedWaypoint();
     return 0;
-}
-
-MovementGeneratorType MotionMaster::GetCurrentMovementGeneratorType() const
-{
-    if (empty())
-        return IDLE_MOTION_TYPE;
-
-    return top()->GetMovementGeneratorType();
 }
 
 void MotionMaster::GetWaypointPathInformation(std::ostringstream& oss) const
 {
-    for (Impl::container_type::const_reverse_iterator rItr = Impl::c.rbegin(); rItr != Impl::c.rend(); ++rItr)
-    {
-        if ((*rItr)->GetMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
-        {
-            static_cast<WaypointMovementGenerator<Creature>*>(*rItr)->GetPathInformation(oss);
-            return;
-        }
-    }
+    if (ActionInfo* action = const_cast<MotionMaster*>(this)->GetUnitStateMgr()->GetAction(UNIT_ACTION_DOWAYPOINTS))
+        static_cast<WaypointMovementGenerator<Creature>*>(&*(action->Action()))->GetPathInformation(oss);
+    return;
 }
 
-bool MotionMaster::GetDestination(float& x, float& y, float& z)
+MovementGeneratorType MotionMaster::GetCurrentMovementGeneratorType() const
+{
+    return const_cast<MotionMaster*>(this)->CurrentMovementGenerator()->GetMovementGeneratorType();
+}
+
+bool MotionMaster::GetDestination(float &x, float &y, float &z)
 {
     if (m_owner->movespline->Finalized())
         return false;
@@ -519,14 +312,101 @@ bool MotionMaster::GetDestination(float& x, float& y, float& z)
     return true;
 }
 
+MotionMaster::MotionMaster(Unit* unit) : m_owner(unit)
+{
+}
+
+/** Does nothing */
+void MotionMaster::Clear(bool reset /*=true*/, bool all /*=false*/)
+{
+    if (all)
+        GetUnitStateMgr()->InitDefaults();
+    else if (reset)
+        GetUnitStateMgr()->DropAllStates();
+    // If no command provided, reinit only if states list empty.
+    else if (GetUnitStateMgr()->GetActions().empty())
+        GetUnitStateMgr()->InitDefaults();
+}
+
+MovementGenerator* MotionMaster::CurrentMovementGenerator()
+{
+    UnitAction* mgen = GetUnitStateMgr()->CurrentAction();
+    if (!mgen)
+    {
+        sLog.outError("MotionMaster::CurrentMovementGenerator() %s has empty states list! Possible no one update cycle?", m_owner->GetGuidStr().c_str());
+        return &si_idleMovement;
+    }
+    return ((MovementGenerator*)&*mgen);
+}
+
+UnitStateMgr* MotionMaster::GetUnitStateMgr()
+{
+    MANGOS_ASSERT(m_owner);
+    UnitStateMgr* mgr = &m_owner->GetUnitStateMgr();
+    MANGOS_ASSERT(mgr);
+    return mgr;
+}
+
+bool MotionMaster::empty()
+{
+    MovementGenerator* mgen = CurrentMovementGenerator();
+    if (isStatic(mgen))
+        return true;
+
+    return (mgen->GetMovementGeneratorType() == IDLE_MOTION_TYPE);
+}
+
 void MotionMaster::MoveJump(float x, float y, float z, float horizontalSpeed, float max_height, uint32 id)
 {
-    Movement::MoveSplineInit init(*m_owner);
-    init.MoveTo(x, y, z);
+    if (horizontalSpeed <= 0.1f)
+        return;
+
+    Mutate(new JumpMovementGenerator(x, y, z, horizontalSpeed, max_height, id), UNIT_ACTION_EFFECT);
+}
+
+void MotionMaster::MoveToDestination(float x, float y, float z, float o, Unit* target, float horizontalSpeed, float max_height, uint32 id, bool straightLine /*=false*/)
+{
+    if (horizontalSpeed <= 0.1f)
+        return;
+
+    Mutate(new MoveToDestMovementGenerator(x, y, z, o, target, horizontalSpeed, max_height, id, straightLine), UNIT_ACTION_EFFECT);
+}
+
+void MotionMaster::MoveSkyDiving(float x, float y, float z, float o, float horizontalSpeed, float max_height, bool eject)
+{
+    if (horizontalSpeed <= 0.1f)
+        return;
+
+    Movement::MoveSplineInit<Unit*> init(*m_owner);
+    init.MoveTo(x, y, z, false, true);
     init.SetParabolic(max_height, 0);
     init.SetVelocity(horizontalSpeed);
+    init.SetFacing(o);
+    if (!eject)
+        init.SetExitVehicle();
     init.Launch();
-    Mutate(new EffectMovementGenerator(id));
+    Mutate(new EjectMovementGenerator(0), UNIT_ACTION_EFFECT);
+}
+
+void MotionMaster::MoveBoardVehicle(float x, float y, float z, float o, float horizontalSpeed, float max_height)
+{
+    if (horizontalSpeed <= 0.1f)
+        return;
+
+    Movement::MoveSplineInit<Unit*> init(*m_owner);
+    init.MoveTo(x, y, z, false, true);
+    init.SetParabolic(max_height, 0);
+    init.SetVelocity(horizontalSpeed);
+    init.SetFacing(o);
+    init.SetBoardVehicle();
+    init.Launch();
+    // Currently no real unit action in this method, only visual effect
+    //Mutate(new EffectMovementGenerator(0), UNIT_ACTION_EFFECT);
+}
+
+void MotionMaster::MoveWithSpeed(float x, float y, float z, float speed, bool generatePath, bool forceDestination)
+{
+    Mutate(new MoveWithSpeedMovementGenerator(x, y, z, speed, generatePath, forceDestination), UNIT_ACTION_EFFECT);
 }
 
 void MotionMaster::MoveFall()
@@ -535,8 +415,8 @@ void MotionMaster::MoveFall()
     float tz = m_owner->GetMap()->GetHeight(m_owner->GetPhaseMask(), m_owner->GetPositionX(), m_owner->GetPositionY(), m_owner->GetPositionZ());
     if (tz <= INVALID_HEIGHT)
     {
-        DEBUG_LOG("MotionMaster::MoveFall: unable retrive a proper height at map %u (x: %f, y: %f, z: %f).",
-                  m_owner->GetMap()->GetId(), m_owner->GetPositionX(), m_owner->GetPositionY(), m_owner->GetPositionZ());
+        sLog.outError("MotionMaster::MoveFall: unable retrive a proper height at map %u (x: %f, y: %f, z: %f).",
+            m_owner->GetMap()->GetId(), m_owner->GetPositionX(), m_owner->GetPositionY(), m_owner->GetPositionZ());
         return;
     }
 
@@ -544,9 +424,18 @@ void MotionMaster::MoveFall()
     if (fabs(m_owner->GetPositionZ() - tz) < 0.1f)
         return;
 
-    Movement::MoveSplineInit init(*m_owner);
-    init.MoveTo(m_owner->GetPositionX(), m_owner->GetPositionY(), tz);
+    Movement::MoveSplineInit<Unit*> init(*m_owner);
+    init.MoveTo(m_owner->GetPositionX(),m_owner->GetPositionY(),tz);
     init.SetFall();
     init.Launch();
-    Mutate(new EffectMovementGenerator(0));
+    Mutate(new EffectMovementGenerator(0), UNIT_ACTION_EFFECT);
+}
+
+void MotionMaster::MoveFlyOrLand(uint32 id, float x, float y, float z, bool liftOff)
+{
+    if (m_owner->GetTypeId() != TYPEID_UNIT)
+        return;
+
+    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s targeted point for %s (Id: %u X: %f Y: %f Z: %f)", m_owner->GetGuidStr().c_str(), liftOff ? "liftoff" : "landing", id, x, y, z);
+    Mutate(new FlyOrLandMovementGenerator(id, x, y, z, liftOff), UNIT_ACTION_EFFECT);
 }

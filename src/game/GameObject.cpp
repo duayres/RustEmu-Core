@@ -39,9 +39,12 @@
 #include "OutdoorPvP/OutdoorPvP.h"
 #include "Util.h"
 #include "ScriptMgr.h"
+#include "Transports.h"
 #include "vmap/GameObjectModel.h"
 #include "SQLStorages.h"
 #include <G3D/Quat.h>
+#include "movement/MoveSplineInit.h"
+#include "movement/MoveSpline.h"
 
 GameObject::GameObject() : WorldObject(),
     loot(this),
@@ -84,8 +87,7 @@ void GameObject::AddToWorld()
     if (m_model)
         GetMap()->InsertGameObjectModel(*m_model);
 
-    // After AddToWorld so that for initial state the GO is added to the world (and hence handled correctly)
-    UpdateCollisionState();
+    EnableCollision(CalculateCurrentCollisionState());
 }
 
 void GameObject::RemoveFromWorld(bool remove)
@@ -201,276 +203,341 @@ bool GameObject::Create(uint32 guidlow, uint32 name_id, Map* map, uint32 phaseMa
 
 void GameObject::Update(uint32 update_diff, uint32 p_time)
 {
-    if (GetObjectGuid().IsMOTransport())
+    UpdateSplineMovement(p_time);
+
+    switch (getLootState())
     {
-        //((Transport*)this)->Update(p_time);
-        return;
+    case GO_NOT_READY:
+    {
+        switch (GetGoType())
+        {
+        case GAMEOBJECT_TYPE_TRAP:                  // Initialized delayed to be able to use GetOwner()
+        {
+            // Arming Time for GAMEOBJECT_TYPE_TRAP (6)
+            Unit* owner = GetOwner();
+            if ((owner && owner->isInCombat())
+                // FIXME - need remove this hacks on some objects
+                || GetEntry() == 190752      // SoTA Seaforium Charges
+                || GetEntry() == 195331      // IoC Huge Seaforium Charges
+                || GetEntry() == 195235)     // IoC Seaforium Charges
+                m_cooldownTime = time(NULL) + GetGOInfo()->trap.startDelay;
+            m_lootState = GO_READY;
+            break;
+        }
+        case GAMEOBJECT_TYPE_FISHINGNODE:           // Keep not ready for some delay
+        {
+            // fishing code (bobber ready)
+            if (time(NULL) > m_respawnTime - FISHING_BOBBER_READY_TIME)
+            {
+                // splash bobber (bobber ready now)
+                Unit* caster = GetOwner();
+                if (caster && caster->GetTypeId() == TYPEID_PLAYER)
+                {
+                    SetGoState(GO_STATE_ACTIVE);
+                    // SetUInt32Value(GAMEOBJECT_FLAGS, GO_FLAG_NODESPAWN);
+
+                    SendForcedObjectUpdate();
+
+                    SendGameObjectCustomAnim(GetObjectGuid(), 0);
+                }
+
+                m_lootState = GO_READY;             // can be successfully open with some chance
+            }
+            break;
+        }
+        default:
+            break;
+        }
+        break;
     }
-
-    switch (m_lootState)
+    /* no break */
+    case GO_READY:
     {
-        case GO_NOT_READY:
+        if (m_respawnTime > 0)                          // timer on
         {
-            switch (GetGoType())
+            if (m_respawnTime <= time(NULL))            // timer expired
             {
-                case GAMEOBJECT_TYPE_TRAP:                  // Initialized delayed to be able to use GetOwner()
+                m_respawnTime = 0;
+                ClearAllUsesData();
+
+                switch (GetGoType())
                 {
-                    // Arming Time for GAMEOBJECT_TYPE_TRAP (6)
-                    Unit* owner = GetOwner();
-                    if (owner && owner->isInCombat())
-                        m_cooldownTime = time(NULL) + GetGOInfo()->trap.startDelay;
-                    m_lootState = GO_READY;
-                    break;
-                }
-                case GAMEOBJECT_TYPE_FISHINGNODE:           // Keep not ready for some delay
+                case GAMEOBJECT_TYPE_FISHINGNODE:   // can't fish now
                 {
-                    // fishing code (bobber ready)
-                    if (time(NULL) > m_respawnTime - FISHING_BOBBER_READY_TIME)
+                    Unit* caster = GetOwner();
+                    if (caster && caster->GetTypeId() == TYPEID_PLAYER)
                     {
-                        // splash bobber (bobber ready now)
-                        Unit* caster = GetOwner();
-                        if (caster && caster->GetTypeId() == TYPEID_PLAYER)
-                        {
-                            SetGoState(GO_STATE_ACTIVE);
-                            // SetUInt32Value(GAMEOBJECT_FLAGS, GO_FLAG_NODESPAWN);
+                        caster->FinishSpell(CURRENT_CHANNELED_SPELL);
 
-                            SendForcedObjectUpdate();
-
-                            SendGameObjectCustomAnim(GetObjectGuid());
-                        }
-
-                        m_lootState = GO_READY;             // can be successfully open with some chance
+                        WorldPacket data(SMSG_FISH_NOT_HOOKED, 0);
+                        ((Player*)caster)->GetSession()->SendPacket(&data);
                     }
-                    break;
+                    // can be deleted
+                    m_lootState = GO_JUST_DEACTIVATED;
+                    return;
                 }
-                default:
-                    break;
-            }
-            break;
-        }
-        case GO_READY:
-        {
-            if (m_respawnTime > 0)                          // timer on
-            {
-                if (m_respawnTime <= time(NULL))            // timer expired
-                {
-                    m_respawnTime = 0;
-                    ClearAllUsesData();
-
-                    switch (GetGoType())
-                    {
-                        case GAMEOBJECT_TYPE_FISHINGNODE:   // can't fish now
-                        {
-                            Unit* caster = GetOwner();
-                            if (caster && caster->GetTypeId() == TYPEID_PLAYER)
-                            {
-                                caster->FinishSpell(CURRENT_CHANNELED_SPELL);
-
-                                WorldPacket data(SMSG_FISH_NOT_HOOKED, 0);
-                                ((Player*)caster)->GetSession()->SendPacket(&data);
-                            }
-                            // can be deleted
-                            m_lootState = GO_JUST_DEACTIVATED;
-                            return;
-                        }
-                        case GAMEOBJECT_TYPE_DOOR:
-                        case GAMEOBJECT_TYPE_BUTTON:
-                            // we need to open doors if they are closed (add there another condition if this code breaks some usage, but it need to be here for battlegrounds)
-                            if (GetGoState() != GO_STATE_READY)
-                                ResetDoorOrButton();
-                            // flags in AB are type_button and we need to add them here so no break!
-                        default:
-                            if (!m_spawnedByDefault)        // despawn timer
-                            {
-                                // can be despawned or destroyed
-                                SetLootState(GO_JUST_DEACTIVATED);
-                                // Remove Wild-Summoned GO on timer expire
-                                if (!HasStaticDBSpawnData())
-                                {
-                                    if (Unit* owner = GetOwner())
-                                        owner->RemoveGameObject(this, false);
-                                    Delete();
-                                }
-                                return;
-                            }
-
-                            // respawn timer
-                            GetMap()->Add(this);
-                            break;
-                    }
-                }
-            }
-
-            if (isSpawned())
-            {
-                // traps can have time and can not have
-                GameObjectInfo const* goInfo = GetGOInfo();
-                if (goInfo->type == GAMEOBJECT_TYPE_TRAP)   // traps
-                {
-                    if (m_cooldownTime >= time(NULL))
-                        return;
-
-                    // FIXME: this is activation radius (in different casting radius that must be selected from spell data)
-                    // TODO: move activated state code (cast itself) to GO_ACTIVATED, in this place only check activating and set state
-                    float radius = float(goInfo->trap.radius);
-                    if (!radius)
-                    {
-                        if (goInfo->trap.cooldown != 3)     // cast in other case (at some triggering/linked go/etc explicit call)
-                            return;
-                        else
-                        {
-                            if (m_respawnTime > 0)
-                                break;
-
-                            // battlegrounds gameobjects has data2 == 0 && data5 == 3
-                            radius = float(goInfo->trap.cooldown);
-                        }
-                    }
-
-                    // Should trap trigger?
-                    Unit* enemy = NULL;                     // pointer to appropriate target if found any
-                    MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck u_check(this, radius);
-                    MaNGOS::UnitSearcher<MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck> checker(enemy, u_check);
-                    Cell::VisitAllObjects(this, checker, radius);
-                    if (enemy)
-                        Use(enemy);
-                }
-
-                if (uint32 max_charges = goInfo->GetCharges())
-                {
-                    if (m_useTimes >= max_charges)
-                    {
-                        m_useTimes = 0;
-                        SetLootState(GO_JUST_DEACTIVATED);  // can be despawned or destroyed
-                    }
-                }
-            }
-            break;
-        }
-        case GO_ACTIVATED:
-        {
-            switch (GetGoType())
-            {
                 case GAMEOBJECT_TYPE_DOOR:
                 case GAMEOBJECT_TYPE_BUTTON:
-                    if (GetGOInfo()->GetAutoCloseTime() && (m_cooldownTime < time(NULL)))
+                    // we need to open doors if they are closed (add there another condition if this code breaks some usage, but it need to be here for battlegrounds)
+                    if (GetGoState() != GO_STATE_READY)
                         ResetDoorOrButton();
-                    break;
-                case GAMEOBJECT_TYPE_CHEST:
-                    if (m_groupLootId)
+                    // flags in AB are type_button and we need to add them here so no break!
+                default:
+                    if (!m_spawnedByDefault)        // despawn timer
                     {
-                        if (m_groupLootTimer <= update_diff)
-                            StopGroupLoot();
-                        else
-                            m_groupLootTimer -= update_diff;
-                    }
-                    break;
-                case GAMEOBJECT_TYPE_GOOBER:
-                    if (m_cooldownTime < time(NULL))
-                    {
-                        RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_IN_USE);
-
+                        // can be despawned or destroyed
                         SetLootState(GO_JUST_DEACTIVATED);
-                        m_cooldownTime = 0;
-                    }
-                    break;
-                case GAMEOBJECT_TYPE_CAPTURE_POINT:
-                    m_captureTimer += p_time;
-                    if (m_captureTimer >= 5000)
-                    {
-                        TickCapturePoint();
-                        m_captureTimer -= 5000;
-                    }
-                    break;
-                default:
-                    break;
-            }
-            break;
-        }
-        case GO_JUST_DEACTIVATED:
-        {
-            switch (GetGoType())
-            {
-                case GAMEOBJECT_TYPE_GOOBER:
-                    // if gameobject should cast spell, then this, but some GOs (type = 10) should be destroyed
-                    if (uint32 spellId = GetGOInfo()->goober.spellId)
-                    {
-                        for (GuidSet::const_iterator itr = m_UniqueUsers.begin(); itr != m_UniqueUsers.end(); ++itr)
+                        // Remove Wild-Summoned GO on timer expire
+                        if (!HasStaticDBSpawnData())
                         {
-                            if (Player* owner = GetMap()->GetPlayer(*itr))
-                                owner->CastSpell(owner, spellId, false, NULL, NULL, GetObjectGuid());
+                            if (Unit* owner = GetOwner())
+                                owner->RemoveGameObject(this, false);
+                            Delete();
                         }
-
-                        ClearAllUsesData();
+                        return;
                     }
 
-                    SetGoState(GO_STATE_READY);
-
-                    // any return here in case battleground traps
+                    // respawn timer
+                    GetMap()->Add(this);
                     break;
-                case GAMEOBJECT_TYPE_CAPTURE_POINT:
-                    // remove capturing players because slider wont be displayed if capture point is being locked
-                    for (GuidSet::const_iterator itr = m_UniqueUsers.begin(); itr != m_UniqueUsers.end(); ++itr)
-                    {
-                        if (Player* owner = GetMap()->GetPlayer(*itr))
-                            owner->SendUpdateWorldState(GetGOInfo()->capturePoint.worldState1, WORLD_STATE_REMOVE);
-                    }
-
-                    m_UniqueUsers.clear();
-                    SetLootState(GO_READY);
-                    return; // SetLootState and return because go is treated as "burning flag" due to GetGoAnimProgress() being 100 and would be removed on the client
-                default:
-                    break;
-            }
-
-            // Remove wild summoned after use
-            if (!HasStaticDBSpawnData() && (!GetSpellId() || GetGOInfo()->GetDespawnPossibility()))
-            {
-                if (Unit* owner = GetOwner())
-                    owner->RemoveGameObject(this, false);
-                Delete();
-                return;
-            }
-
-            // burning flags in some battlegrounds, if you find better condition, just add it
-            if (GetGOInfo()->IsDespawnAtAction() || GetGoAnimProgress() > 0)
-            {
-                SendObjectDeSpawnAnim(GetObjectGuid());
-                // reset flags
-                if (GetMap()->Instanceable())
-                {
-                    // In Instances GO_FLAG_LOCKED, GO_FLAG_INTERACT_COND or GO_FLAG_NO_INTERACT are not changed
-                    uint32 currentLockOrInteractFlags = GetUInt32Value(GAMEOBJECT_FLAGS) & (GO_FLAG_LOCKED | GO_FLAG_INTERACT_COND | GO_FLAG_NO_INTERACT);
-                    SetUInt32Value(GAMEOBJECT_FLAGS, (GetGOInfo()->flags & ~(GO_FLAG_LOCKED | GO_FLAG_INTERACT_COND | GO_FLAG_NO_INTERACT)) | currentLockOrInteractFlags);
                 }
-                else
-                    SetUInt32Value(GAMEOBJECT_FLAGS, GetGOInfo()->flags);
+            }
+        }
+
+        if (isSpawned())
+        {
+            // traps can have time and can not have
+            GameObjectInfo const* goInfo = GetGOInfo();
+            if (goInfo->type == GAMEOBJECT_TYPE_TRAP)   // traps
+            {
+                if (m_cooldownTime >= time(NULL))
+                    return;
+
+                // FIXME: this is activation radius (in different casting radius that must be selected from spell data)
+                // TODO: move activated state code (cast itself) to GO_ACTIVATED, in this place only check activating and set state
+                float radius = float(goInfo->trap.radius);
+                if (!radius)
+                {
+                    if (goInfo->trap.cooldown != 3)     // cast in other case (at some triggering/linked go/etc explicit call)
+                        return;
+                    else
+                    {
+                        if (m_respawnTime > 0)
+                            break;
+
+                        // battlegrounds gameobjects has data2 == 0 && data5 == 3
+                        radius = float(goInfo->trap.cooldown);
+                    }
+                }
+
+                // Note: this hack with search required until GO casting not implemented
+                // search unfriendly creature
+                // Should trap trigger?
+                Unit* enemy = NULL;                     // pointer to appropriate target if found any
+
+                // FIXME - need remove hacks fot this GO
+                // SoTA Seaforium Charge || IoC Seaforium Charge
+                if (GetEntry() == 190752 || GetEntry() == 195331 || GetEntry() == 195235)
+                {
+                    enemy = GetOwner();
+                }
+
+                MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck u_check(this, radius);
+                MaNGOS::UnitSearcher<MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck> checker(enemy, u_check);
+                Cell::VisitAllObjects(this, checker, radius);
+                if (enemy)
+                    Use(enemy);
             }
 
-            loot.clear();
-            SetLootRecipient(NULL);
-            SetLootState(GO_READY);
+            if (uint32 max_charges = goInfo->GetCharges())
+            {
+                if (m_useTimes >= max_charges)
+                {
+                    m_useTimes = 0;
+                    SetLootState(GO_JUST_DEACTIVATED);  // can be despawned or destroyed
+                }
+            }
+        }
+        break;
+    }
+    case GO_ACTIVATED:
+    {
+        switch (GetGoType())
+        {
+        case GAMEOBJECT_TYPE_DOOR:
+        case GAMEOBJECT_TYPE_BUTTON:
+            if (GetGOInfo()->GetAutoCloseTime() && (m_cooldownTime < time(NULL)))
+                ResetDoorOrButton();
+            break;
+        case GAMEOBJECT_TYPE_CHEST:
+            if (m_groupLootId)
+            {
+                if (m_groupLootTimer <= update_diff)
+                    StopGroupLoot();
+                else
+                    m_groupLootTimer -= update_diff;
+            }
+            break;
+        case GAMEOBJECT_TYPE_GOOBER:
+            if (m_cooldownTime < time(NULL))
+            {
+                RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_IN_USE);
 
-            if (!m_respawnDelayTime)
-                return;
-
-            // since pool system can fail to roll unspawned object, this one can remain spawned, so must set respawn nevertheless
-            m_respawnTime = m_spawnedByDefault ? time(NULL) + m_respawnDelayTime : 0;
-
-            // if option not set then object will be saved at grid unload
-            if (sWorld.getConfig(CONFIG_BOOL_SAVE_RESPAWN_TIME_IMMEDIATELY))
-                SaveRespawnTime();
-
-            // if part of pool, let pool system schedule new spawn instead of just scheduling respawn
-            if (uint16 poolid = sPoolMgr.IsPartOfAPool<GameObject>(GetGUIDLow()))
-                sPoolMgr.UpdatePool<GameObject>(*GetMap()->GetPersistentState(), poolid, GetGUIDLow());
-
-            // can be not in world at pool despawn
-            if (IsInWorld())
-                UpdateObjectVisibility();
-
+                SetLootState(GO_JUST_DEACTIVATED);
+                m_cooldownTime = 0;
+            }
+            break;
+        case GAMEOBJECT_TYPE_CAPTURE_POINT:
+            m_captureTimer += p_time;
+            if (m_captureTimer >= 5000)
+            {
+                TickCapturePoint();
+                m_captureTimer -= 5000;
+            }
+            break;
+        case GAMEOBJECT_TYPE_TRANSPORT:
+        case GAMEOBJECT_TYPE_MO_TRANSPORT:
+        {
+            if (IsTransport() && dynamic_cast<Transport*>(this))
+            {
+                if (TransportKit* tKit = dynamic_cast<Transport*>(this)->GetTransportKit())
+                {
+                    if (!tKit->IsInitialized())
+                        tKit->Initialize();
+                    else
+                        // Update passenger positions
+                        tKit->Update(p_time);
+                }
+            }
+            return;
+        }
+        default:
             break;
         }
+        break;
+    }
+    case GO_JUST_DEACTIVATED:
+    {
+        switch (GetGoType())
+        {
+        case GAMEOBJECT_TYPE_GOOBER:
+            // if gameobject should cast spell, then this, but some GOs (type = 10) should be destroyed
+            if (uint32 spellId = GetGOInfo()->goober.spellId)
+            {
+                for (GuidSet::const_iterator itr = m_UniqueUsers.begin(); itr != m_UniqueUsers.end(); ++itr)
+                {
+                    if (Player* owner = GetMap()->GetPlayer(*itr))
+                        owner->CastSpell(owner, spellId, false, NULL, NULL, GetObjectGuid());
+                }
+
+                ClearAllUsesData();
+            }
+
+            SetGoState(GO_STATE_READY);
+
+            // any return here in case battleground traps
+            break;
+        case GAMEOBJECT_TYPE_CAPTURE_POINT:
+            // remove capturing players because slider wont be displayed if capture point is being locked
+            for (GuidSet::const_iterator itr = m_UniqueUsers.begin(); itr != m_UniqueUsers.end(); ++itr)
+            {
+                if (Player* owner = ObjectMgr::GetPlayer(*itr))
+                    owner->SendUpdateWorldState(GetGOInfo()->capturePoint.worldState1, WORLD_STATE_REMOVE);
+            }
+
+            m_UniqueUsers.clear();
+            SetLootState(GO_READY);
+            return; // SetLootState and return because go is treated as "burning flag" due to GetGoAnimProgress() being 100 and would be removed on the client
+        case GAMEOBJECT_TYPE_TRANSPORT:
+        case GAMEOBJECT_TYPE_MO_TRANSPORT:
+            return;
+        default:
+            break;
+        }
+
+        // Remove wild summoned after use
+        if (!HasStaticDBSpawnData() && (!GetSpellId() || GetGOInfo()->GetDespawnPossibility()))
+        {
+            if (Unit* owner = GetOwner())
+                owner->RemoveGameObject(this, false);
+            Delete();
+            return;
+        }
+
+        // Wild Summoned GOs also should be deleted
+        if (IsWildSummoned())
+        {
+            SetRespawnTime(0);
+            Delete();
+            return;
+        }
+
+        // burning flags in some battlegrounds, if you find better condition, just add it
+        if (GetGOInfo()->IsDespawnAtAction() || GetGoAnimProgress() > 0)
+        {
+            SendObjectDeSpawnAnim(GetObjectGuid());
+            // reset flags
+            if (GetMap()->Instanceable())
+            {
+                // In Instances GO_FLAG_LOCKED, GO_FLAG_INTERACT_COND or GO_FLAG_NO_INTERACT are not changed
+                uint32 currentLockOrInteractFlags = GetUInt32Value(GAMEOBJECT_FLAGS) & (GO_FLAG_LOCKED | GO_FLAG_INTERACT_COND | GO_FLAG_NO_INTERACT);
+                SetUInt32Value(GAMEOBJECT_FLAGS, (GetGOInfo()->flags & ~(GO_FLAG_LOCKED | GO_FLAG_INTERACT_COND | GO_FLAG_NO_INTERACT)) | currentLockOrInteractFlags);
+            }
+            else
+                SetUInt32Value(GAMEOBJECT_FLAGS, GetGOInfo()->flags);
+        }
+
+        loot.clear();
+        SetLootRecipient(NULL);
+        SetLootState(GO_READY);
+
+        if (!m_respawnDelayTime)
+            return;
+
+        // since pool system can fail to roll unspawned object, this one can remain spawned, so must set respawn nevertheless
+        m_respawnTime = m_spawnedByDefault ? time(NULL) + m_respawnDelayTime : 0;
+
+        // if option not set then object will be saved at grid unload
+        if (sWorld.getConfig(CONFIG_BOOL_SAVE_RESPAWN_TIME_IMMEDIATELY))
+            SaveRespawnTime();
+
+        // if part of pool, let pool system schedule new spawn instead of just scheduling respawn
+        if (uint16 poolid = sPoolMgr.IsPartOfAPool<GameObject>(GetGUIDLow()))
+            sPoolMgr.UpdatePool<GameObject>(*GetMap()->GetPersistentState(), poolid, GetGUIDLow());
+
+        // can be not in world at pool despawn
+        if (IsInWorld())
+            UpdateObjectVisibility();
+
+        break;
+    }
+    }
+}
+
+void GameObject::UpdateSplineMovement(uint32 t_diff)
+{
+    if (movespline->Finalized())
+        return;
+
+    movespline->updateState(t_diff);
+    bool arrived = movespline->Finalized();
+    /*
+    TODO: DB script support instead of direct in Transport class
+    if (arrived)
+    Script run on_arrived;
+    */
+    m_movesplineTimer.Update(t_diff);
+
+    if (m_movesplineTimer.Passed() || arrived)
+    {
+        m_movesplineTimer.Reset(sWorld.getConfig(CONFIG_UINT32_POSITION_UPDATE_DELAY));
+
+        Position pos = movespline->ComputePosition();
+
+        if (IsBoarded())
+            GetTransportInfo()->SetLocalPosition(pos);
+        else
+            GetMap()->Relocation(this, pos);
     }
 }
 
@@ -695,8 +762,29 @@ bool GameObject::IsTransport() const
 {
     // If something is marked as a transport, don't transmit an out of range packet for it.
     GameObjectInfo const* gInfo = GetGOInfo();
-    if (!gInfo) return false;
-    return gInfo->type == GAMEOBJECT_TYPE_TRANSPORT || gInfo->type == GAMEOBJECT_TYPE_MO_TRANSPORT;
+    if (!gInfo)
+        return false;
+    //FIXME - temporary GAMEOBJECT_TYPE_TRANSPORT disabled, awaiting finish code implementing
+    return /*gInfo->type == GAMEOBJECT_TYPE_TRANSPORT ||*/ gInfo->type == GAMEOBJECT_TYPE_MO_TRANSPORT;
+}
+
+bool GameObject::IsMOTransport() const
+{
+    // If something is marked as a transport, don't transmit an out of range packet for it.
+    GameObjectInfo const* gInfo = GetGOInfo();
+    if (!gInfo)
+        return false;
+    return gInfo->type == GAMEOBJECT_TYPE_MO_TRANSPORT;
+}
+
+// is Dynamic transport = non-stop Transport
+bool GameObject::IsDynTransport() const
+{
+    // If something is marked as a transport, don't transmit an out of range packet for it.
+    GameObjectInfo const * gInfo = GetGOInfo();
+    if (!gInfo)
+        return false;
+    return gInfo->type == GAMEOBJECT_TYPE_MO_TRANSPORT || (gInfo->type == GAMEOBJECT_TYPE_TRANSPORT && !gInfo->transport.pause);
 }
 
 Unit* GameObject::GetOwner() const
@@ -721,7 +809,7 @@ bool GameObject::isVisibleForInState(Player const* u, WorldObject const* viewPoi
         return false;
 
     // Transport always visible at this step implementation
-    if (IsTransport() && IsInMap(u))
+    if (IsTransport() && IsInMap(u) && isActiveObject())
         return true;
 
     // quick check visibility false cases for non-GM-mode
@@ -1786,13 +1874,15 @@ bool GameObject::IsFriendlyTo(Unit const* unit) const
 void GameObject::SetLootState(LootState state)
 {
     m_lootState = state;
-    UpdateCollisionState();
+    EnableCollision(CalculateCurrentCollisionState());
 }
 
 void GameObject::SetGoState(GOState state)
 {
     SetByteValue(GAMEOBJECT_BYTES_1, 0, state);
-    UpdateCollisionState();
+
+    if (m_model && IsInWorld())
+        EnableCollision(CalculateCurrentCollisionState());
 }
 
 void GameObject::SetDisplayId(uint32 modelId)
@@ -1805,26 +1895,65 @@ void GameObject::SetDisplayId(uint32 modelId)
 void GameObject::SetPhaseMask(uint32 newPhaseMask, bool update)
 {
     WorldObject::SetPhaseMask(newPhaseMask, update);
-    UpdateCollisionState();
+    EnableCollision(CalculateCurrentCollisionState());
 }
 
-void GameObject::UpdateCollisionState() const
+void GameObject::EnableCollision(bool enable)
 {
-    if (!m_model || !IsInWorld())
+    if (!m_model)
         return;
 
-    m_model->enable(IsCollisionEnabled() ? GetPhaseMask() : 0);
+    /*if (enable && !GetMap()->Contains(*m_model))
+    GetMap()->Insert(*m_model);*/
+
+    m_model->enable(enable ? GetPhaseMask() : 0);
+}
+
+bool GameObject::CalculateCurrentCollisionState() const
+{
+    if (!m_model || !isSpawned())
+        return false;
+
+    bool startOpen;
+    bool result = false;
+
+    switch (GetGoType())
+    {
+    case GAMEOBJECT_TYPE_DOOR:
+    case GAMEOBJECT_TYPE_BUTTON:
+        startOpen = GetGOInfo()->door.startOpen;
+        break;
+        // place custom collision rules here
+    default:
+        startOpen = false;
+        break;
+    }
+
+    if ((GetGoState() == GO_STATE_ACTIVE || GetGoState() == GO_STATE_ACTIVE_ALTERNATIVE) ||
+        (getLootState() == GO_ACTIVATED || getLootState() == GO_JUST_DEACTIVATED))
+        result = startOpen;
+    else if (GetGoState() == GO_STATE_READY || getLootState() == GO_READY)
+        result = !startOpen;
+
+    return result;
 }
 
 void GameObject::UpdateModel()
 {
-    if (m_model && IsInWorld() && GetMap()->ContainsGameObjectModel(*m_model))
-        GetMap()->RemoveGameObjectModel(*m_model);
-    delete m_model;
+    if (!IsInWorld())
+        return;
+    if (m_model)
+    {
+        if (GetMap()->ContainsGameObjectModel(*m_model))
+            GetMap()->RemoveGameObjectModel(*m_model);
+        delete m_model;
+    }
 
     m_model = GameObjectModel::construct(this);
     if (m_model)
         GetMap()->InsertGameObjectModel(*m_model);
+
+    EnableCollision(CalculateCurrentCollisionState());
 }
 
 void GameObject::StartGroupLoot(Group* group, uint32 timer)
@@ -1990,6 +2119,41 @@ void GameObject::SpawnInMaps(uint32 db_guid, GameObjectData const* data)
 bool GameObject::HasStaticDBSpawnData() const
 {
     return sObjectMgr.GetGOData(GetGUIDLow()) != NULL;
+}
+
+bool GameObject::IsWildSummoned() const
+{
+    // All Wild GOs are summoned by a spell and have no owner entry
+    if (!GetSpellId() || !GetOwnerGuid().IsEmpty())
+        return false;
+
+    // This check is likely not needed
+    if (SpellEntry const* spellInfo = sSpellStore.LookupEntry(GetSpellId()))
+    {
+        for (int eff_idx = 0; eff_idx < MAX_EFFECT_INDEX; ++eff_idx)
+        {
+            if (spellInfo->Effect[eff_idx] == SPELL_EFFECT_SUMMON_OBJECT_WILD && GetEntry() == (uint32)spellInfo->EffectMiscValue[eff_idx])
+                return true;
+        }
+    }
+
+    // Also possible add MANGOS_ASSERT(false) or weaker bug-report to note this unexpected case.
+    return false;
+}
+
+float GameObject::GetDeterminativeSize(bool b_priorityZ) const
+{
+    if (!IsInWorld())
+        return 0.0f;
+
+    GameObjectDisplayInfoEntry const *info = sGameObjectDisplayInfoStore.LookupEntry(GetUInt32Value(GAMEOBJECT_DISPLAYID));
+    if (!info)
+        return 0.0f;
+
+    if (b_priorityZ)
+        return info->geoBoxMaxZ - info->geoBoxMinZ;
+
+    return Location(info->geoBoxMaxX, info->geoBoxMaxY, info->geoBoxMaxZ).GetDistance(Location(info->geoBoxMinX, info->geoBoxMinY, info->geoBoxMinZ));
 }
 
 void GameObject::SetCapturePointSlider(float value, bool isLocked)

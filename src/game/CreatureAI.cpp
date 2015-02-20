@@ -146,24 +146,25 @@ void CreatureAI::SetCombatMovement(bool enable, bool stopOrStartMovement /*=fals
     else
         m_creature->addUnitState(UNIT_STAT_NO_COMBAT_MOVEMENT);
 
-    if (stopOrStartMovement && m_creature->getVictim())     // Only change current movement while in combat
+    if (!stopOrStartMovement)
+        return;
+
+    if (Unit* pVictim = m_creature->getVictim()) // Only change current movement while in combat
     {
         if (enable)
-            m_creature->GetMotionMaster()->MoveChase(m_creature->getVictim(), m_attackDistance, m_attackAngle);
-        else if (!enable && m_creature->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
+            m_creature->GetMotionMaster()->MoveChase(pVictim, m_attackDistance, m_attackAngle);
+        else if (m_creature->IsInUnitState(UNIT_ACTION_CHASE))
             m_creature->StopMoving();
     }
 }
 
 void CreatureAI::HandleMovementOnAttackStart(Unit* victim)
 {
-    MotionMaster* creatureMotion = m_creature->GetMotionMaster();
     if (m_isCombatMovement)
-        creatureMotion->MoveChase(victim, m_attackDistance, m_attackAngle);
-    // TODO - adapt this to only stop OOC-MMGens when MotionMaster rewrite is finished
-    else if (creatureMotion->GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE || creatureMotion->GetCurrentMovementGeneratorType() == RANDOM_MOTION_TYPE)
+        m_creature->GetMotionMaster()->MoveChase(victim, m_attackDistance, m_attackAngle);
+    else if (m_creature->IsInUnitState(UNIT_ACTION_CHASE))
     {
-        creatureMotion->MoveIdle();
+        m_creature->GetUnitStateMgr().DropAction(UNIT_ACTION_CHASE);
         m_creature->StopMoving();
     }
 }

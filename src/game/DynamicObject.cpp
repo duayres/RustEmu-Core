@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,9 +40,10 @@ DynamicObject::DynamicObject() : WorldObject()
 
 bool DynamicObject::Create(uint32 guidlow, Unit* caster, uint32 spellId, SpellEffectIndex effIndex, float x, float y, float z, int32 duration, float radius, DynamicObjectType type)
 {
-    WorldObject::_Create(guidlow, HIGHGUID_DYNAMICOBJECT, caster->GetPhaseMask());
+    WorldObject::_Create(ObjectGuid(HIGHGUID_DYNAMICOBJECT, guidlow), caster->GetPhaseMask());
+
+    Relocate(WorldLocation(caster->GetMapId(), x, y, z, 0.0f, caster->GetPhaseMask(), caster->GetInstanceId()));
     SetMap(caster->GetMap());
-    Relocate(x, y, z, 0);
 
     if (!IsPositionValid())
     {
@@ -56,9 +57,9 @@ bool DynamicObject::Create(uint32 guidlow, Unit* caster, uint32 spellId, SpellEf
     SetGuidValue(DYNAMICOBJECT_CASTER, caster->GetObjectGuid());
 
     /* Bytes field, so it's really 4 bit fields. These flags are unknown, but we do know that 0x00000001 is set for most.
-    Farsight for example, does not have this flag, instead it has 0x80000002.
-    Flags are set dynamically with some conditions, so one spell may have different flags set, depending on those conditions.
-    The size of the visual may be controlled to some degree with these flags.
+       Farsight for example, does not have this flag, instead it has 0x80000002.
+       Flags are set dynamically with some conditions, so one spell may have different flags set, depending on those conditions.
+       The size of the visual may be controlled to some degree with these flags.
 
     uint32 bytes = 0x00000000;
     bytes |= 0x01;

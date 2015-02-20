@@ -413,11 +413,6 @@ enum
     HORDE_COORDS                = 6
 };
 
-struct Location
-{
-    float x, y, z, o;
-};
-
 static Location AllianceCoords[] =
 {
     { -3757.38f, -4533.05f, 14.16f, 3.62f},                 // Top-far-right bunk as seen from entrance

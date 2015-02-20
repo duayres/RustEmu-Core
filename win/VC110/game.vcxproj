@@ -473,6 +473,7 @@
     <ClCompile Include="..\..\src\game\Spell.cpp" />
     <ClCompile Include="..\..\src\game\SpellAuras.cpp" />
     <ClCompile Include="..\..\src\game\SQLStorages.cpp" />
+    <ClCompile Include="..\..\src\game\StateMgr.cpp" />
     <ClCompile Include="..\..\src\game\TransportSystem.cpp" />
     <ClCompile Include="..\..\src\game\UnitAuraProcHandler.cpp" />
     <ClCompile Include="..\..\src\game\SpellEffects.cpp" />
@@ -506,6 +507,7 @@
     <ClCompile Include="..\..\src\game\OutdoorPvP\OutdoorPvPSI.cpp" />
     <ClCompile Include="..\..\src\game\OutdoorPvP\OutdoorPvPTF.cpp" />
     <ClCompile Include="..\..\src\game\OutdoorPvP\OutdoorPvPZM.cpp" />
+    <ClCompile Include="..\..\src\game\WorldLocation.cpp" />
     <ClCompile Include="..\..\src\game\WorldSession.cpp" />
     <ClCompile Include="..\..\src\game\WorldSocket.cpp" />
     <ClCompile Include="..\..\src\game\WorldSocketMgr.cpp" />
@@ -647,6 +649,8 @@
     <ClInclude Include="..\..\src\game\SpellClassMask.h" />
     <ClInclude Include="..\..\src\game\SpellMgr.h" />
     <ClInclude Include="..\..\src\game\SQLStorages.h" />
+    <ClInclude Include="..\..\src\game\StateMgr.h" />
+    <ClInclude Include="..\..\src\game\StateMgrImpl.h" />
     <ClInclude Include="..\..\src\game\TargetedMovementGenerator.h" />
     <ClInclude Include="..\..\src\game\TemporarySummon.h" />
     <ClInclude Include="..\..\src\game\ThreatManager.h" />
@@ -674,6 +678,7 @@
     <ClInclude Include="..\..\src\game\OutdoorPvP\OutdoorPvPSI.h" />
     <ClInclude Include="..\..\src\game\OutdoorPvP\OutdoorPvPTF.h" />
     <ClInclude Include="..\..\src\game\OutdoorPvP\OutdoorPvPZM.h" />
+    <ClInclude Include="..\..\src\game\WorldLocation.h" />
     <ClInclude Include="..\..\src\game\WorldSession.h" />
     <ClInclude Include="..\..\src\game\WorldSocket.h" />
     <ClInclude Include="..\..\src\game\WorldSocketMgr.h" />

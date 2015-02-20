@@ -79,7 +79,7 @@ TotemAI::UpdateAI(const uint32 /*diff*/)
     {
         victim = NULL;
 
-        MaNGOS::NearestAttackableUnitInObjectRangeCheck u_check(m_creature, m_creature, max_range);
+        MaNGOS::NearestAttackableUnitInObjectRangeCheck u_check(m_creature, max_range);
         MaNGOS::UnitLastSearcher<MaNGOS::NearestAttackableUnitInObjectRangeCheck> checker(victim, u_check);
         Cell::VisitAllObjects(m_creature, checker, max_range);
     }

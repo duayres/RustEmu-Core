@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,10 +27,10 @@
 
 enum WaypointPathOrigin
 {
-    PATH_NO_PATH            = 0,
-    PATH_FROM_GUID          = 1,
-    PATH_FROM_ENTRY         = 2,
-    PATH_FROM_EXTERNAL      = 3
+    PATH_NO_PATH = 0,
+    PATH_FROM_GUID = 1,
+    PATH_FROM_ENTRY = 2,
+    PATH_FROM_EXTERNAL = 3
 };
 
 // Obsolete structure
@@ -110,30 +110,32 @@ class WaypointManager
 
             switch (wpOrigin)
             {
-                case PATH_FROM_GUID:
-                    key = lowGuid;
-                    wpMap = &m_pathMap;
-                    break;
-                case PATH_FROM_ENTRY:
-                    if (pathId >= 0xFF || pathId < 0)
-                        return NULL;
-                    key = (entry << 8) + pathId;
-                    wpMap = &m_pathTemplateMap;
-                    break;
-                case PATH_FROM_EXTERNAL:
-                    if (pathId >= 0xFF || pathId < 0)
-                        return NULL;
-                    key = (entry << 8) + pathId;
-                    wpMap = &m_externalPathTemplateMap;
-                    break;
-                case PATH_NO_PATH:
-                default:
+            case PATH_FROM_GUID:
+                key = lowGuid;
+                wpMap = &m_pathMap;
+                break;
+            case PATH_FROM_ENTRY:
+                if (pathId >= 0xFF || pathId < 0)
                     return NULL;
+                key = (entry << 8) + pathId;
+                wpMap = &m_pathTemplateMap;
+                break;
+            case PATH_FROM_EXTERNAL:
+                if (pathId >= 0xFF || pathId < 0)
+                    return NULL;
+                key = (entry << 8) + pathId;
+                wpMap = &m_externalPathTemplateMap;
+                break;
+            case PATH_NO_PATH:
+            default:
+                return NULL;
             }
             WaypointPathMap::iterator find = wpMap->find(key);
             return find != wpMap->end() ? &find->second : NULL;
         }
 
+        void AddLastNode(uint32 id, float x, float y, float z, float o, uint32 delay, uint32 wpGuid);
+        uint32 GetLastPoint(uint32 id, uint32 default_notfound);
         void DeletePath(uint32 id);
         void CheckTextsExistance(std::set<int32>& ids);
 
@@ -159,11 +161,11 @@ class WaypointManager
         {
             switch (origin)
             {
-                case PATH_NO_PATH:          return "<no path>";
-                case PATH_FROM_GUID:        return "guid";
-                case PATH_FROM_ENTRY:       return "entry";
-                case PATH_FROM_EXTERNAL:    return "external";
-                default:                    return "invalid origin";
+            case PATH_NO_PATH:          return "<no path>";
+            case PATH_FROM_GUID:        return "guid";
+            case PATH_FROM_ENTRY:       return "entry";
+            case PATH_FROM_EXTERNAL:    return "external";
+            default:                    return "invalid origin";
             }
         }
 
@@ -179,7 +181,7 @@ class WaypointManager
             WaypointPathMap::iterator itr = m_pathTemplateMap.find((entry << 8) /*+ pathId*/);
             return itr != m_pathTemplateMap.end() ? &itr->second : NULL;
         }
-
+        
         void _clearPath(WaypointPath& path);
 
         typedef UNORDERED_MAP<uint32 /*guidOrEntry*/, WaypointPath> WaypointPathMap;

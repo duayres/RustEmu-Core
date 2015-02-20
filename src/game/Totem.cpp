@@ -97,33 +97,55 @@ void Totem::Summon(Unit* owner)
     if (owner->GetTypeId() == TYPEID_UNIT && ((Creature*)owner)->AI())
         ((Creature*)owner)->AI()->JustSummoned((Creature*)this);
 
-    // there are some totems, which exist just for their visual appeareance
-    if (!GetSpell())
-        return;
-
     switch (m_type)
     {
-        case TOTEM_PASSIVE:
-            CastSpell(this, GetSpell(), true);
-            break;
-        case TOTEM_STATUE:
-            CastSpell(GetOwner(), GetSpell(), true);
-            break;
-        default: break;
+    case TOTEM_PASSIVE:
+    {
+        for (uint32 i = 0; i <= GetSpellMaxIndex(); ++i)
+        {
+            if (uint32 spellId = GetSpell(i))
+                CastSpell(this, spellId, true);
+        }
+        break;
+    }
+    case TOTEM_STATUE:
+    {
+        if (GetSpell(0))
+            CastSpell(GetOwner(), GetSpell(0), true);
+        break;
+    }
+    default:
+        break;
     }
 }
 
 void Totem::UnSummon()
 {
     CombatStop();
-    RemoveAurasDueToSpell(GetSpell());
+
+    uint32 maxIdx = GetSpellMaxIndex();
+
+    for (int32 i = maxIdx; i >= 0; --i)
+    {
+        if (uint32 spellId = GetSpell(i))
+            RemoveAurasDueToSpell(spellId);
+    }
 
     if (Unit* owner = GetOwner())
     {
         owner->_RemoveTotem(this);
-        owner->RemoveAurasDueToSpell(GetSpell());
 
-        // remove aura all party members too
+        for (int32 i = maxIdx; i >= 0; --i)
+        {
+            if (uint32 spellId = GetSpell(i))
+                owner->RemoveAurasDueToSpell(spellId);
+        }
+
+        // Sentry totem has dummy aura on owner at least
+        if (GetUInt32Value(UNIT_CREATED_BY_SPELL) != 0)
+            owner->RemoveAurasDueToSpell(GetUInt32Value(UNIT_CREATED_BY_SPELL));
+
+        //remove aura all party members too
         if (owner->GetTypeId() == TYPEID_PLAYER)
         {
             ((Player*)owner)->SendAutoRepeatCancel(this);
@@ -135,7 +157,13 @@ void Totem::UnSummon()
                 {
                     Player* Target = itr->getSource();
                     if (Target && pGroup->SameSubGroup((Player*)owner, Target))
-                        Target->RemoveAurasDueToSpell(GetSpell());
+                    {
+                        for (int32 i = maxIdx; i >= 0; --i)
+                        {
+                            if (uint32 spellId = GetSpell(i))
+                                Target->RemoveAurasDueToSpell(spellId);
+                        }
+                    }
                 }
             }
         }

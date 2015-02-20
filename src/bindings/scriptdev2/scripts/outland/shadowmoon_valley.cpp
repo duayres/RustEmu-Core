@@ -99,7 +99,7 @@ struct mob_mature_netherwing_drakeAI : public ScriptedAI
             m_uiCreditTimer = 7000;
             m_creature->SetLevitate(false);
             m_creature->HandleEmote(EMOTE_ONESHOT_ATTACKUNARMED);
-            m_creature->RemoveByteFlag(UNIT_FIELD_BYTES_1, 3, UNIT_BYTE1_FLAG_FLY_ANIM);
+            m_creature->RemoveByteFlag(UNIT_FIELD_BYTES_1, 3, UNIT_BYTE1_FLAG_HOVER);
         }
     }
 
@@ -141,7 +141,7 @@ struct mob_mature_netherwing_drakeAI : public ScriptedAI
 
                 Reset();
                 m_creature->SetLevitate(true);
-                m_creature->SetByteFlag(UNIT_FIELD_BYTES_1, 3, UNIT_BYTE1_FLAG_FLY_ANIM);
+                m_creature->SetByteFlag(UNIT_FIELD_BYTES_1, 3, UNIT_BYTE1_FLAG_HOVER);
                 m_creature->GetMotionMaster()->Clear();
                 m_uiCreditTimer = 0;
             }
@@ -721,14 +721,6 @@ static TorlothCinematic TorlothAnim[] =
     {0, TORLOTH, 0}
 };
 
-struct Location
-{
-    float fLocX;
-    float fLocY;
-    float fLocZ;
-    float fOrient;
-};
-
 static Location SpawnLocation[] =
 {
     { -4615.8556f, 1342.2532f, 139.9f, 1.612f},             // Illidari Soldier
@@ -982,10 +974,10 @@ struct npc_lord_illidan_stormrageAI : public Scripted_NoMovementAI
         for (uint8 i = 0; i < uiCount; ++i)
         {
             float fLocX, fLocY, fLocZ, fOrient;
-            fLocX = SpawnLocation[uiLocIndex + i].fLocX;
-            fLocY = SpawnLocation[uiLocIndex + i].fLocY;
-            fLocZ = SpawnLocation[uiLocIndex + i].fLocZ;
-            fOrient = SpawnLocation[uiLocIndex + i].fOrient;
+            fLocX = SpawnLocation[uiLocIndex + i].x;
+            fLocY = SpawnLocation[uiLocIndex + i].y;
+            fLocZ = SpawnLocation[uiLocIndex + i].z;
+            fOrient = SpawnLocation[uiLocIndex + i].o;
 
             if (Creature* pSpawn = m_creature->SummonCreature(WavesInfo[m_uiWaveCount].uiCreatureId, fLocX, fLocY, fLocZ, fOrient, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15000))
             {

@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,11 +23,12 @@
 
 namespace Movement
 {
+
     extern float computeFallTime(float path_length, bool isSafeFall);
-    extern float computeFallElevation(float time_passed, bool isSafeFall, float start_velocy);
+    extern float computeFallElevation(float time_passed, bool isSafeFall, float start_velocity);
     extern float computeFallElevation(float time_passed);
 
-    Location MoveSpline::ComputePosition() const
+    Position MoveSpline::ComputePosition() const
     {
         MANGOS_ASSERT(Initialized());
 
@@ -35,7 +36,7 @@ namespace Movement
         int32 seg_time = spline.length(point_Idx, point_Idx + 1);
         if (seg_time > 0)
             u = (time_passed - spline.length(point_Idx)) / (float)seg_time;
-        Location c;
+        Position c;
         c.orientation = initialOrientation;
         spline.evaluate_percent(point_Idx, u, c);
 
@@ -66,6 +67,8 @@ namespace Movement
             if (splineflags.orientationInversed)
                 c.orientation = -c.orientation;
         }
+
+        c.orientation = G3D::wrap(c.orientation, 0.0f, float(G3D::twoPi()));
         return c;
     }
 
@@ -170,7 +173,7 @@ namespace Movement
         initialOrientation = args.initialOrientation;
 
         time_passed = 0;
-        vertical_acceleration = 0.f;
+        vertical_acceleration = 0.0f;
         effect_start_time = 0;
 
         // detect Stop command
@@ -196,7 +199,7 @@ namespace Movement
     }
 
     MoveSpline::MoveSpline() : m_Id(0), time_passed(0),
-        vertical_acceleration(0.f), initialOrientation(0.f), effect_start_time(0), point_Idx(0), point_Idx_offset(0)
+        vertical_acceleration(0.0f), initialOrientation(0.0f), effect_start_time(0), point_Idx(0), point_Idx_offset(0)
     {
         splineflags.done = true;
     }
@@ -208,19 +211,19 @@ namespace Movement
 #define CHECK(exp) \
     if (!(exp))\
     {\
-        sLog.outError("MoveSplineInitArgs::Validate: expression '%s' failed for %s", #exp, unit->GetGuidStr().c_str());\
+        sLog.outError("MoveSplineInitArgs::Validate expression '%s' failed for %s", #exp, unit ? unit->GetGuidStr().c_str(): "<none>");\
         return false;\
     }
         CHECK(path.size() > 1);
-        CHECK(velocity > 0.f);
-        CHECK(time_perc >= 0.f && time_perc <= 1.f);
+        CHECK(velocity > 0.0f);
+        CHECK(time_perc >= 0.0f && time_perc <= 1.0f);
         // CHECK(_checkPathBounds());
         return true;
 #undef CHECK
     }
 
-// MONSTER_MOVE packet format limitation for not CatmullRom movement:
-// each vertex offset packed into 11 bytes
+    // MONSTER_MOVE packet format limitation for not CatmullRom movement:
+    // each vertex offset packed into 11 bytes
     bool MoveSplineInitArgs::_checkPathBounds() const
     {
         if (!(flags & MoveSplineFlag::Mask_CatmullRom) && path.size() > 2)
@@ -274,7 +277,7 @@ namespace Movement
                 {
                     point_Idx = spline.first();
                     time_passed = time_passed % Duration();
-                    result = Result_NextSegment;
+                    result = Result_NextCycle;
                 }
                 else
                 {

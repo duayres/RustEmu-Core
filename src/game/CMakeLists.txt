@@ -403,6 +403,9 @@ set(SRC_GRP_WORLD_HANDLERS
     SpellClassMask.h
     SpellEffects.cpp
     SpellHandler.cpp
+    StateMgr.cpp
+    StateMgr.h
+    StateMgrImpl.h
     TaxiHandler.cpp
     TradeHandler.cpp
     Transports.cpp
@@ -416,6 +419,8 @@ set(SRC_GRP_WORLD_HANDLERS
     WaypointManager.h
     Weather.cpp
     Weather.h
+    WorldLocation.cpp
+    WorldLocation.h
     World.cpp
     World.h
 )

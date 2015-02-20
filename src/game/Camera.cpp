@@ -116,7 +116,7 @@ void Camera::SetView(WorldObject* obj, bool update_far_sight_field /*= true*/)
 
 void Camera::Event_ViewPointVisibilityChanged()
 {
-    if (!m_owner.HaveAtClient(GetBody()))
+    if (!m_owner.HaveAtClient(GetBody()->GetObjectGuid()))
         ResetView();
 }
 
@@ -163,17 +163,10 @@ void Camera::UpdateVisibilityOf(WorldObject* target)
     m_owner.UpdateVisibilityOf(GetBody(), target);
 }
 
-template<class T>
-void Camera::UpdateVisibilityOf(T* target, UpdateData& data, std::set<WorldObject*>& vis)
+void Camera::UpdateVisibilityOf(WorldObject* target, UpdateData& data, WorldObjectSet& vis)
 {
-    m_owner.template UpdateVisibilityOf<T>(GetBody(), target, data, vis);
+    m_owner.UpdateVisibilityOf(GetBody(), target, data, vis);
 }
-
-template void Camera::UpdateVisibilityOf(Player*, UpdateData&, std::set<WorldObject*>&);
-template void Camera::UpdateVisibilityOf(Creature*, UpdateData&, std::set<WorldObject*>&);
-template void Camera::UpdateVisibilityOf(Corpse*, UpdateData&, std::set<WorldObject*>&);
-template void Camera::UpdateVisibilityOf(GameObject*, UpdateData&, std::set<WorldObject*>&);
-template void Camera::UpdateVisibilityOf(DynamicObject*, UpdateData&, std::set<WorldObject*>&);
 
 void Camera::UpdateVisibilityForOwner()
 {

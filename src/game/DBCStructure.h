@@ -741,24 +741,24 @@ struct CreatureDisplayInfoEntry
 
 struct CreatureModelDataEntry
 {
-    uint32      Id;
-    uint32      Flags;
-    // char*    ModelPath[16]
-    // uint32   Unk1;
-    float       Scale;                                      // Used in calculation of unit collision data
-    // int32    Unk2
-    // int32    Unk3
-    // uint32   Unk4
-    // uint32   Unk5
-    // float    Unk6
-    // uint32   Unk7
-    // float    Unk8
-    // uint32   Unk9
-    // uint32   Unk10
-    // float    CollisionWidth;
-    float       CollisionHeight;
-    float       MountHeight;                                // Used in calculation of unit collision data when mounted
-    // float Unks[11]
+    uint32 Id;                                              // 1
+    //uint32 Flags;                                         // 2
+    //char* ModelPath[16]                                   // 3
+    uint32 modInhabitType;                                  // 4 model inhabit type
+    float Scale;                                            // 5 Used in calculation of unit collision data
+    //int32 Unk2                                            // 6
+    //int32 Unk3                                            // 7
+    //uint32 Unk4                                           // 8
+    //uint32 Unk5                                           // 9
+    //float Unk6                                            // 10
+    //uint32 Unk7                                           // 11
+    //float Unk8                                            // 12
+    //uint32 Unk9                                           // 13
+    //uint32 Unk10                                          // 14
+    //float CollisionWidth;                                 // 15
+    float CollisionHeight;                                  // 16
+    float MountHeight;                                      // 17 Used in calculation of unit collision data when mounted
+    //float Unks[11]                                        // 18-28
 };
 
 struct CreatureDisplayInfoExtraEntry
@@ -1295,26 +1295,26 @@ struct MailTemplateEntry
 struct MapEntry
 {
     uint32  MapID;                                          // 0        m_ID
-    // char*       internalname;                            // 1        m_Directory
+    //char*       internalname;                             // 1        m_Directory
     uint32  map_type;                                       // 2        m_InstanceType
-    // uint32 mapFlags;                                     // 3        m_Flags (0x100 - CAN_CHANGE_PLAYER_DIFFICULTY)
-    // uint32 isPvP;                                        // 4        m_PVP 0 or 1 for battlegrounds (not arenas)
+    uint32  mapFlags;                                       // 3        m_Flags (0x100 - CAN_CHANGE_PLAYER_DIFFICULTY)
+    //uint32 isPvP;                                         // 4        m_PVP 0 or 1 for battlegrounds (not arenas)
     char*   name[16];                                       // 5-20     m_MapName_lang
     // 21 string flags
     uint32  linked_zone;                                    // 22       m_areaTableID
-    // char*     hordeIntro[16];                            // 23-38    m_MapDescription0_lang
+    //char*     hordeIntro[16];                             // 23-38    m_MapDescription0_lang
     // 39 string flags
-    // char*     allianceIntro[16];                         // 40-55    m_MapDescription1_lang
+    //char*     allianceIntro[16];                          // 40-55    m_MapDescription1_lang
     // 56 string flags
     uint32  multimap_id;                                    // 57       m_LoadingScreenID (LoadingScreens.dbc)
-    // float   BattlefieldMapIconScale;                     // 58       m_minimapIconScale
+    //float   BattlefieldMapIconScale;                      // 58       m_minimapIconScale
     int32   ghost_entrance_map;                             // 59       m_corpseMapID map_id of entrance map in ghost mode (continent always and in most cases = normal entrance)
     float   ghost_entrance_x;                               // 60       m_corpseX entrance x coordinate in ghost mode  (in most cases = normal entrance)
     float   ghost_entrance_y;                               // 61       m_corpseY entrance y coordinate in ghost mode  (in most cases = normal entrance)
-    // uint32  timeOfDayOverride;                           // 62       m_timeOfDayOverride
+    //uint32  timeOfDayOverride;                            // 62       m_timeOfDayOverride
     uint32  addon;                                          // 63       m_expansionID
-    // 64       m_raidOffset
-    // uint32 maxPlayers;                                   // 65       m_maxPlayers
+    uint32  instanceResetOffset;                            // 64       m_raidOffset offset used instead of first period while creating reset table
+    uint32  maxPlayers;                                     // 65       m_maxPlayers, fallback if not present in MapDifficulty.dbc
 
     // Helpers
     uint32 Expansion() const { return addon; }
@@ -1330,16 +1330,27 @@ struct MapEntry
     bool IsMountAllowed() const
     {
         return !IsDungeon() ||
-               MapID == 209 || MapID == 269 || MapID == 309 || // TanarisInstance, CavernsOfTime, Zul'gurub
-               MapID == 509 || MapID == 534 || MapID == 560 || // AhnQiraj, HyjalPast, HillsbradPast
-               MapID == 568 || MapID == 580 || MapID == 595 || // ZulAman, Sunwell Plateau, Culling of Stratholme
-               MapID == 603 || MapID == 615 || MapID == 616;// Ulduar, The Obsidian Sanctum, The Eye Of Eternity
+            MapID == 209 || MapID == 269 || MapID == 309 ||       // TanarisInstance, CavernsOfTime, Zul'gurub
+            MapID == 509 || MapID == 534 || MapID == 560 ||       // AhnQiraj, HyjalPast, HillsbradPast
+            MapID == 568 || MapID == 580 || MapID == 595 ||       // ZulAman, Sunwell Plateau, Culling of Stratholme
+            MapID == 603 || MapID == 615 || MapID == 616 ||       // Ulduar, The Obsidian Sanctum, The Eye Of Eternity
+            MapID == 631 || MapID == 658 || MapID == 724;         // ICC, Pit of Saron, Ruby Sanctum
     }
 
     bool IsContinent() const
     {
         return MapID == 0 || MapID == 1 || MapID == 530 || MapID == 571;
     }
+
+    bool IsTransport() const
+    {
+        if (IsContinent())
+            return false;
+
+        return map_type == MAP_COMMON && mapFlags == MAP_FLAG_INSTANCEABLE && linked_zone == 0;
+    }
+
+    bool IsDynamicDifficultyMap() const { return mapFlags & MAP_FLAG_VARIABLE_DIFFICULTY; }
 };
 
 struct MapDifficultyEntry
@@ -2428,6 +2439,29 @@ struct TotemCategoryEntry
     uint32    categoryMask;                                 // 19       m_totemCategoryMask (compatibility mask for same type: different for totems, compatible from high to low for rods)
 };
 
+struct TransportAnimationEntry
+{
+    //uint32    id;                                         // 0       m_ID
+    uint32    transportEntry;                               // 1       transport GO entry
+    uint32    timeFrame;                                    // 2       linked time frame
+    float     x;                                            // 3       transport offset X
+    float     y;                                            // 4       transport offset Y
+    float     z;                                            // 5       transport offset Z
+    uint32    animId;                                       // 6       animation ID
+};
+
+struct TransportRotationEntry
+{
+    //uint32    id;                                         // 0       m_ID
+    uint32    transportEntry;                               // 1       transport GO entry
+    uint32    timeFrame;                                    // 2       linked time frame
+    //float     qx;                                         // 3       rotation quaternion x
+    //float     qy;                                         // 4       rotation quaternion y
+    //float     qz;                                         // 5       rotation quaternion z
+    //float     qw;                                         // 6       rotation quaternion w
+};
+
+
 #define MAX_VEHICLE_SEAT 8
 
 struct VehicleEntry
@@ -2460,9 +2494,9 @@ struct VehicleEntry
     uint32  m_uiLocomotionType;                             // 34
     float   m_msslTrgtImpactTexRadius;                      // 35
     uint32  m_uiSeatIndicatorType;                          // 36       m_vehicleUIIndicatorID
-    uint32  m_powerDisplayID;                               // 37
-    // 38 new in 3.1
-    // 39 new in 3.1
+    uint32  m_powerDisplayID;                               // 37, new in 3.1 - powerType
+    // 38, new in 3.1
+    // 39, new in 3.1
 };
 
 struct VehicleSeatEntry
@@ -2525,6 +2559,16 @@ struct VehicleSeatEntry
     // 55       m_cameraEnteringZoom"
     // 56       m_cameraSeatZoomMin
     // 57       m_cameraSeatZoomMax
+    bool IsUsable() const {
+        return
+            (m_flags & SEAT_FLAG_USABLE) ||
+            (m_flags & SEAT_FLAG_CAN_CONTROL) ||
+            (m_flags & SEAT_FLAG_UNCONTROLLED) ||
+            (m_flagsB & VEHICLE_SEAT_FLAG_B_USABLE_FORCED) ||
+            (m_flagsB & VEHICLE_SEAT_FLAG_B_USABLE_FORCED_2) ||
+            (m_flagsB & VEHICLE_SEAT_FLAG_B_USABLE_FORCED_3) ||
+            (m_flagsB & VEHICLE_SEAT_FLAG_B_USABLE_FORCED_4);
+    }
 };
 
 struct WMOAreaTableEntry

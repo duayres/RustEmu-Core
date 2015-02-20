@@ -448,14 +448,14 @@ bool Group::AddMember(ObjectGuid guid, const char* name)
 
             if (Player* pMember = itr->getSource())
             {
-                if (player->HaveAtClient(pMember))
+                if (player->HaveAtClient(pMember->GetObjectGuid()))
                 {
                     pMember->SetFieldNotifyFlag(UF_FLAG_PARTY_MEMBER);
                     pMember->BuildValuesUpdateBlockForPlayer(&data, player);
                     pMember->RemoveFieldNotifyFlag(UF_FLAG_PARTY_MEMBER);
                 }
 
-                if (pMember->HaveAtClient(player))
+                if (pMember->HaveAtClient(player->GetObjectGuid()))
                 {
                     UpdateData membData;
                     player->BuildValuesUpdateBlockForPlayer(&membData, pMember);
@@ -1389,7 +1389,7 @@ void Group::UpdatePlayerOutOfRange(Player* pPlayer)
     {
         if (Player* player = itr->getSource())
         {
-            if (player != pPlayer && !player->HaveAtClient(pPlayer))
+            if (player != pPlayer && !player->HaveAtClient(pPlayer->GetObjectGuid()))
                 player->GetSession()->SendPacket(&data);
         }
     }
@@ -1479,7 +1479,7 @@ bool Group::_addMember(ObjectGuid guid, const char* name, uint8 group, GroupFlag
     if (player && player->IsInWorld())
         lastMap = player->GetMapId();
     else if (player && player->IsBeingTeleported())
-        lastMap = player->GetTeleportDest().mapid;
+        lastMap = player->GetTeleportDest().GetMapId();
 
     MemberSlot member;
     member.guid      = guid;

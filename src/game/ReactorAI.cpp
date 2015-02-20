@@ -82,7 +82,6 @@ ReactorAI::EnterEvadeMode()
     if (!m_creature->isAlive())
     {
         DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "Creature stopped attacking, he is dead [guid=%u]", m_creature->GetGUIDLow());
-        m_creature->GetMotionMaster()->MovementExpired();
         m_creature->GetMotionMaster()->MoveIdle();
         i_victimGuid.Clear();
         m_creature->CombatStop(true);
@@ -116,6 +115,9 @@ ReactorAI::EnterEvadeMode()
     m_creature->SetLootRecipient(NULL);
 
     // Remove ChaseMovementGenerator from MotionMaster stack list, and add HomeMovementGenerator instead
-    if (m_creature->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
+    if (m_creature->IsInUnitState(UNIT_ACTION_CHASE))
+        m_creature->GetUnitStateMgr().DropAction(UNIT_ACTION_CHASE);
+
+    if (!m_creature->GetVehicle())
         m_creature->GetMotionMaster()->MoveTargetedHome();
 }

@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,9 +20,10 @@
 #define MANGOSSERVER_MOVESPLINEINIT_H
 
 #include "MoveSplineInitArgs.h"
-#include "PathFinder.h"
+#include "../PathFinder.h"
 
 class Unit;
+class GameObject;
 
 namespace Movement
 {
@@ -34,9 +35,11 @@ namespace Movement
         FlyToGround = 3, // 463 = FlyToGround
     };
 
+    template <class T> class MoveSplineInit;
+
     /*  Initializes and launches spline movement
      */
-    class MANGOS_DLL_SPEC MoveSplineInit
+    template <> class MoveSplineInit<Unit*>
     {
         public:
 
@@ -73,12 +76,12 @@ namespace Movement
              * @param path - array of points, shouldn't be empty
              * @param pointId - Id of fisrt point of the path. Example: when third path point will be done it will notify that pointId + 3 done
              */
-            void MovebyPath(const PointsArray& path, int32 pointId = 0);
+            void MovebyPath(PointsArray const& path, int32 pointId = 0);
 
             /* Initializes simple A to B mition, A is current unit's position, B is destination
              */
-            void MoveTo(const Vector3& destination, bool generatePath = false, bool forceDestination = false);
-            void MoveTo(float x, float y, float z, bool generatePath = false, bool forceDestination = false);
+            void MoveTo(Vector3 const& destination, bool generatePath = false, bool forceDestination = false, bool straightLine = false);
+            void MoveTo(float x, float y, float z, bool generatePath = false, bool forceDestination = false, bool straightLine = false);
 
             /* Sets Id of fisrt point of the path. When N-th path point will be done ILisener will notify that pointId + N done
              * Needed for waypoint movement where path splitten into parts
@@ -108,6 +111,11 @@ namespace Movement
              */
             void SetOrientationFixed(bool enable);
 
+            /* Enables transport enter/exit modes
+             */
+            void SetTransportEnter();
+            void SetTransportExit();
+
             /* Sets the velocity (in case you want to have custom movement velocity)
              * if no set, speed will be selected based on unit's speeds and current movement mode
              * Has no effect if falling mode enabled
@@ -124,36 +132,37 @@ namespace Movement
             void SetExitVehicle();
 
             PointsArray& Path() { return args.path; }
+
         protected:
 
             MoveSplineInitArgs args;
             Unit&  unit;
     };
 
-    inline void MoveSplineInit::SetFly() { args.flags.EnableFlying();}
-    inline void MoveSplineInit::SetWalk(bool enable) { args.flags.walkmode = enable;}
-    inline void MoveSplineInit::SetSmooth() { args.flags.EnableCatmullRom();}
-    inline void MoveSplineInit::SetCyclic() { args.flags.cyclic = true;}
-    inline void MoveSplineInit::SetFall() { args.flags.EnableFalling();}
-    inline void MoveSplineInit::SetVelocity(float vel) {  args.velocity = vel;}
-    inline void MoveSplineInit::SetOrientationInversed() { args.flags.orientationInversed = true;}
-    inline void MoveSplineInit::SetOrientationFixed(bool enable) { args.flags.orientationFixed = enable;}
-    inline void MoveSplineInit::SetBoardVehicle() { args.flags.EnableBoardVehicle(); }
-    inline void MoveSplineInit::SetExitVehicle() { args.flags.EnableExitVehicle(); }
+    inline void MoveSplineInit<Unit*>::SetFly() { args.flags.EnableFlying();}
+    inline void MoveSplineInit<Unit*>::SetWalk(bool enable) { args.flags.walkmode = enable;}
+    inline void MoveSplineInit<Unit*>::SetSmooth() { args.flags.EnableCatmullRom();}
+    inline void MoveSplineInit<Unit*>::SetCyclic() { args.flags.cyclic = true;}
+    inline void MoveSplineInit<Unit*>::SetFall() { args.flags.EnableFalling();}
+    inline void MoveSplineInit<Unit*>::SetVelocity(float vel) {  args.velocity = vel;}
+    inline void MoveSplineInit<Unit*>::SetOrientationInversed() { args.flags.orientationInversed = true;}
+    inline void MoveSplineInit<Unit*>::SetOrientationFixed(bool enable) { args.flags.orientationFixed = enable;}
+    inline void MoveSplineInit<Unit*>::SetBoardVehicle() { args.flags.EnableBoardVehicle(); }
+    inline void MoveSplineInit<Unit*>::SetExitVehicle() { args.flags.EnableExitVehicle(); }
 
-    inline void MoveSplineInit::MovebyPath(const PointsArray& controls, int32 path_offset)
+    inline void MoveSplineInit<Unit*>::MovebyPath(PointsArray const& controls, int32 path_offset)
     {
         args.path_Idx_offset = path_offset;
         args.path.assign(controls.begin(), controls.end());
     }
 
-    inline void MoveSplineInit::MoveTo(float x, float y, float z, bool generatePath, bool forceDestination)
+    inline void MoveSplineInit<Unit*>::MoveTo(float x, float y, float z, bool generatePath, bool forceDestination, bool straightLine)
     {
         Vector3 v(x, y, z);
-        MoveTo(v, generatePath, forceDestination);
+        MoveTo(v, generatePath, forceDestination, straightLine);
     }
 
-    inline void MoveSplineInit::MoveTo(const Vector3& dest, bool generatePath, bool forceDestination)
+    inline void MoveSplineInit<Unit*>::MoveTo(const Vector3& dest, bool generatePath, bool forceDestination, bool straightLine)
     {
         if (generatePath)
         {
@@ -169,25 +178,75 @@ namespace Movement
         }
     }
 
-    inline void MoveSplineInit::SetParabolic(float amplitude, float time_shift)
+    inline void MoveSplineInit<Unit*>::SetParabolic(float amplitude, float time_shift)
     {
         args.time_perc = time_shift;
         args.parabolic_amplitude = amplitude;
         args.flags.EnableParabolic();
     }
 
-    inline void MoveSplineInit::SetAnimation(AnimType anim)
+    inline void MoveSplineInit<Unit*>::SetAnimation(AnimType anim)
     {
-        args.time_perc = 0.f;
+        args.time_perc = 0.0f;
         args.flags.EnableAnimation((uint8)anim);
     }
 
-    inline void MoveSplineInit::SetFacing(Vector3 const& spot)
+    inline void MoveSplineInit<Unit*>::SetFacing(Vector3 const& spot)
     {
         args.facing.f.x = spot.x;
         args.facing.f.y = spot.y;
         args.facing.f.z = spot.z;
         args.flags.EnableFacingPoint();
+    }
+
+    template <> class MANGOS_DLL_SPEC MoveSplineInit<GameObject*>
+    {
+        public:
+            explicit MoveSplineInit(GameObject& go);
+            int32 Launch();
+            void SetParabolic(float amplitude, float start_time);
+            void MovebyPath(const PointsArray& path, int32 pointId = 0);
+            void MoveTo(const Vector3& destination);
+            void MoveTo(float x, float y, float z);
+            void SetFirstPointId(int32 pointId) { args.path_Idx_offset = pointId; }
+            void SetSmooth();
+            void SetFly();
+            void SetCyclic();
+            void SetFall();
+            void SetOrientationInversed();
+            void SetOrientationFixed(bool enable);
+            void SetVelocity(float velocity);
+
+            PointsArray& Path() { return args.path; }
+
+        protected:
+            MoveSplineInitArgs args;
+            GameObject&  gameobject;
+    };
+
+    inline void MoveSplineInit<GameObject*>::SetFly() { args.flags.EnableFlying();}
+    inline void MoveSplineInit<GameObject*>::SetSmooth() { args.flags.EnableCatmullRom();}
+    inline void MoveSplineInit<GameObject*>::SetCyclic() { args.flags.cyclic = true;}
+    inline void MoveSplineInit<GameObject*>::SetFall() { args.flags.EnableFalling();}
+    inline void MoveSplineInit<GameObject*>::SetVelocity(float vel) {  args.velocity = vel;}
+    inline void MoveSplineInit<GameObject*>::SetOrientationInversed() { args.flags.orientationInversed = true;}
+    inline void MoveSplineInit<GameObject*>::SetParabolic(float amplitude, float time_shift)
+    {
+        args.time_perc = time_shift;
+        args.parabolic_amplitude = amplitude;
+        args.flags.EnableParabolic();
+    }
+    inline void MoveSplineInit<GameObject*>::MoveTo(float x, float y, float z)
+    {
+        Vector3 v(x, y, z);
+        MoveTo(v);
+    }
+
+    inline void MoveSplineInit<GameObject*>::MoveTo(const Vector3& dest)
+    {
+        args.path_Idx_offset = 0;
+        args.path.resize(2);
+        args.path[1] = dest;
     }
 }
 #endif // MANGOSSERVER_MOVESPLINEINIT_H

@@ -25,6 +25,7 @@
 #include "UpdateData.h"
 #include "ObjectGuid.h"
 #include "Camera.h"
+#include "WorldLocation.h"
 
 #include <set>
 #include <string>
@@ -41,6 +42,7 @@
 #define DEFAULT_OBJECT_SCALE        1.0f                    // player/item scale as default, npc/go from database, pets from dbc
 
 #define MAX_STEALTH_DETECT_RANGE    45.0f
+#define DEFAULT_HIDDEN_MODEL_ID     11686                   // common "hidden" (invisible) model ID
 
 enum TempSummonType
 {
@@ -63,12 +65,6 @@ enum TempSummonType
     TEMPSUMMON_DEAD_OR_LOST_UNIQUENESS_DESPAWN              = 24,            // despawns when owner spawn creature this type in visible range, or by rules of TEMPSUMMON_DEAD_DESPAWN
 };
 
-enum PhaseMasks
-{
-    PHASEMASK_NORMAL   = 0x00000001,
-    PHASEMASK_ANYWHERE = 0xFFFFFFFF
-};
-
 class WorldPacket;
 class UpdateData;
 class WorldSession;
@@ -80,30 +76,12 @@ class Map;
 class UpdateMask;
 class InstanceData;
 class TerrainInfo;
+class Transport;
+class TransportBase;
 class TransportInfo;
 struct MangosStringLocale;
 
 typedef UNORDERED_MAP<ObjectGuid, UpdateData> UpdateDataMapType;
-
-struct Position
-{
-    Position() : x(0.0f), y(0.0f), z(0.0f), o(0.0f) {}
-    Position(float _x, float _y, float _z, float _o) : x(_x), y(_y), z(_z), o(_o) {}
-    float x, y, z, o;
-};
-
-struct WorldLocation
-{
-    uint32 mapid;
-    float coord_x;
-    float coord_y;
-    float coord_z;
-    float orientation;
-    explicit WorldLocation(uint32 _mapid = 0, float _x = 0, float _y = 0, float _z = 0, float _o = 0)
-        : mapid(_mapid), coord_x(_x), coord_y(_y), coord_z(_z), orientation(_o) {}
-    WorldLocation(WorldLocation const& loc)
-        : mapid(loc.mapid), coord_x(loc.coord_x), coord_y(loc.coord_y), coord_z(loc.coord_z), orientation(loc.orientation) {}
-};
 
 // use this class to measure time between world update ticks
 // essential for units updating their spells after cells become active
@@ -428,6 +406,7 @@ class MANGOS_DLL_SPEC Object
         uint16 m_fieldNotifyFlags;
 
         bool m_objectUpdated;
+        bool m_skipUpdate;
 
     private:
         bool m_inWorld;
@@ -441,9 +420,19 @@ class MANGOS_DLL_SPEC Object
         // for output helpfull error messages from ASSERTs
         bool PrintIndexError(uint32 index, bool set) const;
         bool PrintEntryError(char const* descr) const;
+        // SkipUpdate mechanic used if object (Player, MOTransport, etc) moved from one map to another,
+        // for skipping double-update in one world update tick
+        bool SkipUpdate() const { return m_skipUpdate; };
+        void SkipUpdate(bool value) { m_skipUpdate = value; };
 };
 
 struct WorldObjectChangeAccumulator;
+class TransportKit;
+
+namespace Movement
+{
+    class MoveSpline;
+};
 
 class MANGOS_DLL_SPEC WorldObject : public Object
 {
@@ -455,28 +444,24 @@ class MANGOS_DLL_SPEC WorldObject : public Object
         // it is needed in order to get time diff between two object's Update() calls
         class MANGOS_DLL_SPEC UpdateHelper
         {
-            public:
-                explicit UpdateHelper(WorldObject* obj) : m_obj(obj) {}
-                ~UpdateHelper() { }
+        public:
+            explicit UpdateHelper(WorldObject& obj) : m_obj(obj) {}
+            ~UpdateHelper() {}
 
-                void Update(uint32 time_diff)
-                {
-                    m_obj->Update(m_obj->m_updateTracker.timeElapsed(), time_diff);
-                    m_obj->m_updateTracker.Reset();
-                }
+            void Update(uint32 time_diff);
 
-            private:
-                UpdateHelper(const UpdateHelper&);
-                UpdateHelper& operator=(const UpdateHelper&);
+        private:
+            UpdateHelper(const UpdateHelper&);
+            UpdateHelper& operator=(const UpdateHelper&);
 
-                WorldObject* const m_obj;
+            WorldObject& m_obj;
         };
 
-        virtual ~WorldObject() {}
+        virtual ~WorldObject();
 
         virtual void Update(uint32 /*update_diff*/, uint32 /*time_diff*/) {}
 
-        void _Create(uint32 guidlow, HighGuid guidhigh, uint32 phaseMask);
+        void _Create(ObjectGuid guid, uint32 phaseMask);
 
         void AddToWorld() override;
         void RemoveFromWorld(bool remove) override;
@@ -485,47 +470,71 @@ class MANGOS_DLL_SPEC WorldObject : public Object
         bool IsBoarded() const { return m_transportInfo != NULL; }
         void SetTransportInfo(TransportInfo* transportInfo) { m_transportInfo = transportInfo; }
 
-        void Relocate(float x, float y, float z, float orientation);
-        void Relocate(float x, float y, float z);
+        virtual bool IsTransport() const { return false; };
+        virtual bool IsMOTransport() const { return false; };
+        TransportBase* GetTransportBase();
+        virtual TransportKit* GetTransportKit() { return NULL; };
 
+        void Relocate(WorldLocation const& location);
+        void Relocate(Position const& position);
         void SetOrientation(float orientation);
 
-        float GetPositionX() const { return m_position.x; }
-        float GetPositionY() const { return m_position.y; }
-        float GetPositionZ() const { return m_position.z; }
-        void GetPosition(float& x, float& y, float& z) const
-        { x = m_position.x; y = m_position.y; z = m_position.z; }
-        void GetPosition(WorldLocation& loc) const
-        { loc.mapid = m_mapId; GetPosition(loc.coord_x, loc.coord_y, loc.coord_z); loc.orientation = GetOrientation(); }
-        float GetOrientation() const { return m_position.o; }
+        // FIXME - need remove wrapper after cleanup SD2
+        void Relocate(float x, float y, float z, float orientation = 0.0f) { Relocate(Position(x, y, z, orientation, GetPhaseMask())); };
+
+        float const& GetPositionX() const     { return GetPosition().getX(); }
+        float const& GetPositionY() const     { return GetPosition().getY(); }
+        float const& GetPositionZ() const     { return GetPosition().getZ(); }
+        float const& GetOrientation() const   { return GetPosition().getO(); }
+        void GetPosition(float &x, float &y, float &z) const { x = m_position.x; y = m_position.y; z = m_position.z; }
+        WorldLocation const& GetPosition() const { return m_position; };
+
+        virtual bool IsOnTransport() const;
+        virtual Transport* GetTransport() const;
+        float GetTransOffsetX() const { return GetPosition().GetTransportPos().getX(); }
+        float GetTransOffsetY() const { return GetPosition().GetTransportPos().getY(); }
+        float GetTransOffsetZ() const { return GetPosition().GetTransportPos().getZ(); }
+        float GetTransOffsetO() const { return GetPosition().GetTransportPos().getO(); }
+        Position const& GetTransportPosition() const { return GetPosition().GetTransportPos(); };
+        void SetTransportPosition(Position const& pos) { m_position.SetTransportPosition(pos); };
+        bool HasTransportPosition() const { return !GetTransportPosition().IsEmpty(); };
+        void ClearTransportData() { m_position.ClearTransportData(); };
 
         /// Gives a 2d-point in distance distance2d in direction absAngle around the current position (point-to-point)
         void GetNearPoint2D(float& x, float& y, float distance2d, float absAngle) const;
         /** Gives a "free" spot for searcher in distance distance2d in direction absAngle on "good" height
-         * @param searcher          -           for whom a spot is searched for
-         * @param x, y, z           -           position for the found spot of the searcher
-         * @param searcher_bounding_radius  -   how much space the searcher will require
-         * @param distance2d        -           distance between the middle-points
-         * @param absAngle          -           angle in which the spot is preferred
-         */
+        * @param searcher          -           for whom a spot is searched for
+        * @param x, y, z           -           position for the found spot of the searcher
+        * @param searcher_bounding_radius  -   how much space the searcher will require
+        * @param distance2d        -           distance between the middle-points
+        * @param absAngle          -           angle in which the spot is preferred
+        */
         void GetNearPoint(WorldObject const* searcher, float& x, float& y, float& z, float searcher_bounding_radius, float distance2d, float absAngle) const;
         /** Gives a "free" spot for a searcher on the distance (including bounding-radius calculation)
-         * @param x, y, z           -           position for the found spot
-         * @param bounding_radius   -           radius for the searcher
-         * @param distance2d        -           range in which to find a free spot. Default = 0.0f (which usually means the units will have contact)
-         * @param angle             -           direction in which to look for a free spot. Default = 0.0f (direction in which 'this' is looking
-         * @param obj               -           for whom to look for a spot. Default = NULL
-         */
+        * @param x, y, z           -           position for the found spot
+        * @param bounding_radius   -           radius for the searcher
+        * @param distance2d        -           range in which to find a free spot. Default = 0.0f (which usually means the units will have contact)
+        * @param angle             -           direction in which to look for a free spot. Default = 0.0f (direction in which 'this' is looking
+        * @param obj               -           for whom to look for a spot. Default = NULL
+        */
         void GetClosePoint(float& x, float& y, float& z, float bounding_radius, float distance2d = 0.0f, float angle = 0.0f, const WorldObject* obj = NULL) const
         {
             // angle calculated from current orientation
             GetNearPoint(obj, x, y, z, bounding_radius, distance2d + GetObjectBoundingRadius() + bounding_radius, GetOrientation() + angle);
         }
+
+        WorldLocation GetClosePoint(float bounding_radius, float distance2d = 0.0f, float angle = 0.0f, WorldObject const* obj = NULL)
+        {
+            WorldLocation loc = GetPosition();
+            GetNearPoint(obj, loc.x, loc.y, loc.z, bounding_radius, distance2d, loc.o + angle);
+            return loc;
+        }
+
         /** Gives a "free" spot for a searcher in contact-range of "this" (including bounding-radius calculation)
-         * @param x, y, z           -           position for the found spot
-         * @param obj               -           for whom to find a contact position. The position will be searched in direction from 'this' towards 'obj'
-         * @param distance2d        -           distance which 'obj' and 'this' should have beetween their bounding radiuses. Default = CONTACT_DISTANCE
-         */
+        * @param x, y, z           -           position for the found spot
+        * @param obj               -           for whom to find a contact position. The position will be searched in direction from 'this' towards 'obj'
+        * @param distance2d        -           distance which 'obj' and 'this' should have beetween their bounding radiuses. Default = CONTACT_DISTANCE
+        */
         void GetContactPoint(const WorldObject* obj, float& x, float& y, float& z, float distance2d = CONTACT_DISTANCE) const
         {
             // angle to face `obj` to `this` using distance includes size of `obj`
@@ -535,16 +544,16 @@ class MANGOS_DLL_SPEC WorldObject : public Object
         virtual float GetObjectBoundingRadius() const { return DEFAULT_WORLD_OBJECT_SIZE; }
 
         bool IsPositionValid() const;
-        void UpdateGroundPositionZ(float x, float y, float& z) const;
-        void UpdateAllowedPositionZ(float x, float y, float& z, Map* atMap = NULL) const;
+        void UpdateGroundPositionZ(float x, float y, float &z) const;
+        void UpdateAllowedPositionZ(float x, float y, float &z) const;
 
         void GetRandomPoint(float x, float y, float z, float distance, float& rand_x, float& rand_y, float& rand_z, float minDist = 0.0f, float const* ori = NULL) const;
 
-        uint32 GetMapId() const { return m_mapId; }
-        uint32 GetInstanceId() const { return m_InstanceId; }
+        uint32 GetMapId() const { return m_position.GetMapId(); }
+        uint32 GetInstanceId() const { return m_position.GetInstanceId(); }
 
         virtual void SetPhaseMask(uint32 newPhaseMask, bool update);
-        uint32 GetPhaseMask() const { return m_phaseMask; }
+        uint32 GetPhaseMask() const { return m_position.GetPhaseMask(); }
         bool InSamePhase(WorldObject const* obj) const { return InSamePhase(obj->GetPhaseMask()); }
         bool InSamePhase(uint32 phasemask) const { return (GetPhaseMask() & phasemask); }
 
@@ -559,16 +568,19 @@ class MANGOS_DLL_SPEC WorldObject : public Object
 
         virtual const char* GetNameForLocaleIdx(int32 /*locale_idx*/) const { return GetName(); }
 
-        float GetDistance(const WorldObject* obj) const;
+        float GetDistance(WorldLocation const& loc) const;
+
+        float GetDistance(WorldObject const* obj) const;
         float GetDistance(float x, float y, float z) const;
-        float GetDistance2d(const WorldObject* obj) const;
+        float GetDistance2d(WorldObject const* obj) const;
         float GetDistance2d(float x, float y) const;
-        float GetDistanceZ(const WorldObject* obj) const;
-        bool IsInMap(const WorldObject* obj) const
+        float GetDistanceZ(WorldObject const* obj) const;
+        bool IsInMap(WorldObject const* obj) const
         {
             return IsInWorld() && obj->IsInWorld() && (GetMap() == obj->GetMap()) && InSamePhase(obj);
         }
         bool IsWithinDist3d(float x, float y, float z, float dist2compare) const;
+        bool IsWithinDist3d(Location const& loc, float dist2compare) const;
         bool IsWithinDist2d(float x, float y, float dist2compare) const;
         bool _IsWithinDist(WorldObject const* obj, float dist2compare, bool is3D) const;
 
@@ -583,19 +595,29 @@ class MANGOS_DLL_SPEC WorldObject : public Object
             return obj && IsInMap(obj) && _IsWithinDist(obj, dist2compare, is3D);
         }
         bool IsWithinLOS(float x, float y, float z) const;
-        bool IsWithinLOSInMap(const WorldObject* obj) const;
+        bool IsWithinLOSInMap(WorldObject const* obj) const;
         bool GetDistanceOrder(WorldObject const* obj1, WorldObject const* obj2, bool is3D = true) const;
         bool IsInRange(WorldObject const* obj, float minRange, float maxRange, bool is3D = true) const;
         bool IsInRange2d(float x, float y, float minRange, float maxRange) const;
         bool IsInRange3d(float x, float y, float z, float minRange, float maxRange) const;
+        bool IsInBetween(WorldObject const* obj1, WorldObject const* obj2, float size = 0) const;
 
-        float GetAngle(const WorldObject* obj) const;
-        float GetAngle(const float x, const float y) const;
-        bool HasInArc(const float arcangle, const WorldObject* obj) const;
-        bool isInFrontInMap(WorldObject const* target, float distance, float arc = M_PI) const;
-        bool isInBackInMap(WorldObject const* target, float distance, float arc = M_PI) const;
-        bool isInFront(WorldObject const* target, float distance, float arc = M_PI) const;
-        bool isInBack(WorldObject const* target, float distance, float arc = M_PI) const;
+        float GetExactDist2dSq(float x, float y) const
+        {
+            float dx = m_position.x - x; float dy = m_position.y - y; return dx*dx + dy*dy;
+        }
+        float GetExactDist2d(const float x, const float y) const
+        {
+            return sqrt(GetExactDist2dSq(x, y));
+        }
+
+        float GetAngle(WorldObject const* obj) const;
+        float GetAngle(float const x, float const y) const;
+        bool HasInArc(float const arcangle, WorldObject const* obj) const;
+        bool isInFrontInMap(WorldObject const* target, float distance, float arc = M_PI_F) const;
+        bool isInBackInMap(WorldObject const* target, float distance, float arc = M_PI_F) const;
+        bool isInFront(WorldObject const* target, float distance, float arc = M_PI_F) const;
+        bool isInBack(WorldObject const* target, float distance, float arc = M_PI_F) const;
 
         virtual void CleanupsBeforeDelete();                // used in destructor or explicitly before mass creature delete to remove cross-references to already deleted units
 
@@ -622,6 +644,7 @@ class MANGOS_DLL_SPEC WorldObject : public Object
 
         virtual void SaveRespawnTime() {}
         void AddObjectToRemoveList();
+        void RemoveObjectFromRemoveList();
 
         void UpdateObjectVisibility();
         virtual void UpdateVisibilityAndView();             // update visibility for object and object for all around
@@ -645,9 +668,18 @@ class MANGOS_DLL_SPEC WorldObject : public Object
         void BuildUpdateData(UpdateDataMapType &) override;
 
         Creature* SummonCreature(uint32 id, float x, float y, float z, float ang, TempSummonType spwtype, uint32 despwtime, bool asActiveObject = false);
+        Creature* SummonCreature(uint32 id, TempSummonType spwType, uint32 despwTime, bool asActiveObject = false)
+        {
+            return SummonCreature(id, 0.0f, 0.0f, 0.0f, 0.0f, spwType, despwTime, asActiveObject);
+        }
+
+        GameObject* SummonGameobject(uint32 id, float x, float y, float z, float angle, uint32 despwtime);
 
         bool isActiveObject() const { return m_isActiveObject || m_viewPoint.hasViewers(); }
         void SetActiveObjectState(bool active);
+
+        uint32 GetLastUpdateTime() const { return m_LastUpdateTime; }
+        void SetLastUpdateTime() { m_LastUpdateTime = WorldTimer::getMSTime(); }
 
         ViewPoint& GetViewPoint() { return m_viewPoint; }
 
@@ -661,14 +693,26 @@ class MANGOS_DLL_SPEC WorldObject : public Object
         GameObject* GetClosestGameObjectWithEntry(const WorldObject* pSource, uint32 uiEntry, float fMaxSearchRange);
         void GetGameObjectListWithEntryInGrid(std::list<GameObject*>& lList, uint32 uiEntry, float fMaxSearchRange);
 
+        virtual bool IsVehicle() const { return false; }
+
+        // Movement
+        Movement::MoveSpline* movespline;
+        ShortTimeTracker m_movesplineTimer;
+
+        // Visibility operations for object in (must be used only in active state!)
+        GuidSet& GetNotifiedClients() { return m_notifiedClients; };
+        void  AddNotifiedClient(ObjectGuid const& guid)    { m_notifiedClients.insert(guid); };
+        void  RemoveNotifiedClient(ObjectGuid const& guid) { m_notifiedClients.erase(guid); };
+        bool  HasNotifiedClients() const { return !m_notifiedClients.empty(); };
+
     protected:
         explicit WorldObject();
 
         // these functions are used mostly for Relocate() and Corpse/Player specific stuff...
         // use them ONLY in LoadFromDB()/Create()  funcs and nowhere else!
         // mapId/instanceId should be set in SetMap() function!
-        void SetLocationMapId(uint32 _mapId) { m_mapId = _mapId; }
-        void SetLocationInstanceId(uint32 _instanceId) { m_InstanceId = _instanceId; }
+        void SetLocationMapId(uint32 _mapId)           { m_position.SetMapId(_mapId); }
+        void SetLocationInstanceId(uint32 _instanceId) { m_position.SetInstanceId(_instanceId); }
 
         virtual void StopGroupLoot() {}
 
@@ -679,14 +723,15 @@ class MANGOS_DLL_SPEC WorldObject : public Object
     private:
         Map* m_currMap;                                     // current object's Map location
 
-        uint32 m_mapId;                                     // object at map with map_id
-        uint32 m_InstanceId;                                // in map copy with instance id
-        uint32 m_phaseMask;                                 // in area phase state
+        WorldLocation m_position;                           // Contains all needed coords for object
 
-        Position m_position;
         ViewPoint m_viewPoint;
         WorldUpdateCounter m_updateTracker;
         bool m_isActiveObject;
+
+        GuidSet    m_notifiedClients;
+
+        uint32 m_LastUpdateTime;
 };
 
 #endif

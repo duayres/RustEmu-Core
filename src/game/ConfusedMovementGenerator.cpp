@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,7 +44,7 @@ void ConfusedMovementGenerator<T>::Interrupt(T& unit)
 {
     unit.InterruptMoving();
     // confused state still applied while movegen disabled
-    unit.clearUnitState(UNIT_STAT_CONFUSED_MOVE);
+    unit.clearUnitState(UNIT_STAT_CONFUSED | UNIT_STAT_CONFUSED_MOVE);
 }
 
 template<class T>
@@ -83,21 +83,23 @@ bool ConfusedMovementGenerator<T>::Update(T& unit, const uint32& diff)
             // start moving
             unit.addUnitState(UNIT_STAT_CONFUSED_MOVE);
 
-            float destX = i_x;
-            float destY = i_y;
-            float destZ = i_z;
+            float x, y, z;
+            unit.GetNearPoint(&unit, x, y, z, unit.GetObjectBoundingRadius(), 10.0f, rand_norm_f() * M_PI_F * 2.0f);
+            unit.UpdateAllowedPositionZ(x, y, z);
 
-            // check if new random position is assigned, GetReachableRandomPosition may fail
-            if (unit.GetMap()->GetReachableRandomPosition(&unit, destX, destY, destZ, 10.0f))
+            PathFinder path(&unit);
+            path.setPathLengthLimit(30.0f);
+            path.calculate(x, y, z);
+            if (path.getPathType() & PATHFIND_NOPATH)
             {
-                Movement::MoveSplineInit init(unit);
-                init.MoveTo(destX, destY, destZ, true);
-                init.SetWalk(true);
-                init.Launch();
-                i_nextMoveTime.Reset(urand(800, 1000));             // Keep a short wait time
+                i_nextMoveTime.Reset(urand(800, 1000));
+                return true;
             }
-            else
-                i_nextMoveTime.Reset(50);                           // Retry later
+
+            Movement::MoveSplineInit<Unit*> init(unit);
+            init.MovebyPath(path.getPath());
+            init.SetWalk(true);
+            init.Launch();
         }
     }
 
@@ -107,8 +109,8 @@ bool ConfusedMovementGenerator<T>::Update(T& unit, const uint32& diff)
 template<>
 void ConfusedMovementGenerator<Player>::Finalize(Player& unit)
 {
-    unit.clearUnitState(UNIT_STAT_CONFUSED | UNIT_STAT_CONFUSED_MOVE);
     unit.StopMoving();
+    unit.clearUnitState(UNIT_STAT_CONFUSED | UNIT_STAT_CONFUSED_MOVE);
 }
 
 template<>

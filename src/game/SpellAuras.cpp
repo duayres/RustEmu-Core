@@ -4007,7 +4007,7 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
 void Aura::HandleAuraMounted(bool apply, bool Real)
 {
     // only at real add/remove aura
-    if(!Real)
+    if (!Real)
         return;
 
     Unit *target = GetTarget();
@@ -4015,7 +4015,7 @@ void Aura::HandleAuraMounted(bool apply, bool Real)
     if (apply)
     {
         CreatureInfo const* ci = ObjectMgr::GetCreatureTemplate(m_modifier.m_miscvalue);
-        if(!ci)
+        if (!ci)
         {
             sLog.outErrorDb("AuraMounted: `creature_template`='%u' not found in database (only need it modelid)", m_modifier.m_miscvalue);
             return;
@@ -4026,28 +4026,11 @@ void Aura::HandleAuraMounted(bool apply, bool Real)
         if (minfo)
             display_id = minfo->modelid;
 
-        target->Mount(display_id, GetId());
-
-        if (ci->VehicleTemplateId)
-        {
-            target->SetVehicleId(ci->VehicleTemplateId, ci->Entry);
-
-            if (target->GetTypeId() == TYPEID_PLAYER)
-                target->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_PLAYER_VEHICLE);
-        }
+        target->Mount(display_id, GetId(), ci->VehicleTemplateId, GetMiscValue());
     }
     else
     {
         target->Unmount(true);
-
-        CreatureInfo const* ci = ObjectMgr::GetCreatureTemplate(m_modifier.m_miscvalue);
-        if (ci && target->IsVehicle() && ci->VehicleTemplateId == target->GetVehicleInfo()->GetVehicleEntry()->m_ID)
-        {
-            if (target->GetTypeId() == TYPEID_PLAYER)
-                target->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_PLAYER_VEHICLE);
-
-            target->SetVehicleId(0, 0);
-        }
     }
 }
 
@@ -4968,7 +4951,7 @@ void Aura::HandleModPossess(bool apply, bool Real)
         {
             ((Creature*)target)->AIM_Initialize();
         }
-        else if (target->GetTypeId() == TYPEID_PLAYER)
+        else if (target->GetTypeId() == TYPEID_PLAYER && !target->GetVehicle())
         {
             ((Player*)target)->SetClientControl(target, 0);
         }
@@ -5001,7 +4984,7 @@ void Aura::HandleModPossess(bool apply, bool Real)
 
         target->SetCharmerGuid(ObjectGuid());
 
-        if (target->GetTypeId() == TYPEID_PLAYER)
+        if (target->GetTypeId() == TYPEID_PLAYER && !target->GetVehicle())
         {
             ((Player*)target)->setFactionForRace(target->getRace());
             ((Player*)target)->SetClientControl(target, 1);
@@ -5352,48 +5335,48 @@ void Aura::HandleAuraModStun(bool apply, bool Real)
             target->StopMoving();
         }
 
-        // target->GetUnitStateMgr().PushAction(UNIT_ACTION_STUN);  what is it?
+        target->GetUnitStateMgr().PushAction(UNIT_ACTION_STUN);
 
         switch (GetId())
         {
-            case 6358: // Seduction
+        case 6358: // Seduction
+        {
+            if (Unit* caster = GetCaster())
             {
-                if (Unit* caster = GetCaster())
+                if (caster->GetOwner() && caster->GetOwner()->HasAura(56250)) // Glyph of Seduction
                 {
-                    if (caster->GetOwner() && caster->GetOwner()->HasAura(56250)) // Glyph of Seduction
-                    {
-                        target->RemoveSpellsCausingAura(SPELL_AURA_PERIODIC_DAMAGE);
-                        target->RemoveSpellsCausingAura(SPELL_AURA_PERIODIC_DAMAGE_PERCENT);
-                    }
+                    target->RemoveSpellsCausingAura(SPELL_AURA_PERIODIC_DAMAGE);
+                    target->RemoveSpellsCausingAura(SPELL_AURA_PERIODIC_DAMAGE_PERCENT);
                 }
-                return;
             }
-            case 39837: // Impaling Spine
+            return;
+        }
+        case 39837: // Impaling Spine
+        {
+            // Summon the Naj'entus Spine GameObject on target if spell is Impaling Spine
+            GameObject* pObj = new GameObject;
+            if (pObj->Create(target->GetMap()->GenerateLocalLowGuid(HIGHGUID_GAMEOBJECT), 185584, target->GetMap(), target->GetPhaseMask(),
+                target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(), target->GetOrientation()))
             {
-                // Summon the Naj'entus Spine GameObject on target if spell is Impaling Spine
-                GameObject* pObj = new GameObject;
-                if (pObj->Create(target->GetMap()->GenerateLocalLowGuid(HIGHGUID_GAMEOBJECT), 185584, target->GetMap(), target->GetPhaseMask(),
-                    target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(), target->GetOrientation()))
-                {
-                    pObj->SetRespawnTime(GetAuraDuration() / IN_MILLISECONDS);
-                    pObj->SetSpellId(GetId());
-                    target->AddGameObject(pObj);
-                    target->GetMap()->Add(pObj);
-                }
-                else
-                    delete pObj;
+                pObj->SetRespawnTime(GetAuraDuration() / IN_MILLISECONDS);
+                pObj->SetSpellId(GetId());
+                target->AddGameObject(pObj);
+                target->GetMap()->Add(pObj);
+            }
+            else
+                delete pObj;
 
-                return;
-            }
-            case 44572: // Deep Freeze damage part
+            return;
+        }
+        case 44572: // Deep Freeze damage part
+        {
+            if (!(target->IsCharmerOrOwnerPlayerOrPlayerItself() || target->IsVehicle()) && target->IsImmuneToSpellEffect(GetSpellProto(), EFFECT_INDEX_0))
             {
-                if (!(target->IsCharmerOrOwnerPlayerOrPlayerItself() || target->IsVehicle()) && target->IsImmuneToSpellEffect(GetSpellProto(), EFFECT_INDEX_0))
-                {
-                    if (Unit* pCaster = GetCaster())
-                        pCaster->CastSpell(target, 71757, true);
-                }
-                return;
+                if (Unit* pCaster = GetCaster())
+                    pCaster->CastSpell(target, 71757, true);
             }
+            return;
+        }
         }
 
         // Pound
@@ -5406,9 +5389,9 @@ void Aura::HandleAuraModStun(bool apply, bool Real)
             uint32 spellId = 0;
             switch (GetSpellProto()->Id)
             {
-                case 53472: spellId = 53509; break;
-                case 59433: spellId = 59432; break;
-                default: return;
+            case 53472: spellId = 53509; break;
+            case 59433: spellId = 59432; break;
+            default: return;
             }
 
             pCaster->CastSpell(target, spellId, true);
@@ -5457,9 +5440,11 @@ void Aura::HandleAuraModStun(bool apply, bool Real)
             target->SetRoot(false);
             target->m_movementInfo.RemoveMovementFlag(MOVEFLAG_ROOT);
 
+            //if (target->GetTypeId() != TYPEID_PLAYER)
+            //    target->AddEvent(new AttackResumeEvent(*target), ATTACK_DISPLAY_DELAY);
         }
 
-        // target->GetUnitStateMgr().DropAction(UNIT_ACTION_STUN); what is it?
+        target->GetUnitStateMgr().DropAction(UNIT_ACTION_STUN);
 
         if (GetId() == 6358) // Seduction
         {
@@ -5479,15 +5464,15 @@ void Aura::HandleAuraModStun(bool apply, bool Real)
             uint32 spell_id;
             switch (GetId())
             {
-                case 19386: spell_id = 24131; break;
-                case 24132: spell_id = 24134; break;
-                case 24133: spell_id = 24135; break;
-                case 27068: spell_id = 27069; break;
-                case 49011: spell_id = 49009; break;
-                case 49012: spell_id = 49010; break;
-                default:
-                    sLog.outError("Spell selection called for unexpected original spell %u, new spell for this spell family?", GetId());
-                    return;
+            case 19386: spell_id = 24131; break;
+            case 24132: spell_id = 24134; break;
+            case 24133: spell_id = 24135; break;
+            case 27068: spell_id = 27069; break;
+            case 49011: spell_id = 49009; break;
+            case 49012: spell_id = 49010; break;
+            default:
+                sLog.outError("Spell selection called for unexpected original spell %u, new spell for this spell family?", GetId());
+                return;
             }
 
             caster->CastSpell(target, spell_id, true, NULL, this);
@@ -5706,7 +5691,7 @@ void Aura::HandleAuraModRoot(bool apply, bool Real)
             target->StopMoving();
         }
 
-        // target->GetUnitStateMgr().PushAction(UNIT_ACTION_ROOT); what is it?
+        target->GetUnitStateMgr().PushAction(UNIT_ACTION_ROOT);
     }
     else
     {
@@ -5755,7 +5740,7 @@ void Aura::HandleAuraModRoot(bool apply, bool Real)
 
         }
 
-        // target->GetUnitStateMgr().DropAction(UNIT_ACTION_ROOT); what is it?
+        target->GetUnitStateMgr().DropAction(UNIT_ACTION_ROOT);
 
         if (GetSpellProto()->Id == 70980)                   // Web Wrap (Icecrown Citadel, trash mob Nerub'ar Broodkeeper)
             target->CastSpell(target, 71010, true);
@@ -10498,16 +10483,37 @@ void Aura::HandleAuraControlVehicle(bool apply, bool Real)
     if (!target->IsVehicle())
         return;
 
-    Unit* caster = GetCaster();
+    // TODO: Check for free seat
+
+    Unit *caster = GetCaster();
     if (!caster)
         return;
 
     if (apply)
     {
-        target->GetVehicleInfo()->Board(caster, GetBasePoints() - 1);
+        // TODO: find a way to make this work properly
+        // some spells seem like store vehicle seat info in basepoints, but not true for all of them, so... ;/
+        int32 seat = GetModifier()->m_amount <= MAX_VEHICLE_SEAT ? GetModifier()->m_amount - 1 : -1;
+
+        if (seat >= 0 && caster->GetTypeId() == TYPEID_PLAYER && !target->GetVehicleKit()->HasEmptySeat(seat))
+            seat = -1;
+
+        caster->_EnterVehicle(target->GetVehicleKit(), seat);
     }
     else
-        target->GetVehicleInfo()->UnBoard(caster, m_removeMode == AURA_REMOVE_BY_TRACKING);
+    {
+
+        if (caster->GetVehicle() && caster->GetVehicle() == target->GetVehicleKit())
+        {
+            if (m_removeMode == AURA_REMOVE_BY_STACK || m_removeMode == AURA_REMOVE_BY_TRACKING)
+                caster->GetVehicle()->RemovePassenger(caster, false);
+            else
+                caster->_ExitVehicle();
+        }
+
+        // some SPELL_AURA_CONTROL_VEHICLE auras have a dummy effect on the player - remove them
+        caster->RemoveAurasDueToSpell(GetId());
+    }
 }
 
 void Aura::HandleAuraLinked(bool apply, bool Real)
@@ -12910,7 +12916,15 @@ void Aura::HandleAuraSetVehicle(bool apply, bool real)
     if (!real)
         return;
 
-    GetTarget()->SetVehicleId(apply ? GetMiscValue() : 0, 0);
+    Unit* target = GetTarget();
+
+    if (!target || !target->IsInWorld())
+        return;
+
+    uint32 vehicleId = GetMiscValue();
+
+    target->SetVehicleId(apply ? vehicleId : 0);
+
 }
 
 void Aura::HandleAuraFactionChange(bool apply, bool real)

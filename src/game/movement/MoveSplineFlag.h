@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +24,7 @@
 
 namespace Movement
 {
-#if defined( __GNUC__ )
+#if defined(__GNUC__)
 #pragma pack(1)
 #else
 #pragma pack(push,1)
@@ -74,8 +74,8 @@ namespace Movement
                 Mask_Unused = No_Spline | Enter_Cycle | Frozen | Unknown7 | Unknown8 | Unknown10 | Unknown11 | Unknown12 | Unknown13,
             };
 
-            inline uint32& raw() { return (uint32&) * this;}
-            inline const uint32& raw() const { return (const uint32&) * this;}
+            inline uint32& raw() { return *reinterpret_cast<uint32*>(this);}
+            inline const uint32& raw() const { return *reinterpret_cast<uint32 const*>(this);}
 
             MoveSplineFlag() { raw() = 0; }
             MoveSplineFlag(uint32 f) { raw() = f; }
@@ -136,7 +136,7 @@ namespace Movement
             bool unknown12     : 1;
             bool unknown13     : 1;
     };
-#if defined( __GNUC__ )
+#if defined(__GNUC__)
 #pragma pack()
 #else
 #pragma pack(pop)

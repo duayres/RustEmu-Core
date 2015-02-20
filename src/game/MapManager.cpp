@@ -43,9 +43,6 @@ MapManager::~MapManager()
     for (MapMapType::iterator iter = i_maps.begin(); iter != i_maps.end(); ++iter)
         delete iter->second;
 
-    for (TransportSet::iterator i = m_Transports.begin(); i != m_Transports.end(); ++i)
-        delete *i;
-
     DeleteStateMachine();
 }
 
@@ -174,12 +171,6 @@ void MapManager::Update(uint32 diff)
 
     for (MapMapType::iterator iter = i_maps.begin(); iter != i_maps.end(); ++iter)
         iter->second->Update((uint32)i_timer.GetCurrent());
-
-    for (TransportSet::iterator iter = m_Transports.begin(); iter != m_Transports.end(); ++iter)
-    {
-        WorldObject::UpdateHelper helper((*iter));
-        helper.Update((uint32)i_timer.GetCurrent());
-    }
 
     // remove all maps which can be unloaded
     MapMapType::iterator iter = i_maps.begin();
@@ -357,4 +348,10 @@ BattleGroundMap* MapManager::CreateBattleGroundMap(uint32 id, uint32 InstanceId,
     map->CreateInstanceData(false);
 
     return map;
+}
+
+bool MapManager::IsTransportMap(uint32 mapid)
+{
+    MapEntry const* mapEntry = sMapStore.LookupEntry(mapid);
+    return mapEntry ? mapEntry->IsTransport() : false;
 }

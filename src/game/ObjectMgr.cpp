@@ -174,6 +174,9 @@ ObjectMgr::~ObjectMgr()
             delete[] playerInfo[race][class_].levelInfo;
 
     // free objects
+    for (TransportSet::iterator itr = m_Transports.begin(); itr != m_Transports.end(); ++itr)
+        delete *itr;
+
     for (GroupMap::iterator itr = mGroupMap.begin(); itr != mGroupMap.end(); ++itr)
         delete itr->second;
 
@@ -1528,6 +1531,37 @@ void ObjectMgr::RemoveCreatureFromGrid(uint32 guid, CreatureData const* data)
 
             CellObjectGuids& cell_guids = mMapObjectGuids[MAKE_PAIR32(data->mapid, i)][cell_id];
             cell_guids.creatures.erase(guid);
+        }
+    }
+}
+
+void ObjectMgr::LoadVehicleAccessory()
+{
+    sVehicleAccessoryStorage.Load();
+
+    sLog.outString(">> Loaded %u vehicle accessories", sVehicleAccessoryStorage.GetRecordCount());
+    sLog.outString();
+
+    // Check content
+    for (SQLMultiStorage::SQLSIterator<VehicleAccessory> itr = sVehicleAccessoryStorage.getDataBegin<VehicleAccessory>(); itr < sVehicleAccessoryStorage.getDataEnd<VehicleAccessory>(); ++itr)
+    {
+        if (!sCreatureStorage.LookupEntry<CreatureInfo>(itr->vehicleEntry))
+        {
+            sLog.outErrorDb("Table `vehicle_accessory` has entry (vehicle entry: %u, seat %u, passenger %u) where vehicle_entry is invalid, skip vehicle.", itr->vehicleEntry, itr->seatId, itr->passengerEntry);
+            sVehicleAccessoryStorage.EraseEntry(itr->vehicleEntry);
+            continue;
+        }
+        if (!sCreatureStorage.LookupEntry<CreatureInfo>(itr->passengerEntry))
+        {
+            sLog.outErrorDb("Table `vehicle_accessory` has entry (vehicle entry: %u, seat %u, passenger %u) where accessory_entry is invalid, skip vehicle.", itr->vehicleEntry, itr->seatId, itr->passengerEntry);
+            sVehicleAccessoryStorage.EraseEntry(itr->vehicleEntry);
+            continue;
+        }
+        if (itr->seatId >= MAX_VEHICLE_SEAT)
+        {
+            sLog.outErrorDb("Table `vehicle_accessory` has entry (vehicle entry: %u, seat %u, passenger %u) where seat is invalid (must be between 0 and %u), skip vehicle.", itr->vehicleEntry, itr->seatId, itr->passengerEntry, MAX_VEHICLE_SEAT - 1);
+            sVehicleAccessoryStorage.EraseEntry(itr->vehicleEntry);
+            continue;
         }
     }
 }
@@ -9905,31 +9939,6 @@ bool LoadMangosStrings(DatabaseType& db, char const* table, int32 start_value, i
     return sObjectMgr.LoadMangosStrings(db, table, start_value, end_value, extra_content);
 }
 
-void ObjectMgr::LoadCreatureTemplateSpells()
-{
-    sCreatureTemplateSpellsStorage.Load();
-
-    for (SQLStorageBase::SQLSIterator<CreatureTemplateSpells> itr = sCreatureTemplateSpellsStorage.getDataBegin<CreatureTemplateSpells>(); itr < sCreatureTemplateSpellsStorage.getDataEnd<CreatureTemplateSpells>(); ++itr)
-    {
-        if (!sCreatureStorage.LookupEntry<CreatureInfo>(itr->entry))
-        {
-            sLog.outErrorDb("LoadCreatureTemplateSpells: Spells found for creature entry %u, but creature does not exist, skipping", itr->entry);
-            sCreatureTemplateSpellsStorage.EraseEntry(itr->entry);
-        }
-        for (uint8 i = 0; i < CREATURE_MAX_SPELLS; ++i)
-        {
-            if (itr->spells[i] && !sSpellStore.LookupEntry(itr->spells[i]))
-            {
-                sLog.outErrorDb("LoadCreatureTemplateSpells: Spells found for creature entry %u, assigned spell %u does not exist, set to 0", itr->entry, itr->spells[i]);
-                const_cast<CreatureTemplateSpells*>(*itr)->spells[i] = 0;
-            }
-        }
-    }
-
-    sLog.outString(">> Loaded %u creature_template_spells definitions", sCreatureTemplateSpellsStorage.GetRecordCount());
-    sLog.outString();
-}
-
 CreatureInfo const* GetCreatureTemplateStore(uint32 entry)
 {
     return sCreatureStorage.LookupEntry<CreatureInfo>(entry);
@@ -10043,6 +10052,209 @@ GameObjectDataPair const* FindGOData::GetResult() const
         return i_spawnedData;
 
     return i_anyData;
+}
+
+void ObjectMgr::LoadTransports()
+{
+    QueryResult *result = WorldDatabase.Query("SELECT entry, name, period FROM transports");
+
+    uint32 count = 0;
+
+    if (!result)
+    {
+        BarGoLink bar(1);
+        bar.step();
+
+        sLog.outString();
+        sLog.outString(">> Loaded %u transports", count);
+        return;
+    }
+
+    BarGoLink bar(result->GetRowCount());
+
+    do
+    {
+        bar.step();
+
+        MOTransport* t = new MOTransport;
+
+        Field* fields = result->Fetch();
+
+        uint32 entry = fields[0].GetUInt32();
+        std::string name = fields[1].GetCppString();
+        t->SetDBPeriod(fields[2].GetUInt32());
+
+        GameObjectInfo const* goinfo = ObjectMgr::GetGameObjectInfo(entry);
+
+        if (!goinfo)
+        {
+            sLog.outErrorDb("Transport ID:%u, Name: %s, will not be loaded, gameobject_template missing", entry, name.c_str());
+            delete t;
+            continue;
+        }
+
+        if (goinfo->type != GAMEOBJECT_TYPE_MO_TRANSPORT)
+        {
+            sLog.outErrorDb("Transport ID:%u, Name: %s, will not be loaded, gameobject_template type wrong", entry, name.c_str());
+            delete t;
+            continue;
+        }
+
+        DEBUG_LOG("Loading transport %u between %s, %s transport map id %u", entry, name.c_str(), goinfo->name, goinfo->moTransport.mapID);
+
+        std::set<uint32> mapsUsed;
+
+        if (!t->GenerateWaypoints(goinfo->moTransport.taxiPathId, mapsUsed))
+            // skip transports with empty waypoints list
+        {
+            sLog.outErrorDb("Transport (path id %u) path size = 0. Transport ignored, check DBC files or transport GO data0 field.", goinfo->moTransport.taxiPathId);
+            delete t;
+            continue;
+        }
+
+        WorldLocation loc = t->GetWayPoint(0).loc;
+
+        //current code does not support transports in dungeon!
+        MapEntry const* pMapInfo = sMapStore.LookupEntry(loc.GetMapId());
+        if (!pMapInfo || pMapInfo->Instanceable())
+        {
+            delete t;
+            continue;
+        }
+
+        // creates the Gameobject
+        if (!t->Create(entry, loc.GetMapId(), loc.x, loc.y, loc.z, loc.o, GO_ANIMPROGRESS_DEFAULT, GO_DYNFLAG_LO_NONE))
+        {
+            delete t;
+            continue;
+        }
+
+        m_Transports.insert(t);
+
+        //If we someday decide to use the grid to track transports, here:
+        Map* map = sMapMgr.CreateMap(loc.GetMapId(), t);
+        t->SetMap(map);
+        map->Relocation((GameObject*)t, loc);
+        map->Add((GameObject*)t);
+        t->Start();
+
+        ++count;
+    } while (result->NextRow());
+    delete result;
+
+    sLog.outString();
+    sLog.outString(">> Loaded %u transports", count);
+
+    // check transport data DB integrity
+    result = WorldDatabase.Query("SELECT gameobject.guid,gameobject.id,transports.name FROM gameobject,transports WHERE gameobject.id = transports.entry");
+    if (result)                                              // wrong data found
+    {
+        do
+        {
+            Field *fields = result->Fetch();
+
+            uint32 guid = fields[0].GetUInt32();
+            uint32 entry = fields[1].GetUInt32();
+            std::string name = fields[2].GetCppString();
+            sLog.outErrorDb("Transport %u '%s' have record (GUID: %u) in `gameobject`. Transports DON'T must have any records in `gameobject` or its behavior will be unpredictable/bugged.", entry, name.c_str(), guid);
+        } while (result->NextRow());
+
+        delete result;
+    }
+}
+
+MOTransport const* ObjectMgr::GetTransportByGOMapId(uint32 mapid) const
+{
+    for (TransportSet::const_iterator iter = m_Transports.begin(); iter != m_Transports.end(); ++iter)
+    {
+        MOTransport const* transport = *iter;
+
+        if (!transport)
+            continue;
+
+        if (transport->GetGOInfo()->moTransport.mapID == mapid)
+            return transport;
+    }
+    return NULL;
+}
+
+MOTransport* ObjectMgr::GetTransportByGuid(ObjectGuid const& guid)
+{
+    for (TransportSet::iterator iter = m_Transports.begin(); iter != m_Transports.end(); ++iter)
+    {
+        MOTransport* transport = *iter;
+
+        if (!transport)
+            continue;
+
+        if (transport->GetObjectGuid() == guid)
+            return transport;
+    }
+    return NULL;
+}
+
+void ObjectMgr::LoadTransports(Map* map)
+{
+    if (!map)
+        return;
+
+    QueryResult* result = WorldDatabase.PQuery("SELECT entry, name, period FROM transports");
+
+    if (!result)
+        return;
+
+    uint32 count = 0;
+    do
+    {
+        Field* fields = result->Fetch();
+        uint32 entry = fields[0].GetUInt32();
+        std::string name = fields[1].GetCppString();
+        uint32 period = fields[2].GetUInt32();
+
+        if (MOTransport::GetPossibleMapByEntry(entry, true) != map->GetId() || !MOTransport::IsSpawnedAtDifficulty(entry, map->GetDifficulty()))
+            continue;
+
+        ++count;
+        /*
+        if (Transport* transport = Transport::Load(this, entry, name, period))
+        {
+        if (transport->GetGoState() == GO_STATE_READY)
+        transport->Start();
+        Add<GameObject>(transport);
+        DEBUG_LOG("Map::LoadTransports Loading %s %s, %s, transport map id %u",
+        transport->GetObjectGuid().GetString().c_str(),
+        transport->GetGOInfo()->name,
+        name.c_str(),
+        transport->GetGOInfo()->moTransport.mapID);
+        DEBUG_LOG("Map::LoadTransports guid %u coords %f %f %f",
+        transport->GetObjectGuid().GetRawValue(),
+        transport->GetPositionX(),
+        transport->GetPositionY(),
+        transport->GetPositionZ());
+        }
+        */
+    } while (result->NextRow());
+
+    delete result;
+
+    if (count > 0)
+        DETAIL_LOG("Map::LoadTransports Loaded %u transports for map %u instance %u", count, map->GetId(), map->GetInstanceId());
+
+    // check transport data DB integrity
+    result = WorldDatabase.PQuery("SELECT gameobject.guid,gameobject.id,transports.name FROM gameobject,transports WHERE gameobject.id = transports.entry AND gameobject.map = %u", map->GetId());
+    if (result)                                              // wrong data found
+    {
+        do
+        {
+            Field *fields = result->Fetch();
+
+            uint32 guid = fields[0].GetUInt32();
+            uint32 entry = fields[1].GetUInt32();
+            std::string name = fields[2].GetCppString();
+            sLog.outErrorDb("Map::LoadTransportsTransport %u '%s' have record (GUID: %u) in `gameobject`. Transports DON'T must have any records in `gameobject` or its behavior will be unpredictable/bugged.", entry, name.c_str(), guid);
+        } while (result->NextRow());
+        delete result;
+    }
 }
 
 bool DoDisplayText(WorldObject* source, int32 entry, Unit const* target /*=NULL*/)

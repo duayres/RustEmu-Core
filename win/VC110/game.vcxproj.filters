@@ -567,6 +567,12 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\src\game\WorldLocation.cpp">
+      <Filter>World/Handlers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\game\StateMgr.cpp">
+      <Filter>World/Handlers</Filter>
+    </ClCompile>
     <ClInclude Include="..\..\src\game\AccountMgr.h">
       <Filter>World/Handlers</Filter>
     </ClInclude>
@@ -685,6 +691,15 @@
       <Filter>World/Handlers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\game\World.h">
+      <Filter>World/Handlers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\game\WorldLocation.h">
+      <Filter>World/Handlers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\game\StateMgr.h">
+      <Filter>World/Handlers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\game\StateMgrImpl.h">
       <Filter>World/Handlers</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\game\OutdoorPvP\OutdoorPvP.h">

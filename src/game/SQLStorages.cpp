@@ -40,8 +40,8 @@ const char SpellTemplatesrcfmt[] = "iiiiiiiiiiiiiiiix";
 //                                  0         10        20        30        40        50        60        70        80        90        100       110       120       130       140       150       160     170       180  185
 const char SpellTemplatedstfmt[] = "ixxxiiiixxxxxxxxxxxxxxxxxxxxxxxxiixxxxixxxxxxFxxxxxxxxxxxxxxxxxxxxxxixxxxxFFFxxxxxxixxixxixxixxxxxFFFxxxxxxixxixxixxFFFxxxxxxxxxxxxxppppppppppppppppppppppppppppppppxxxxxxxxxxxFFFxxxxxx";
 //                                  Id  attr                        proc  DurationIndex                 Effect0        tarA0    effectAura0          triggerSpell0      SpellName[16]   Rank[16]
-const char VehicleAccessorySrcFmt[] = "iiix";
-const char VehicleAccessoryDstFmt[] = "iii";
+const char VehicleAccessorySrcFmt[] = "iiiiffffx";
+const char VehicleAccessoryDstFmt[] = "iiiiffff";
 const char CreatureTemplateSpellsFmt[] = "iiiiiiiii";
 const char SpellScriptTargetFmt[] = "iiii";
 

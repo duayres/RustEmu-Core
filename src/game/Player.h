@@ -1022,28 +1022,26 @@ class MANGOS_DLL_SPEC Player : public Unit
         void AddToWorld() override;
         void RemoveFromWorld(bool remove) override;
 
-        bool TeleportTo(uint32 mapid, float x, float y, float z, float orientation, uint32 options = 0);
-
-        bool TeleportTo(WorldLocation const& loc, uint32 options = 0)
+        bool TeleportTo(uint32 mapid, float x, float y, float z, float orientation, uint32 options = 0)
         {
-            return TeleportTo(loc.mapid, loc.coord_x, loc.coord_y, loc.coord_z, loc.orientation, options);
+            return TeleportTo(WorldLocation(mapid, x, y, z, orientation, GetPhaseMask()), options);
         }
+
+        bool TeleportTo(WorldLocation const& loc, uint32 options = 0);
 
         bool TeleportToBGEntryPoint();
 
-        void SetSummonPoint(uint32 mapid, float x, float y, float z)
+        void SetSummonPoint(WorldLocation const& loc)
         {
             m_summon_expire = time(NULL) + MAX_PLAYER_SUMMON_DELAY;
-            m_summon_mapid = mapid;
-            m_summon_x = x;
-            m_summon_y = y;
-            m_summon_z = z;
+            m_summon_loc = loc;
         }
+
         void SummonIfPossible(bool agree);
 
         bool Create(uint32 guidlow, const std::string& name, uint8 race, uint8 class_, uint8 gender, uint8 skin, uint8 face, uint8 hairStyle, uint8 hairColor, uint8 facialHair, uint8 outfitId);
 
-        void Update(uint32 update_diff, uint32 time) override;
+        virtual void Update(uint32 update_diff, uint32 time) override;
 
         static bool BuildEnumData(QueryResult* result,  WorldPacket* p_data);
 
@@ -1856,7 +1854,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         void SendResetInstanceFailed(uint32 reason, uint32 MapId);
         void SendResetFailedNotify(uint32 mapid);
 
-        bool SetPosition(float x, float y, float z, float orientation, bool teleport = false);
+        bool SetPosition(Position const& pos, bool teleport = false);
         void UpdateUnderwaterState(Map* m, float x, float y, float z);
 
         void SendMessageToSet(WorldPacket* data, bool self) const override;// overwrite Object::SendMessageToSet
@@ -1869,7 +1867,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         Corpse* CreateCorpse();
         void KillPlayer();
         uint32 GetResurrectionSpellId();
-        void ResurrectPlayer(float restore_percent, bool applySickness = false);
+        void ResurrectPlayer(uint32 restorePercent, bool applySickness = false);
         void BuildPlayerRepop();
         void RepopAtGraveyard();
 
@@ -2211,10 +2209,6 @@ class MANGOS_DLL_SPEC Player : public Unit
         void    SetViewPoint(WorldObject* target, bool immediate = false, bool update_far_sight_field = true);
         bool    HasExternalViewPoint() const { return m_camera->GetBody() != (WorldObject*)this; };
 
-        // Transports
-        Transport* GetTransport() const { return m_transport; }
-        void SetTransport(Transport* t) { m_transport = t; }
-
         float GetTransOffsetX() const { return m_movementInfo.GetTransportPos()->x; }
         float GetTransOffsetY() const { return m_movementInfo.GetTransportPos()->y; }
         float GetTransOffsetZ() const { return m_movementInfo.GetTransportPos()->z; }
@@ -2226,31 +2220,27 @@ class MANGOS_DLL_SPEC Player : public Unit
         void   SetSaveTimer(uint32 timer) { m_nextSave = timer; }
 
         // Recall position
-        uint32 m_recallMap;
-        float  m_recallX;
-        float  m_recallY;
-        float  m_recallZ;
-        float  m_recallO;
+        WorldLocation m_recall;
         void   SaveRecallPosition();
 
-        void SetHomebindToLocation(WorldLocation const& loc, uint32 area_id);
-        void RelocateToHomebind() { SetLocationMapId(m_homebindMapId); Relocate(m_homebindX, m_homebindY, m_homebindZ); }
-        bool TeleportToHomebind(uint32 options = 0) { return TeleportTo(m_homebindMapId, m_homebindX, m_homebindY, m_homebindZ, GetOrientation(), options); }
+        void SetHomebindToLocation(WorldLocation const& loc);
+        void RelocateToHomebind() { SetLocationMapId(m_homebind.GetMapId()); Relocate(m_homebind); }
+        bool TeleportToHomebind(uint32 options = TELE_TO_CHECKED) { return TeleportTo(m_homebind, options); }
 
         Object* GetObjectByTypeMask(ObjectGuid guid, TypeMask typemask);
 
-        // currently visible objects at player client
-        GuidSet m_clientGUIDs;
+        // list of currently visible objects, stored at player client
+        GuidSet const& GetClientGuids() { return m_clientGUIDs; };
+        bool HaveAtClient(ObjectGuid const& guid) const;
+        void AddClientGuid(ObjectGuid const& guid);
+        void RemoveClientGuid(ObjectGuid const& guid);
+        bool HasClientGuid(ObjectGuid const& guid) const;
 
-        bool HaveAtClient(WorldObject const* u) { return u == this || m_clientGUIDs.find(u->GetObjectGuid()) != m_clientGUIDs.end(); }
-
-        bool IsVisibleInGridForPlayer(Player* pl) const override;
+        bool IsVisibleInGridForPlayer(Player* pl) const;
         bool IsVisibleGloballyFor(Player* pl) const;
-
+        void BeforeVisibilityDestroy(WorldObject* obj);
         void UpdateVisibilityOf(WorldObject const* viewPoint, WorldObject* target);
-
-        template<class T>
-        void UpdateVisibilityOf(WorldObject const* viewPoint, T* target, UpdateData& data, std::set<WorldObject*>& visibleNow);
+        void UpdateVisibilityOf(WorldObject const* viewPoint, WorldObject* target, UpdateData& data, WorldObjectSet& visibleNow);
 
         // Stealth detection system
         void HandleStealthedUnitsDetection();
@@ -2590,9 +2580,6 @@ class MANGOS_DLL_SPEC Player : public Unit
         RestType rest_type;
         //////////////////// Rest System/////////////////////
 
-        // Transports
-        Transport* m_transport;
-
         uint32 m_resetTalentsCost;
         time_t m_resetTalentsTime;
         uint32 m_usedTalentCount;
@@ -2613,10 +2600,7 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         // Player summoning
         time_t m_summon_expire;
-        uint32 m_summon_mapid;
-        float  m_summon_x;
-        float  m_summon_y;
-        float  m_summon_z;
+        WorldLocation m_summon_loc;
 
         DeclinedName* m_declinedname;
         Runes* m_runes;
@@ -2674,11 +2658,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         MapReference m_mapRef;
 
         // Homebind coordinates
-        uint32 m_homebindMapId;
-        uint16 m_homebindAreaId;
-        float m_homebindX;
-        float m_homebindY;
-        float m_homebindZ;
+        WorldLocation m_homebind;
 
         uint32 m_lastFallTime;
         float  m_lastFallZ;
@@ -2706,6 +2686,9 @@ class MANGOS_DLL_SPEC Player : public Unit
         bool m_bHasBeenAliveAtDelayedTeleport;
 
         uint32 m_DetectInvTimer;
+
+        // Visible object storage
+        GuidSet m_clientGUIDs;
 
         // Temporary removed pet cache
         PetNumberList m_temporaryUnsummonedPetNumber;

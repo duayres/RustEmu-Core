@@ -150,11 +150,6 @@ enum
     GO_RINJI_CAGE           = 142036
 };
 
-struct Location
-{
-    float m_fX, m_fY, m_fZ;
-};
-
 Location m_afAmbushSpawn[] =
 {
     {191.29620f, -2839.329346f, 107.388f},
@@ -219,13 +214,13 @@ struct npc_rinjiAI : public npc_escortAI
             m_iSpawnId = 1;
 
         m_creature->SummonCreature(NPC_RANGER,
-                                   m_afAmbushSpawn[m_iSpawnId].m_fX, m_afAmbushSpawn[m_iSpawnId].m_fY, m_afAmbushSpawn[m_iSpawnId].m_fZ, 0.0f,
+                                   m_afAmbushSpawn[m_iSpawnId].x, m_afAmbushSpawn[m_iSpawnId].y, m_afAmbushSpawn[m_iSpawnId].z, 0.0f,
                                    TEMPSUMMON_TIMED_OOC_OR_CORPSE_DESPAWN, 60000);
 
         for (int i = 0; i < 2; ++i)
         {
             m_creature->SummonCreature(NPC_OUTRUNNER,
-                                       m_afAmbushSpawn[m_iSpawnId].m_fX, m_afAmbushSpawn[m_iSpawnId].m_fY, m_afAmbushSpawn[m_iSpawnId].m_fZ, 0.0f,
+                                       m_afAmbushSpawn[m_iSpawnId].x, m_afAmbushSpawn[m_iSpawnId].y, m_afAmbushSpawn[m_iSpawnId].z, 0.0f,
                                        TEMPSUMMON_TIMED_OOC_OR_CORPSE_DESPAWN, 60000);
         }
     }
@@ -233,7 +228,7 @@ struct npc_rinjiAI : public npc_escortAI
     void JustSummoned(Creature* pSummoned) override
     {
         m_creature->SetWalk(false);
-        pSummoned->GetMotionMaster()->MovePoint(0, m_afAmbushMoveTo[m_iSpawnId].m_fX, m_afAmbushMoveTo[m_iSpawnId].m_fY, m_afAmbushMoveTo[m_iSpawnId].m_fZ);
+        pSummoned->GetMotionMaster()->MovePoint(0, m_afAmbushMoveTo[m_iSpawnId].x, m_afAmbushMoveTo[m_iSpawnId].y, m_afAmbushMoveTo[m_iSpawnId].z);
     }
 
     void WaypointReached(uint32 uiPointId) override

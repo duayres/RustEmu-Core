@@ -86,11 +86,14 @@ enum WorldTimers
 /// Configuration elements
 enum eConfigUInt32Values
 {
+    CONFIG_UINT32_REALMID = 0,
     CONFIG_UINT32_COMPRESSION = 0,
     CONFIG_UINT32_INTERVAL_SAVE,
     CONFIG_UINT32_INTERVAL_GRIDCLEAN,
     CONFIG_UINT32_INTERVAL_MAPUPDATE,
     CONFIG_UINT32_INTERVAL_CHANGEWEATHER,
+    CONFIG_UINT32_MAPUPDATE_MAXVISITORS,
+    CONFIG_UINT32_MAPUPDATE_MAXVISITS,
     CONFIG_UINT32_PORT_WORLD,
     CONFIG_UINT32_GAME_TYPE,
     CONFIG_UINT32_REALM_ZONE,
@@ -196,6 +199,7 @@ enum eConfigUInt32Values
     CONFIG_UINT32_CREATURE_RESPAWN_AGGRO_DELAY,
     CONFIG_UINT32_RANDOM_BG_RESET_HOUR,
     CONFIG_UINT32_RESIST_CALC_METHOD,
+    CONFIG_UINT32_POSITION_UPDATE_DELAY,
     CONFIG_UINT32_GROUPLEADER_RECONNECT_PERIOD,
     CONFIG_UINT32_LFG_MAXKICKS,
     CONFIG_UINT32_GEAR_CALC_BASE,
@@ -362,6 +366,7 @@ enum eConfigBoolValues
     CONFIG_BOOL_PLAYER_COMMANDS,
     CONFIG_BOOL_RESILIENCE_ALTERNATIVE_CALCULATION,
     CONFIG_BOOL_RESIST_ADD_BY_OVER_LEVEL,
+    CONFIG_BOOL_ALLOW_FLIGHT_ON_OLD_MAPS,
     CONFIG_BOOL_LFG_ENABLE,
     CONFIG_BOOL_LFR_ENABLE,
     CONFIG_BOOL_LFG_DEBUG_ENABLE,
@@ -600,7 +605,7 @@ class World
         static float GetVisibleUnitGreyDistance()           { return m_VisibleUnitGreyDistance;       }
         static float GetVisibleObjectGreyDistance()         { return m_VisibleObjectGreyDistance;     }
 
-        static float GetRelocationLowerLimitSq()            { return m_relocation_lower_limit_sq; }
+        static float GetRelocationLowerLimit()              { return m_relocation_lower_limit; }
         static uint32 GetRelocationAINotifyDelay()          { return m_relocation_ai_notify_delay; }
 
         void ProcessCliCommands();
@@ -702,7 +707,7 @@ class World
         static float m_VisibleUnitGreyDistance;
         static float m_VisibleObjectGreyDistance;
 
-        static float  m_relocation_lower_limit_sq;
+        static float  m_relocation_lower_limit;
         static uint32 m_relocation_ai_notify_delay;
 
         // CLI command holder to be thread safe

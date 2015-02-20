@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -70,6 +70,7 @@ namespace Movement
 
     extern double gravity;
     extern float computeFallElevation(float t_passed, bool isSafeFall, float start_velocity);
+    extern UInt32Counter splineIdGen;
 }
 
 #endif // MANGOSSERVER_TYPEDEFS_H

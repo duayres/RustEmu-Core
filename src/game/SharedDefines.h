@@ -448,7 +448,7 @@ enum SpellAttributesEx5
     SPELL_ATTR_EX5_UNK16                       = 0x00010000,// 16
     SPELL_ATTR_EX5_USABLE_WHILE_FEARED         = 0x00020000,// 17 usable while feared
     SPELL_ATTR_EX5_USABLE_WHILE_CONFUSED       = 0x00040000,// 18 usable while confused
-    SPELL_ATTR_EX5_UNK19                       = 0x00080000,// 19
+    SPELL_ATTR_EX5_DONT_TURN_DURING_CAST       = 0x00080000,// 19 Blocks caster's turning when casting (client does not automatically turn caster's model to face UNIT_FIELD_TARGET)
     SPELL_ATTR_EX5_UNK20                       = 0x00100000,// 20
     SPELL_ATTR_EX5_UNK21                       = 0x00200000,// 21
     SPELL_ATTR_EX5_UNK22                       = 0x00400000,// 22
@@ -1478,10 +1478,12 @@ enum GameObjectFlags
 
 enum GameObjectDynamicLowFlags
 {
+    GO_DYNFLAG_LO_NONE              = 0x00,                 // no low flags
     GO_DYNFLAG_LO_ACTIVATE          = 0x01,                 // enables interaction with GO
     GO_DYNFLAG_LO_ANIMATE           = 0x02,                 // possibly more distinct animation of GO
     GO_DYNFLAG_LO_NO_INTERACT       = 0x04,                 // appears to disable interaction (not fully verified)
     GO_DYNFLAG_LO_SPARKLE           = 0x08,                 // makes GO sparkle
+    GO_DYNFLAG_LO_TRANSPORT_STOP    = 0x10,                 // Transport/MOTransport stopped
 };
 
 enum TextEmotes
@@ -2568,6 +2570,7 @@ enum CorpseDynFlags
 #define SPELL_ID_WEAPON_SWITCH_COOLDOWN_1_0s    6123
 #define SPELL_ID_AUTOSHOT                       75          // used for checks in other spells interruption
 #define SPELL_ID_SHADOWMELD                     58984       // used for check ignore stealth stance state
+#define SPELL_ID_HONORLESS_TARGET               2479
 
 enum WeatherType
 {
@@ -3033,6 +3036,13 @@ enum WorldStateType
 {
     WORLD_STATE_REMOVE              = 0,
     WORLD_STATE_ADD                 = 1
+};
+
+enum PhaseMasks
+{
+    PHASEMASK_NONE = 0,
+    PHASEMASK_NORMAL = 0x00000001,
+    PHASEMASK_ANYWHERE = 0xFFFFFFFF
 };
 
 enum ActivateTaxiReply

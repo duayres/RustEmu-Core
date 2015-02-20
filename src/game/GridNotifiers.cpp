@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,30 +40,36 @@ void VisibleChangesNotifier::Visit(CameraMapType& m)
 void VisibleNotifier::Notify()
 {
     Player& player = *i_camera.GetOwner();
-    // at this moment i_clientGUIDs have guids that not iterate at grid level checks
+    // at this moment i_clientGuids have guids that not iterate at grid level checks
     // but exist one case when this possible and object not out of range: transports
+    // FIXME - need remove this hack after full repair per-grid visibility on transport!
     if (Transport* transport = player.GetTransport())
-    {
-        for (Transport::PlayerSet::const_iterator itr = transport->GetPassengers().begin(); itr != transport->GetPassengers().end(); ++itr)
-        {
-            if (i_clientGUIDs.find((*itr)->GetObjectGuid()) != i_clientGUIDs.end())
-            {
-                // ignore far sight case
-                (*itr)->UpdateVisibilityOf(*itr, &player);
-                player.UpdateVisibilityOf(&player, *itr, i_data, i_visibleNow);
-                i_clientGUIDs.erase((*itr)->GetObjectGuid());
-            }
-        }
-    }
+        transport->GetTransportBase()->CallForAllPassengers(UpdateVisibilityOfWithHelper(player, i_clientGuids, i_data, i_visibleNow));
 
     // generate outOfRange for not iterate objects
-    i_data.AddOutOfRangeGUID(i_clientGUIDs);
-    for (GuidSet::iterator itr = i_clientGUIDs.begin(); itr != i_clientGUIDs.end(); ++itr)
+    for (GuidSet::iterator itr = i_clientGuids.begin(); itr != i_clientGuids.end(); ++itr)
     {
-        player.m_clientGUIDs.erase(*itr);
+        ObjectGuid guid = *itr;
+        if (!player.GetMap()->IsVisibleGlobally(guid))
+        {
+            i_data.AddOutOfRangeGuid(guid);
+            player.RemoveClientGuid(guid);
+            DEBUG_FILTER_LOG(LOG_FILTER_VISIBILITY_CHANGES, "VisibleNotifier::Notify %s is out of range (no in active cells set) now for %s",
+                guid.GetString().c_str(), player.GetGuidStr().c_str());
+        }
+        else
+        {
+            if (WorldObject* object = player.GetMap()->GetWorldObject(guid))
+            {
+                object->AddNotifiedClient(player.GetObjectGuid());
+                DEBUG_FILTER_LOG(LOG_FILTER_VISIBILITY_CHANGES, "VisibleNotifier::Notify try make %s is out of range for %s, but his visible globally (distance %f). Need check movement trajectory.",
+                    guid.GetString().c_str(), player.GetGuidStr().c_str(), player.GetDistance(object));
+            }
+            else
+                i_data.AddOutOfRangeGuid(guid);
 
-        DEBUG_FILTER_LOG(LOG_FILTER_VISIBILITY_CHANGES, "%s is out of range (no in active cells set) now for %s",
-                         itr->GetString().c_str(), player.GetGuidStr().c_str());
+            player.RemoveClientGuid(guid);
+        }
     }
 
     if (i_data.HasData())
@@ -74,7 +80,7 @@ void VisibleNotifier::Notify()
         player.GetSession()->SendPacket(&packet);
 
         // send out of range to other players if need
-        GuidSet const& oor = i_data.GetOutOfRangeGUIDs();
+        GuidSet const& oor = i_data.GetOutOfRangeGuids();
         for (GuidSet::const_iterator iter = oor.begin(); iter != oor.end(); ++iter)
         {
             if (!iter->IsPlayer())
@@ -88,7 +94,7 @@ void VisibleNotifier::Notify()
     // Now do operations that required done at object visibility change to visible
 
     // send data at target visibility change (adding to client)
-    for (std::set<WorldObject*>::const_iterator vItr = i_visibleNow.begin(); vItr != i_visibleNow.end(); ++vItr)
+    for (WorldObjectSet::const_iterator vItr = i_visibleNow.begin(); vItr != i_visibleNow.end(); ++vItr)
     {
         // target aura duration for caster show only if target exist at caster client
         if ((*vItr) != &player && (*vItr)->isType(TYPEMASK_UNIT))
@@ -178,7 +184,7 @@ void ObjectUpdater::Visit(GridRefManager<T>& m)
 {
     for (typename GridRefManager<T>::iterator iter = m.begin(); iter != m.end(); ++iter)
     {
-        WorldObject::UpdateHelper helper(iter->getSource());
+        WorldObject::UpdateHelper helper(*iter->getSource());
         helper.Update(i_timeDiff);
     }
 }
@@ -299,5 +305,4 @@ bool MaNGOS::AnyAssistCreatureInRangeCheck::operator()(Creature* u)
     return true;
 }
 
-template void ObjectUpdater::Visit<GameObject>(GameObjectMapType&);
 template void ObjectUpdater::Visit<DynamicObject>(DynamicObjectMapType&);

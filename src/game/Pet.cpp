@@ -2080,7 +2080,7 @@ bool Pet::Create(uint32 guidlow, CreatureCreatePos& cPos, CreatureInfo const* ci
     if (!InitEntry(cinfo->Entry))
         return false;
 
-    cPos.SelectFinalPoint(this);
+    cPos.SelectFinalPoint(this, true);
 
     if (!cPos.Relocate(this))
         return false;
@@ -2166,6 +2166,21 @@ void Pet::CastPetAuras(bool current)
     }
 }
 
+void Pet::CastPetAura(PetAura const* aura)
+{
+    uint32 auraId = aura->GetAura(GetEntry());
+    if (!auraId)
+        return;
+
+    if (auraId == 35696)                                       // Demonic Knowledge
+    {
+        int32 basePoints = int32(aura->GetDamage() * (GetStat(STAT_STAMINA) + GetStat(STAT_INTELLECT)) / 100);
+        CastCustomSpell(this, auraId, &basePoints, NULL, NULL, true);
+    }
+    else
+        CastSpell(this, auraId, true);
+}
+
 void Pet::CastOwnerTalentAuras()
 {
     if (!GetOwner() || GetOwner()->GetTypeId() != TYPEID_PLAYER)
@@ -2205,21 +2220,6 @@ void Pet::CastOwnerTalentAuras()
             }
         }
     } // End Ferocious Inspiration Talent
-}
-
-void Pet::CastPetAura(PetAura const* aura)
-{
-    uint32 auraId = aura->GetAura(GetEntry());
-    if (!auraId)
-        return;
-
-    if (auraId == 35696)                                       // Demonic Knowledge
-    {
-        int32 basePoints = int32(aura->GetDamage() * (GetStat(STAT_STAMINA) + GetStat(STAT_INTELLECT)) / 100);
-        CastCustomSpell(this, auraId, &basePoints, NULL, NULL, true);
-    }
-    else
-        CastSpell(this, auraId, true);
 }
 
 struct DoPetLearnSpell
@@ -2902,7 +2902,7 @@ bool Pet::IsInEvadeMode() const
         case COMMAND_FOLLOW:
         case COMMAND_ATTACK:
         default:
-            return !i_motionMaster.empty() && i_motionMaster.GetCurrentMovementGeneratorType() == HOME_MOTION_TYPE && !IsWithinDistInMap(GetOwner(), PET_FOLLOW_DIST + 1.0f);
+            return IsInUnitState(UNIT_ACTION_HOME) && !IsWithinDistInMap(GetOwner(), PET_FOLLOW_DIST + 1.0f);
     }
     return false;
 }
@@ -3317,23 +3317,6 @@ float Pet::OCTRegenMPPerSpirit()
     float spirit = GetStat(STAT_SPIRIT);
     float regen = spirit * moreRatio->ratio;
     return regen;
-}
-
-void Pet::ApplyModeFlags(PetModeFlags mode, bool apply)
-{
-    if (apply)
-        m_petModeFlags = PetModeFlags(m_petModeFlags | mode);
-    else
-        m_petModeFlags = PetModeFlags(m_petModeFlags & ~mode);
-
-    Unit* owner = GetOwner();
-    if (!owner || owner->GetTypeId() != TYPEID_PLAYER)
-        return;
-
-    WorldPacket data(SMSG_PET_MODE, 12);
-    data << GetObjectGuid();
-    data << uint32(m_petModeFlags);
-    ((Player*)owner)->GetSession()->SendPacket(&data);
 }
 
 void ApplyArenaPreparationWithHelper::operator() (Unit* unit) const

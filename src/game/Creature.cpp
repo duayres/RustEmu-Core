@@ -103,19 +103,27 @@ bool ForcedDespawnDelayEvent::Execute(uint64 /*e_time*/, uint32 /*p_time*/)
     return true;
 }
 
-void CreatureCreatePos::SelectFinalPoint(Creature* cr)
+void CreatureCreatePos::SelectFinalPoint(Creature* cr, bool checkLOS /*=false*/)
 {
     // if object provided then selected point at specific dist/angle from object forward look
     if (m_closeObject)
     {
-        if (m_dist == 0.0f)
+        if (fabs(m_dist) < M_NULL_F)
         {
-            m_pos.x = m_closeObject->GetPositionX();
-            m_pos.y = m_closeObject->GetPositionY();
-            m_pos.z = m_closeObject->GetPositionZ();
+            m_pos = m_closeObject->GetPosition();
+        }
+        else if (checkLOS)
+        {
+            m_closeObject->GetClosePoint(m_pos.x, m_pos.y, m_pos.z, cr->GetObjectBoundingRadius(), m_dist, m_angle);
+            float ox, oy, oz;
+            m_closeObject->GetPosition(ox, oy, oz);
+            m_closeObject->UpdateAllowedPositionZ(ox, oy, oz);
+            m_map->GetHitPosition(ox, oy, oz, m_pos.x, m_pos.y, m_pos.z, GetPhaseMask(), -0.5f);
         }
         else
             m_closeObject->GetClosePoint(m_pos.x, m_pos.y, m_pos.z, cr->GetObjectBoundingRadius(), m_dist, m_angle);
+
+        m_closeObject->UpdateAllowedPositionZ(m_pos.x, m_pos.y, m_pos.z);
     }
 }
 
@@ -147,9 +155,6 @@ Creature::Creature(CreatureSubtype subtype) : Unit(),
 {
     m_regenTimer = 200;
     m_valuesCount = UNIT_END;
-
-    for (int i = 0; i < CREATURE_MAX_SPELLS; ++i)
-        m_spells[i] = 0;
 
     SetWalk(true, true);
 }
@@ -212,9 +217,8 @@ void Creature::RemoveCorpse()
     if (respawnDelay)
         m_respawnTime = time(NULL) + respawnDelay;
 
-    float x, y, z, o;
-    GetRespawnCoord(x, y, z, &o);
-    GetMap()->CreatureRelocation(this, x, y, z, o);
+    WorldLocation loc = GetRespawnCoord();
+    GetMap()->Relocation(this, loc);
 
     // forced recreate creature object at clients
     UnitVisibility currentVis = GetVisibility();
@@ -402,15 +406,7 @@ bool Creature::UpdateEntry(uint32 Entry, Team team, const CreatureData* data /*=
             SetPvP(false);
     }
 
-    // Try difficulty dependend version before falling back to base entry
-    CreatureTemplateSpells const* templateSpells = sCreatureTemplateSpellsStorage.LookupEntry<CreatureTemplateSpells>(GetCreatureInfo()->Entry);
-    if (!templateSpells)
-        templateSpells = sCreatureTemplateSpellsStorage.LookupEntry<CreatureTemplateSpells>(GetEntry());
-    if (templateSpells)
-        for (int i = 0; i < CREATURE_MAX_SPELLS; ++i)
-            m_spells[i] = templateSpells->spells[i];
-
-    SetVehicleId(GetCreatureInfo()->VehicleTemplateId, 0);
+    SetVehicleId(GetCreatureInfo()->VehicleTemplateId);
 
     // if eventData set then event active and need apply spell_start
     if (eventData)
@@ -516,7 +512,7 @@ void Creature::Update(uint32 update_diff, uint32 diff)
                 {
                     SetDeathState(JUST_DIED);
                     SetHealth(0);
-                    i_motionMaster.Clear();
+                    GetUnitStateMgr().InitDefaults(true);
                     clearUnitState(UNIT_STAT_ALL_STATE);
                     LoadCreatureAddon(true);
                 }
@@ -1405,9 +1401,13 @@ bool Creature::LoadFromDB(uint32 guidlow, Map* map)
         m_deathState = DEAD;
         if (CanFly())
         {
-            float tz = GetTerrain()->GetHeightStatic(data->posX, data->posY, data->posZ, false);
-            if (data->posZ - tz > 0.1)
-                Relocate(data->posX, data->posY, tz);
+            Position loc = pos.m_pos;
+            float tz = GetMap()->GetHeight(GetPhaseMask(), loc.x, loc.y, loc.z);
+            if (loc.z - tz > 0.1)
+            {
+                loc.z = tz;
+                Relocate(loc);
+            }
         }
     }
     else if (m_respawnTime)                                 // respawn time set but expired
@@ -1435,9 +1435,13 @@ bool Creature::LoadFromDB(uint32 guidlow, Map* map)
             // Just set to dead, so need to relocate like above
             if (CanFly())
             {
-                float tz = GetTerrain()->GetHeightStatic(data->posX, data->posY, data->posZ, false);
-                if (data->posZ - tz > 0.1)
-                    Relocate(data->posX, data->posY, tz);
+                Position loc = pos.m_pos;
+                float tz = GetMap()->GetHeight(GetPhaseMask(), loc.x, loc.y, loc.z);
+                if (loc.z - tz > 0.1)
+                {
+                    loc.z = tz;
+                    Relocate(loc);
+                }
             }
         }
     }
@@ -1625,8 +1629,10 @@ void Creature::SetDeathState(DeathState s)
             UpdateSpeed(MOVE_RUN, false);
         }
 
+        GetUnitStateMgr().InitDefaults(true);
+
         if (CanFly())
-            i_motionMaster.MoveFall();
+            GetMotionMaster()->MoveFall();
 
         Unit::SetDeathState(CORPSE);
     }
@@ -1655,7 +1661,7 @@ void Creature::SetDeathState(DeathState s)
         RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE);
 
         SetWalk(true, true);
-        i_motionMaster.Initialize();
+        GetMotionMaster()->Initialize();
     }
 }
 
@@ -1732,25 +1738,27 @@ SpellEntry const* Creature::ReachWithSpellAttack(Unit* pVictim)
     if (!pVictim)
         return NULL;
 
-    for (uint32 i = 0; i < CREATURE_MAX_SPELLS; ++i)
+    for (uint32 i = 0; i <= GetSpellMaxIndex(); ++i)
     {
-        if (!m_spells[i])
+        uint32 spellID = GetSpell(i);
+        if (!spellID)
             continue;
-        SpellEntry const* spellInfo = sSpellStore.LookupEntry(m_spells[i]);
+
+        SpellEntry const* spellInfo = sSpellStore.LookupEntry(spellID);
         if (!spellInfo)
         {
-            sLog.outError("WORLD: unknown spell id %i", m_spells[i]);
+            sLog.outError("WORLD: unknown spell id %i", spellID);
             continue;
         }
 
         bool bcontinue = true;
         for (int j = 0; j < MAX_EFFECT_INDEX; ++j)
         {
-            if ((spellInfo->Effect[j] == SPELL_EFFECT_SCHOOL_DAMAGE)       ||
-                    (spellInfo->Effect[j] == SPELL_EFFECT_INSTAKILL)            ||
-                    (spellInfo->Effect[j] == SPELL_EFFECT_ENVIRONMENTAL_DAMAGE) ||
-                    (spellInfo->Effect[j] == SPELL_EFFECT_HEALTH_LEECH)
-               )
+            if ((spellInfo->Effect[j] == SPELL_EFFECT_SCHOOL_DAMAGE) ||
+                (spellInfo->Effect[j] == SPELL_EFFECT_INSTAKILL) ||
+                (spellInfo->Effect[j] == SPELL_EFFECT_ENVIRONMENTAL_DAMAGE) ||
+                (spellInfo->Effect[j] == SPELL_EFFECT_HEALTH_LEECH)
+                )
             {
                 bcontinue = false;
                 break;
@@ -1760,13 +1768,13 @@ SpellEntry const* Creature::ReachWithSpellAttack(Unit* pVictim)
 
         if (spellInfo->manaCost > GetPower(POWER_MANA))
             continue;
-        SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(spellInfo->rangeIndex);
+        SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(spellInfo->GetRangeIndex());
         float range = GetSpellMaxRange(srange);
         float minrange = GetSpellMinRange(srange);
 
         float dist = GetCombatDistance(pVictim, spellInfo->rangeIndex == SPELL_RANGE_IDX_COMBAT);
 
-        // if(!isInFront( pVictim, range ) && spellInfo->AttributesEx )
+        // if(!isInFront( pVictim, range ) && spellInfo->GetAttributesEx() )
         //    continue;
         if (dist > range || dist < minrange)
             continue;
@@ -1784,14 +1792,16 @@ SpellEntry const* Creature::ReachWithSpellCure(Unit* pVictim)
     if (!pVictim)
         return NULL;
 
-    for (uint32 i = 0; i < CREATURE_MAX_SPELLS; ++i)
+    for (uint32 i = 0; i <= GetSpellMaxIndex(); ++i)
     {
-        if (!m_spells[i])
+        uint32 spellID = GetSpell(i);
+        if (!spellID)
             continue;
-        SpellEntry const* spellInfo = sSpellStore.LookupEntry(m_spells[i]);
+
+        SpellEntry const* spellInfo = sSpellStore.LookupEntry(spellID);
         if (!spellInfo)
         {
-            sLog.outError("WORLD: unknown spell id %i", m_spells[i]);
+            sLog.outError("WORLD: unknown spell id %i", spellID);
             continue;
         }
 
@@ -1809,13 +1819,13 @@ SpellEntry const* Creature::ReachWithSpellCure(Unit* pVictim)
 
         if (spellInfo->manaCost > GetPower(POWER_MANA))
             continue;
-        SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(spellInfo->rangeIndex);
+        SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(spellInfo->GetRangeIndex());
         float range = GetSpellMaxRange(srange);
         float minrange = GetSpellMinRange(srange);
 
         float dist = GetCombatDistance(pVictim, spellInfo->rangeIndex == SPELL_RANGE_IDX_COMBAT);
 
-        // if(!isInFront( pVictim, range ) && spellInfo->AttributesEx )
+        // if(!isInFront( pVictim, range ) && spellInfo->GetAttributesEx() )
         //    continue;
         if (dist > range || dist < minrange)
             continue;
@@ -1995,8 +2005,8 @@ bool Creature::IsOutOfThreatArea(Unit* pVictim) const
     float ThreatRadius = sWorld.getConfig(CONFIG_FLOAT_THREAT_RADIUS);
 
     // Use AttackDistance in distance check if threat radius is lower. This prevents creature bounce in and out of combat every update tick.
-    return !pVictim->IsWithinDist3d(m_combatStartX, m_combatStartY, m_combatStartZ,
-                                    ThreatRadius > AttackDist ? ThreatRadius : AttackDist);
+    return !pVictim->IsWithinDist3d(m_combatStart.x, m_combatStart.y, m_combatStart.z,
+        ThreatRadius > AttackDist ? ThreatRadius : AttackDist);
 }
 
 CreatureDataAddon const* Creature::GetCreatureAddon() const
@@ -2237,7 +2247,7 @@ uint8 Creature::getRace() const
 
 bool Creature::IsInEvadeMode() const
 {
-    return !i_motionMaster.empty() && i_motionMaster.GetCurrentMovementGeneratorType() == HOME_MOTION_TYPE;
+    return IsInUnitState(UNIT_ACTION_HOME) || hasUnitState(UNIT_STAT_DELAYED_EVADE);
 }
 
 void Creature::ProhibitSpellSchool(SpellSchoolMask idSchoolMask, uint32 unTimeMs)
@@ -2849,7 +2859,7 @@ void Creature::SetRoot(bool enable)
     else
         m_movementInfo.RemoveMovementFlag(MOVEFLAG_ROOT);
 
-    WorldPacket data(enable ? SMSG_SPLINE_MOVE_ROOT : SMSG_SPLINE_MOVE_UNROOT, 9);
+    WorldPacket data(enable ? SMSG_SPLINE_MOVE_ROOT : SMSG_SPLINE_MOVE_UNROOT, GetPackGUID().size());
     data << GetPackGUID();
     SendMessageToSet(&data, true);
 }
@@ -2861,7 +2871,121 @@ void Creature::SetWaterWalk(bool enable)
     else
         m_movementInfo.RemoveMovementFlag(MOVEFLAG_WATERWALKING);
 
-    WorldPacket data(enable ? SMSG_SPLINE_MOVE_WATER_WALK : SMSG_SPLINE_MOVE_LAND_WALK, 9);
+    WorldPacket data(enable ? SMSG_SPLINE_MOVE_WATER_WALK : SMSG_SPLINE_MOVE_LAND_WALK, GetPackGUID().size());
     data << GetPackGUID();
     SendMessageToSet(&data, true);
+}
+
+// TODO
+//void Creature::SetCanFly(bool enable)
+//{
+//    if (enable)
+//        m_movementInfo.AddMovementFlag(MOVEFLAG_CAN_FLY);
+//    else
+//        m_movementInfo.RemoveMovementFlag(MOVEFLAG_CAN_FLY);
+//
+//    Unit::SetCanFly(enable);
+//}
+
+void Creature::SetDisplayId(uint32 modelId)
+{
+    m_modelInhabitType = -1;
+    Unit::SetDisplayId(modelId);
+}
+
+uint32 Creature::GetModelInhabitType()
+{
+    if (m_modelInhabitType < 0)
+    {
+        uint32 miType = MODEL_INHABIT_ONLY_GROUND;
+        if (CreatureDisplayInfoEntry const* displayInfo = sCreatureDisplayInfoStore.LookupEntry(GetDisplayId()))
+        {
+            if (CreatureModelDataEntry const* modelData = sCreatureModelDataStore.LookupEntry(displayInfo->ModelId))
+                miType = modelData->modInhabitType;
+        }
+        m_modelInhabitType = miType;
+    }
+
+    return m_modelInhabitType;
+}
+
+bool Creature::CanWalk()
+{
+    if (!(m_creatureInfo->InhabitType & INHABIT_GROUND))
+        return false;
+
+    /*int32 modelInhabitType = GetModelInhabitType();
+    if ((modelInhabitType == MODEL_INHABIT_ONLY_SWIM) ||
+    (modelInhabitType == MODEL_INHABIT_ONLY_FLY))
+    return false;*/
+
+    return true;
+}
+
+bool Creature::CanSwim()
+{
+    if (!(m_creatureInfo->InhabitType & INHABIT_WATER))
+        return false;
+
+    int32 modelInhabitType = GetModelInhabitType();
+    if ((modelInhabitType == MODEL_INHABIT_ONLY_GROUND) ||
+        (modelInhabitType == MODEL_INHABIT_ONLY_FLY) ||
+        (modelInhabitType == MODEL_INHABIT_ONLY_UNDERWATER))
+        return false;
+
+    return true;
+}
+
+bool Creature::CanFly()
+{
+    if (!(m_creatureInfo->InhabitType & INHABIT_AIR) && !(GetByteValue(UNIT_FIELD_BYTES_1, 3) & UNIT_BYTE1_FLAG_HOVER) && !HasAuraType(SPELL_AURA_FLY))
+        return false;
+
+    int32 modelInhabitType = GetModelInhabitType();
+    if ((modelInhabitType == MODEL_INHABIT_ONLY_GROUND) ||
+        (modelInhabitType == MODEL_INHABIT_ONLY_SWIM) ||
+        (modelInhabitType == MODEL_INHABIT_ONLY_UNDERWATER))
+        return false;
+
+    return true;
+}
+
+void Creature::SetTargetGuid(ObjectGuid targetGuid)
+{
+    // not focused
+    if (!m_focusSpell)
+        Unit::SetTargetGuid(targetGuid);
+}
+
+void Creature::FocusTarget(Spell const* focusSpell, WorldObject* target)
+{
+    // already focused
+    if (m_focusSpell)
+        return;
+
+    m_focusSpell = focusSpell;
+    Unit::SetTargetGuid(target->GetObjectGuid());
+
+    if (focusSpell->m_spellInfo->HasAttribute(SPELL_ATTR_EX5_DONT_TURN_DURING_CAST))
+        addUnitState(UNIT_STAT_ROTATING);
+
+    // Set serverside orientation if needed (needs to be after attribute check)
+    SetInFront((Unit*)target);
+}
+
+void Creature::ReleaseFocus(Spell const* focusSpell)
+{
+    // focused to something else
+    if (focusSpell != m_focusSpell)
+        return;
+
+    m_focusSpell = NULL;
+
+    if (Unit* pVictim = getVictim())
+        Unit::SetTargetGuid(pVictim->GetObjectGuid());
+    else
+        Unit::SetTargetGuid(ObjectGuid());
+
+    if (focusSpell->m_spellInfo->HasAttribute(SPELL_ATTR_EX5_DONT_TURN_DURING_CAST))
+        clearUnitState(UNIT_STAT_ROTATING);
 }

@@ -230,6 +230,8 @@ struct GameObjectInfo
             uint32 transportPhysics;                        //5
             uint32 mapID;                                   //6
             uint32 worldState1;                             //7
+            uint32 defaultState;                            //8
+            uint32 difficultyMask;                          //9 custom data, not be found in cache.
         } moTransport;
         //16 GAMEOBJECT_TYPE_DUELFLAG - empty
         //17 GAMEOBJECT_TYPE_FISHINGNODE - empty
@@ -620,12 +622,15 @@ class MANGOS_DLL_SPEC GameObject : public WorldObject
         void AddToWorld() override;
         void RemoveFromWorld(bool remove) override;
 
-        bool Create(uint32 guidlow, uint32 name_id, Map* map, uint32 phaseMask, float x, float y, float z, float ang,
+        virtual bool Create(uint32 guidlow, uint32 name_id, Map* map, uint32 phaseMask, float x, float y, float z, float ang,
                     const QuaternionData &rotation = QuaternionData(), uint8 animprogress = GO_ANIMPROGRESS_DEFAULT, GOState go_state = GO_STATE_READY);
-        void Update(uint32 update_diff, uint32 p_time) override;
+        virtual void Update(uint32 update_diff, uint32 p_time) override;
         GameObjectInfo const* GetGOInfo() const;
 
-        bool IsTransport() const;
+        virtual bool IsTransport() const override;
+        virtual bool IsMOTransport() const override;
+        bool IsDynTransport() const;
+        virtual TransportKit* GetTransportKit() override { return NULL; };
 
         bool HasStaticDBSpawnData() const;                  // listed in `gameobject` table and have fixed in DB guid
 
@@ -657,6 +662,8 @@ class MANGOS_DLL_SPEC GameObject : public WorldObject
             m_spellId = id;
         }
         uint32 GetSpellId() const { return m_spellId;}
+
+        bool IsWildSummoned() const;
 
         time_t GetRespawnTime() const { return m_respawnTime; }
         time_t GetRespawnTimeEx() const
@@ -699,7 +706,9 @@ class MANGOS_DLL_SPEC GameObject : public WorldObject
         void SetGoAnimProgress(uint8 animprogress) { SetByteValue(GAMEOBJECT_BYTES_1, 3, animprogress); }
         uint32 GetDisplayId() const { return GetUInt32Value(GAMEOBJECT_DISPLAYID); }
         void SetDisplayId(uint32 modelId);
-        void SetPhaseMask(uint32 newPhaseMask, bool update);
+        void SetPhaseMask(uint32 newPhaseMask, bool update) override; // overwrite WorldObject::SetPhaseMask
+        void EnableCollision(bool enable);
+        bool CalculateCurrentCollisionState() const;
 
         float GetObjectBoundingRadius() const override;     // overwrite WorldObject version
 
@@ -762,6 +771,8 @@ class MANGOS_DLL_SPEC GameObject : public WorldObject
         uint32 GetHealth() const { return m_useTimes; }
         uint32 GetMaxHealth() const { return m_goInfo->destructibleBuilding.intactNumHits + m_goInfo->destructibleBuilding.damagedNumHits; }
 
+        float GetDeterminativeSize(bool b_priorityZ = false) const;
+
         bool isVisibleForInState(Player const* u, WorldObject const* viewPoint, bool inVisibleList) const override;
 
         bool IsCollisionEnabled() const;                    // Check if a go should collide. Like if a door is closed
@@ -772,6 +783,8 @@ class MANGOS_DLL_SPEC GameObject : public WorldObject
         float GetCapturePointSliderValue() const { return m_captureSlider; }
 
         GridReference<GameObject>& GetGridRef() { return m_gridRef; }
+
+        void UpdateSplineMovement(uint32 t_diff);
 
         GameObjectModel* m_model;
 

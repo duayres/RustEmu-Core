@@ -669,7 +669,6 @@ void CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
                     m_attackDistance = 0.0f;
                     m_attackAngle = 0.0f;
 
-                    m_creature->GetMotionMaster()->Clear(false);
                     m_creature->GetMotionMaster()->MoveChase(m_creature->getVictim(), m_attackDistance, m_attackAngle);
                     break;
                 default:
@@ -832,8 +831,6 @@ void CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
         {
             if (m_creature->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
             {
-                // Drop current movement gen
-                m_creature->GetMotionMaster()->Clear(false);
                 m_creature->GetMotionMaster()->MoveChase(m_creature->getVictim(), m_attackDistance, m_attackAngle);
             }
         }

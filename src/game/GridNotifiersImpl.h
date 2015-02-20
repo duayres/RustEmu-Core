@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@
 #include "Corpse.h"
 #include "Player.h"
 #include "UpdateData.h"
+#include "World.h"
 #include "CreatureAI.h"
 #include "SpellAuras.h"
 #include "DBCEnums.h"
@@ -35,15 +36,80 @@ inline void MaNGOS::VisibleNotifier::Visit(GridRefManager<T>& m)
     for (typename GridRefManager<T>::iterator iter = m.begin(); iter != m.end(); ++iter)
     {
         i_camera.UpdateVisibilityOf(iter->getSource(), i_data, i_visibleNow);
-        i_clientGUIDs.erase(iter->getSource()->GetObjectGuid());
+        i_clientGuids.erase(iter->getSource()->GetObjectGuid());
     }
 }
 
 inline void MaNGOS::ObjectUpdater::Visit(CreatureMapType& m)
 {
+    uint32  lastUpdateTime;
+    uint32  diffTime;
+    uint32  minUpdateTime = 0;
+    uint32  visitorsCount = 0;
+    uint8   visitCount = 1;
+    std::vector<uint32> lastUpdateTimeList;
+    lastUpdateTimeList.clear();
+
     for (CreatureMapType::iterator iter = m.begin(); iter != m.end(); ++iter)
     {
-        WorldObject::UpdateHelper helper(iter->getSource());
+        ++visitorsCount;
+        lastUpdateTime = iter->getSource()->GetLastUpdateTime();
+        if (lastUpdateTime == 0)
+        {
+            iter->getSource()->SetLastUpdateTime();
+            lastUpdateTime = iter->getSource()->GetLastUpdateTime();
+        }
+        lastUpdateTimeList.push_back(lastUpdateTime);
+    }
+
+    if (visitorsCount == 0)
+        return;
+
+    std::unique(lastUpdateTimeList.begin(), lastUpdateTimeList.end());
+    std::sort(lastUpdateTimeList.begin(), lastUpdateTimeList.end());
+
+    if (lastUpdateTimeList.empty())
+        return;
+
+    if (visitorsCount > sWorld.getConfig(CONFIG_UINT32_MAPUPDATE_MAXVISITORS))
+        minUpdateTime = lastUpdateTimeList.at(sWorld.getConfig(CONFIG_UINT32_MAPUPDATE_MAXVISITORS));
+    else
+        minUpdateTime = lastUpdateTimeList.at(visitorsCount-1);
+
+    /*if (visitorsCount > 50)
+        for (CreatureMapType::iterator iter = m.begin(); iter != m.end(); ++iter)
+        {
+            DEBUG_LOG("Entry: %u, GUID: %u, VisitorCount: %u", iter->getSource()->GetEntry(),iter->getSource()->GetGUIDLow(), VisitorCount);
+        }*/
+
+    for (CreatureMapType::iterator iter = m.begin(); iter != m.end(); ++iter)
+    {
+        lastUpdateTime = iter->getSource()->GetLastUpdateTime();
+        diffTime = WorldTimer::getMSTimeDiff(lastUpdateTime, WorldTimer::getMSTime());
+
+        if (diffTime < (iter->getSource()->IsInCombat() ?
+            sWorld.getConfig(CONFIG_UINT32_INTERVAL_MAPUPDATE) : 5 * sWorld.getConfig(CONFIG_UINT32_INTERVAL_MAPUPDATE)) ||
+            lastUpdateTime > minUpdateTime)
+            continue;
+
+        WorldObject::UpdateHelper helper(*iter->getSource());
+        helper.Update(diffTime);
+        visitCount++;
+        if (visitCount > sWorld.getConfig(CONFIG_UINT32_MAPUPDATE_MAXVISITS))
+            break;
+    }
+}
+
+inline void MaNGOS::ObjectUpdater::Visit(GameObjectMapType& m)
+{
+    for (GameObjectMapType::iterator iter = m.begin(); iter != m.end(); ++iter)
+    {
+        uint32 diffTime = WorldTimer::getMSTimeDiff(iter->getSource()->GetLastUpdateTime(), WorldTimer::getMSTime());
+        if (diffTime < sWorld.getConfig(CONFIG_UINT32_INTERVAL_MAPUPDATE)/2)
+            continue;
+
+        iter->getSource()->SetLastUpdateTime();
+        WorldObject::UpdateHelper helper(*iter->getSource());
         helper.Update(i_timeDiff);
     }
 }
@@ -149,7 +215,7 @@ inline void MaNGOS::DynamicObjectUpdater::VisitHelper(Unit* target)
             return;
     }
 
-    if (i_dynobject.IsAffecting(target))
+    if (target->HasAura(i_dynobject.GetSpellId(), i_dynobject.GetEffIndex()))
         return;
 
     SpellEntry const* spellInfo = sSpellStore.LookupEntry(i_dynobject.GetSpellId());
@@ -169,7 +235,7 @@ inline void MaNGOS::DynamicObjectUpdater::VisitHelper(Unit* target)
         {
             Aura* Aur = holder->CreateAura(AURA_CLASS_PERSISTENT_AREA_AURA, eff_index, NULL, holder, target, i_dynobject.GetCaster(), NULL);
             target->AddAuraToModList(Aur);
-            Aur->ApplyModifier(true, true);
+            Aur->ApplyModifier(true,true);
         }
         else if (holder->GetAuraDuration() >= 0 && uint32(holder->GetAuraDuration()) < i_dynobject.GetDuration())
         {
@@ -180,7 +246,7 @@ inline void MaNGOS::DynamicObjectUpdater::VisitHelper(Unit* target)
     else
     {
         holder = CreateSpellAuraHolder(spellInfo, target, i_dynobject.GetCaster());
-        holder->CreateAura(AURA_CLASS_PERSISTENT_AREA_AURA, eff_index, NULL, holder, target, i_dynobject.GetCaster(), NULL);
+        holder->CreateAura(AURA_CLASS_PERSISTENT_AREA_AURA, eff_index, NULL, holder, target, i_dynobject.GetCaster(),NULL);
         target->AddSpellAuraHolder(holder);
     }
 
@@ -188,14 +254,14 @@ inline void MaNGOS::DynamicObjectUpdater::VisitHelper(Unit* target)
 }
 
 template<>
-inline void MaNGOS::DynamicObjectUpdater::Visit(CreatureMapType&  m)
+inline void MaNGOS::DynamicObjectUpdater::Visit(CreatureMapType& m)
 {
     for (CreatureMapType::iterator itr = m.begin(); itr != m.end(); ++itr)
         VisitHelper(itr->getSource());
 }
 
 template<>
-inline void MaNGOS::DynamicObjectUpdater::Visit(PlayerMapType&  m)
+inline void MaNGOS::DynamicObjectUpdater::Visit(PlayerMapType& m)
 {
     for (PlayerMapType::iterator itr = m.begin(); itr != m.end(); ++itr)
         VisitHelper(itr->getSource());

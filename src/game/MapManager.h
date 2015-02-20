@@ -28,7 +28,6 @@
 #include <boost/thread/lock_guard.hpp>
 #include <boost/thread/recursive_mutex.hpp>
 
-class Transport;
 class BattleGround;
 
 struct MapID
@@ -94,6 +93,7 @@ class MapManager : public MaNGOS::Singleton<MapManager, MaNGOS::ClassLevelLockab
 
         static bool ExistMapAndVMap(uint32 mapid, float x, float y);
         static bool IsValidMAP(uint32 mapid);
+        static bool IsTransportMap(uint32 mapid);
 
         static bool IsValidMapCoord(uint32 mapid, float x, float y)
         {
@@ -112,7 +112,7 @@ class MapManager : public MaNGOS::Singleton<MapManager, MaNGOS::ClassLevelLockab
 
         static bool IsValidMapCoord(WorldLocation const& loc)
         {
-            return IsValidMapCoord(loc.mapid, loc.coord_x, loc.coord_y, loc.coord_z, loc.orientation);
+            return IsValidMapCoord(loc.GetMapId(), loc.x, loc.y, loc.z, loc.orientation);
         }
 
         // modulos a radian orientation to the range of 0..2PI
@@ -131,14 +131,6 @@ class MapManager : public MaNGOS::Singleton<MapManager, MaNGOS::ClassLevelLockab
         }
 
         void RemoveAllObjectsInRemoveList();
-
-        void LoadTransports();
-
-        typedef std::set<Transport*> TransportSet;
-        TransportSet m_Transports;
-
-        typedef std::map<uint32, TransportSet> TransportMap;
-        TransportMap m_TransportsByMap;
 
         void InitializeVisibilityDistanceInfo();
 

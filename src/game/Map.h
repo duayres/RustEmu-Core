@@ -134,12 +134,17 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>
         void MessageDistBroadcast(Player const*, WorldPacket*, float dist, bool to_self, bool own_team_only = false);
         void MessageDistBroadcast(WorldObject const*, WorldPacket*, float dist);
 
-        float GetVisibilityDistance() const { return m_VisibleDistance; }
+        float GetVisibilityDistance(WorldObject const* obj = NULL) const;
         // function for setting up visibility distance for maps on per-type/per-Id basis
         virtual void InitVisibilityDistance();
 
-        void PlayerRelocation(Player*, float x, float y, float z, float angl);
-        void CreatureRelocation(Creature* creature, float x, float y, float z, float orientation);
+        // Half-hack method for use with visible-over-grid active objects (like big WB and MOTransport)
+        bool IsVisibleGlobally(ObjectGuid const& guid);
+
+        template<class T> void Relocation(T* object, Position const& pos);
+
+        // FIXME - remove this wrapper after SD2 correct
+        void CreatureRelocation(Creature* object, float x, float y, float z, float orientation);
 
         template<class T, class CONTAINER> void Visit(const Cell& cell, TypeContainerVisitor<T, CONTAINER>& visitor);
 
@@ -154,6 +159,9 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>
             GridPair p = MaNGOS::ComputeGridPair(x, y);
             return loaded(p);
         }
+
+        void ActivateGrid(WorldLocation const& loc);
+        void ActivateGrid(NGridType* nGrid);
 
         bool GetUnloadLock(const GridPair& p) const { return getNGrid(p.x_coord, p.y_coord)->getUnloadLock(); }
         void SetUnloadLock(const GridPair& p, bool on) { getNGrid(p.x_coord, p.y_coord)->setUnloadExplicitLock(on); }
@@ -174,12 +182,12 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>
 
         virtual void RemoveAllObjectsInRemoveList();
 
-        bool CreatureRespawnRelocation(Creature* c);        // used only in CreatureRelocation and ObjectGridUnloader
+        bool CreatureRespawnRelocation(Creature *c);        // used only in CreatureRelocation and ObjectGridUnloader
 
         bool CheckGridIntegrity(Creature* c, bool moved) const;
 
         uint32 GetInstanceId() const { return i_InstanceId; }
-        virtual bool CanEnter(Player* player);
+        virtual bool CanEnter(Player* /*player*/) { return true; }
         const char* GetMapName() const;
 
         // have meaning only for instanced map (that have set real difficulty), NOT USE its for BaseMap
@@ -243,6 +251,7 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>
         void AddToActive(WorldObject* obj);
         // must called with RemoveFromWorld
         void RemoveFromActive(WorldObject* obj);
+        GuidQueue GetActiveObjects();
 
         Player* GetPlayer(ObjectGuid const& guid, bool globalSearch = false);
         Creature* GetCreature(ObjectGuid  const& guid);
@@ -267,7 +276,7 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>
         void AddUpdateObject(ObjectGuid const& guid);
         void RemoveUpdateObject(ObjectGuid const& guid);
         GuidSet const* GetObjectsUpdateQueue() { return &i_objectsToClientUpdate; };
-
+        ObjectGuid GetNextObjectFromUpdateQueue();
 
         // DynObjects currently
         uint32 GenerateLocalLowGuid(HighGuid guidhigh);
@@ -329,7 +338,7 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>
         bool GetReachableRandomPosition(Unit* unit, float& x, float& y, float& z, float radius);
         bool GetReachableRandomPointOnGround(uint32 phaseMask, float& x, float& y, float& z, float radius);
         bool GetRandomPointInTheAir(uint32 phaseMask, float& x, float& y, float& z, float radius);
-        bool GetRandomPointUnderWater(uint32 phaseMask, float& x, float& y, float& z, float radius, GridMapLiquidData& liquid_status);
+        bool GetRandomPointUnderWater(uint32 phaseMask, float& x, float& y, float& z, float radius, float water_z);
 
     private:
         void LoadMapAndVMap(int gx, int gy);
@@ -338,10 +347,12 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>
 
         void SendInitSelf(Player* player);
 
-        void SendInitTransports(Player* player);
-        void SendRemoveTransports(Player* player);
+        void SendInitActiveObjects(Player* player);
+        void SendRemoveActiveObjects(Player* player);
 
-        bool CreatureCellRelocation(Creature* creature, const Cell &new_cell);
+        void SendRemoveNotifyToStoredClients(WorldObject* object, bool destroy = false);
+
+        bool CreatureCellRelocation(Creature* creature, Cell new_cell);
 
         bool loaded(const GridPair&) const;
         void EnsureGridCreated(const GridPair&);
@@ -381,9 +392,7 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>
         MapRefManager m_mapRefManager;
         MapRefManager::iterator m_mapRefIter;
 
-        typedef std::set<WorldObject*> ActiveNonPlayers;
-        ActiveNonPlayers m_activeNonPlayers;
-        ActiveNonPlayers::iterator m_activeNonPlayersIter;
+        GuidSet m_activeObjects;
         MapStoredObjectTypesContainer m_objectsStore;
 
     private:

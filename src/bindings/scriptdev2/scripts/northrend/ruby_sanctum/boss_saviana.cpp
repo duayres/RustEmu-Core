@@ -170,7 +170,7 @@ struct boss_savianaAI : public ScriptedAI
                     m_uiPhase = PHASE_TRANSITION;
 
                     SetCombatMovement(false);
-                    m_creature->SetByteValue(UNIT_FIELD_BYTES_1, 3, UNIT_BYTE1_FLAG_FLY_ANIM);
+                    m_creature->SetByteValue(UNIT_FIELD_BYTES_1, 3, UNIT_BYTE1_FLAG_HOVER);
                     m_creature->SetLevitate(true);
 
                     m_creature->GetMotionMaster()->Clear();

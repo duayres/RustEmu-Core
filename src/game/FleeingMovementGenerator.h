@@ -1,5 +1,5 @@
 /*
-* This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+* Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
 *
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -35,7 +35,8 @@ class MANGOS_DLL_SPEC FleeingMovementGenerator
         void Reset(T&);
         bool Update(T&, const uint32&);
 
-        MovementGeneratorType GetMovementGeneratorType() const override { return FLEEING_MOTION_TYPE; }
+        MovementGeneratorType GetMovementGeneratorType() const { return FLEEING_MOTION_TYPE; }
+        const char* Name() const { return "<Fleeing>"; }
 
     private:
         void _setTargetLocation(T& owner);
@@ -53,9 +54,10 @@ class MANGOS_DLL_SPEC TimedFleeingMovementGenerator
             FleeingMovementGenerator<Creature>(fright),
             i_totalFleeTime(time) {}
 
-        MovementGeneratorType GetMovementGeneratorType() const override { return TIMED_FLEEING_MOTION_TYPE; }
-        bool Update(Unit&, const uint32&) override;
-        void Finalize(Unit&) override;
+        MovementGeneratorType GetMovementGeneratorType() const { return TIMED_FLEEING_MOTION_TYPE; }
+        bool Update(Unit&, const uint32&);
+        void Finalize(Unit&);
+        const char* Name() const { return "<TimedFleeing>"; }
 
     private:
         TimeTracker i_totalFleeTime;

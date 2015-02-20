@@ -1015,7 +1015,7 @@ bool ChatHandler::HandleGameObjectMoveCommand(char* args)
         Map* map = obj->GetMap();
         map->Remove(obj, false);
 
-        obj->Relocate(chr->GetPositionX(), chr->GetPositionY(), chr->GetPositionZ(), obj->GetOrientation());
+        obj->Relocate(chr->GetPosition());
 
         map->Add(obj);
     }
@@ -1869,22 +1869,22 @@ bool ChatHandler::HandleNpcMoveCommand(char* args)
     else
         lowguid = pCreature->GetGUIDLow();
 
-    float x = player->GetPositionX();
-    float y = player->GetPositionY();
-    float z = player->GetPositionZ();
-    float o = player->GetOrientation();
+    WorldLocation loc = m_session->GetPlayer()->GetPosition();
 
     if (pCreature)
     {
         if (CreatureData const* data = sObjectMgr.GetCreatureData(pCreature->GetGUIDLow()))
         {
-            const_cast<CreatureData*>(data)->posX = x;
-            const_cast<CreatureData*>(data)->posY = y;
-            const_cast<CreatureData*>(data)->posZ = z;
-            const_cast<CreatureData*>(data)->orientation = o;
+            const_cast<CreatureData*>(data)->posX = loc.x;
+            const_cast<CreatureData*>(data)->posY = loc.y;
+            const_cast<CreatureData*>(data)->posZ = loc.z;
+            const_cast<CreatureData*>(data)->orientation = loc.o;
         }
-        pCreature->GetMap()->CreatureRelocation(pCreature, x, y, z, o);
+
+        pCreature->SetRespawnCoord(loc);
+        pCreature->GetMap()->Relocation(pCreature, loc);
         pCreature->GetMotionMaster()->Initialize();
+
         if (pCreature->isAlive())                           // dead creature will reset movement generator at respawn
         {
             pCreature->SetDeathState(JUST_DIED);
@@ -1892,7 +1892,7 @@ bool ChatHandler::HandleNpcMoveCommand(char* args)
         }
     }
 
-    WorldDatabase.PExecuteLog("UPDATE creature SET position_x = '%f', position_y = '%f', position_z = '%f', orientation = '%f' WHERE guid = '%u'", x, y, z, o, lowguid);
+    WorldDatabase.PExecuteLog("UPDATE creature SET position_x = '%f', position_y = '%f', position_z = '%f', orientation = '%f' WHERE guid = '%u'", loc.x, loc.y, loc.z, loc.o, lowguid);
     PSendSysMessage(LANG_COMMAND_CREATUREMOVED);
     return true;
 }
@@ -2153,28 +2153,24 @@ bool ChatHandler::HandleNpcUnFollowCommand(char* /*args*/)
         return false;
     }
 
-    MotionMaster* creatureMotion = creature->GetMotionMaster();
-    if (creatureMotion->empty() ||
-        creatureMotion->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
+    if (creature->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
     {
         PSendSysMessage(LANG_CREATURE_NOT_FOLLOW_YOU, creature->GetName());
         SetSentErrorMessage(true);
         return false;
     }
 
-    FollowMovementGenerator<Creature> const* mgen = static_cast<FollowMovementGenerator<Creature> const*>(creatureMotion->top());
+    FollowMovementGenerator<Creature> const* mgen
+        = static_cast<FollowMovementGenerator<Creature> const*>((creature->GetMotionMaster()->CurrentMovementGenerator()));
 
     if (mgen->GetTarget() != player)
-    {
-        PSendSysMessage(LANG_CREATURE_NOT_FOLLOW_YOU, creature->GetName());
-        SetSentErrorMessage(true);
-        return false;
-    }
+        PSendSysMessage(LANG_CREATURE_NOT_FOLLOW_YOU);
+    // Need remove chase action even if chase not for your.
 
-    // reset movement
-    creatureMotion->MovementExpired(true);
+    // remove UNIT_ACTION_CHASE
+    creature->GetUnitStateMgr().DropAction(UNIT_ACTION_CHASE);
 
-    PSendSysMessage(LANG_CREATURE_NOT_FOLLOW_YOU_NOW, creature->GetName());
+    PSendSysMessage(LANG_CREATURE_NOT_FOLLOW_YOU_NOW, creature->GetObjectGuid().GetString().c_str());
     return true;
 }
 // npc tame handling
@@ -2815,14 +2811,14 @@ inline Creature* Helper_CreateWaypointFor(Creature* wpOwner, WaypointPathOrigin 
 
     wpCreature->SetActiveObjectState(true);
 
-    wpCreature->Summon(TEMPSUMMON_TIMED_DESPAWN, 5*MINUTE*IN_MILLISECONDS);// Also initializes the AI and MMGen
+    wpCreature->Summon(TEMPSUMMON_TIMED_DESPAWN, 5 * MINUTE*IN_MILLISECONDS);// Also initializes the AI and MMGen
     return wpCreature;
 }
 inline void UnsummonVisualWaypoints(Player const* player, ObjectGuid ownerGuid)
 {
     std::list<Creature*> waypoints;
-    MaNGOS::AllCreaturesOfEntryInRangeCheck checkerForWaypoint(player, VISUAL_WAYPOINT, SIZE_OF_GRIDS);
-    MaNGOS::CreatureListSearcher<MaNGOS::AllCreaturesOfEntryInRangeCheck> searcher(waypoints, checkerForWaypoint);
+    MaNGOS::AllCreaturesOfEntryInRangeCheck check(player, VISUAL_WAYPOINT, SIZE_OF_GRIDS);
+    MaNGOS::CreatureListSearcher<MaNGOS::AllCreaturesOfEntryInRangeCheck> searcher(waypoints, check);
     Cell::VisitGridObjects(player, searcher, SIZE_OF_GRIDS);
 
     for (std::list<Creature*>::iterator itr = waypoints.begin(); itr != waypoints.end(); ++itr)
@@ -2840,23 +2836,23 @@ inline void UnsummonVisualWaypoints(Player const* player, ObjectGuid ownerGuid)
 }
 
 /** Add a waypoint to a creature
- * .wp add [dbGuid] [pathId] [source]
- *
- * The user can either select an npc or provide its dbGuid.
- * Also the user can specify pathId and source if wanted.
- *
- * The user can even select a visual waypoint - then the new waypoint
- * is placed *after* the selected one - this makes insertion of new
- * waypoints possible.
- *
- * .wp add [pathId] [source]
- * -> adds a waypoint to the currently selected creature, to path pathId in source-storage
- *
- * .wp add guid [pathId] [source]
- * -> if no npc is selected, expect the creature provided with guid argument
- *
- * @return true - command did succeed, false - something went wrong
- */
+* .wp add [dbGuid] [pathId] [source]
+*
+* The user can either select an npc or provide its dbGuid.
+* Also the user can specify pathId and source if wanted.
+*
+* The user can even select a visual waypoint - then the new waypoint
+* is placed *after* the selected one - this makes insertion of new
+* waypoints possible.
+*
+* .wp add [pathId] [source]
+* -> adds a waypoint to the currently selected creature, to path pathId in source-storage
+*
+* .wp add guid [pathId] [source]
+* -> if no npc is selected, expect the creature provided with guid argument
+*
+* @return true - command did succeed, false - something went wrong
+*/
 bool ChatHandler::HandleWpAddCommand(char* args)
 {
     DEBUG_LOG("DEBUG: HandleWpAddCommand");
@@ -2950,7 +2946,7 @@ bool ChatHandler::HandleWpAddCommand(char* args)
         if (wpDestination == PATH_NO_PATH)                  // No overwrite params. Do best estimate
         {
             if (wpOwner->GetMotionMaster()->GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
-                if (WaypointMovementGenerator<Creature> const* wpMMGen = dynamic_cast<WaypointMovementGenerator<Creature> const*>(wpOwner->GetMotionMaster()->GetCurrent()))
+                if (WaypointMovementGenerator<Creature> const* wpMMGen = dynamic_cast<WaypointMovementGenerator<Creature> const*>(wpOwner->GetMotionMaster()->CurrentMovementGenerator()))
                     wpMMGen->GetPathInformation(wpPathId, wpDestination);
 
             // Get information about default path if no current path. If no default path, prepare data dependendy on uniqueness
@@ -2971,7 +2967,7 @@ bool ChatHandler::HandleWpAddCommand(char* args)
     // All arguments parsed
     // wpOwner will get a new waypoint inserted into wpPath = GetPathFromOrigin(wpOwner, wpDestination, wpPathId) at wpPointId
 
-    float x, y,z;
+    float x, y, z;
     m_session->GetPlayer()->GetPosition(x, y, z);
     if (!sWaypointMgr.AddNode(wpOwner->GetEntry(), wpOwner->GetGUIDLow(), wpPointId, wpDestination, x, y, z))
     {
@@ -2999,40 +2995,40 @@ bool ChatHandler::HandleWpAddCommand(char* args)
 }                                                           // HandleWpAddCommand
 
 /**
- * .wp modify waittime | scriptid | orientation | del | move [dbGuid, id] [value]
- *
- * waittime <Delay>
- *   User has selected a visual waypoint before.
- *   Delay <Delay> is added to this waypoint. Everytime the
- *   NPC comes to this waypoint, it will wait Delay millieseconds.
- *
- * waittime <DBGuid> <WPNUM> <Delay>
- *   User has not selected visual waypoint before.
- *   For the waypoint <WPNUM> for the NPC with <DBGuid>
- *   an delay Delay is added to this waypoint
- *   Everytime the NPC comes to this waypoint, it will wait Delay millieseconds.
- *
- * scriptid <scriptId>
- *   User has selected a visual waypoint before.
- *   <scriptId> is added to this waypoint. Everytime the
- *   NPC comes to this waypoint, the DBScript scriptId is executed.
- *
- * scriptid <DBGuid> <WPNUM> <scriptId>
- *   User has not selected visual waypoint before.
- *   For the waypoint <WPNUM> for the NPC with <DBGuid>
- *   an emote <scriptId> is added.
- *   Everytime the NPC comes to this waypoint, the DBScript scriptId is executed.
- *
- * orientation [DBGuid, WpNum] <Orientation>
- *   Set the orientation of the selected waypoint or waypoint given with DbGuid/ WpId
- *   to the value of <Orientation>.
- *
- * del [DBGuid, WpId]
- *   Remove the selected waypoint or waypoint given with DbGuid/ WpId.
- *
- * move [DBGuid, WpId]
- *   Move the selected waypoint or waypoint given with DbGuid/ WpId to player's current positiion.
- */
+* .wp modify waittime | scriptid | orientation | del | move [dbGuid, id] [value]
+*
+* waittime <Delay>
+*   User has selected a visual waypoint before.
+*   Delay <Delay> is added to this waypoint. Everytime the
+*   NPC comes to this waypoint, it will wait Delay millieseconds.
+*
+* waittime <DBGuid> <WPNUM> <Delay>
+*   User has not selected visual waypoint before.
+*   For the waypoint <WPNUM> for the NPC with <DBGuid>
+*   an delay Delay is added to this waypoint
+*   Everytime the NPC comes to this waypoint, it will wait Delay millieseconds.
+*
+* scriptid <scriptId>
+*   User has selected a visual waypoint before.
+*   <scriptId> is added to this waypoint. Everytime the
+*   NPC comes to this waypoint, the DBScript scriptId is executed.
+*
+* scriptid <DBGuid> <WPNUM> <scriptId>
+*   User has not selected visual waypoint before.
+*   For the waypoint <WPNUM> for the NPC with <DBGuid>
+*   an emote <scriptId> is added.
+*   Everytime the NPC comes to this waypoint, the DBScript scriptId is executed.
+*
+* orientation [DBGuid, WpNum] <Orientation>
+*   Set the orientation of the selected waypoint or waypoint given with DbGuid/ WpId
+*   to the value of <Orientation>.
+*
+* del [DBGuid, WpId]
+*   Remove the selected waypoint or waypoint given with DbGuid/ WpId.
+*
+* move [DBGuid, WpId]
+*   Move the selected waypoint or waypoint given with DbGuid/ WpId to player's current positiion.
+*/
 bool ChatHandler::HandleWpModifyCommand(char* args)
 {
     DEBUG_LOG("DEBUG: HandleWpModifyCommand");
@@ -3134,7 +3130,7 @@ bool ChatHandler::HandleWpModifyCommand(char* args)
     if (wpSource == PATH_NO_PATH)                           // No waypoint selected
     {
         if (wpOwner->GetMotionMaster()->GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
-            if (WaypointMovementGenerator<Creature> const* wpMMGen = dynamic_cast<WaypointMovementGenerator<Creature> const*>(wpOwner->GetMotionMaster()->GetCurrent()))
+            if (WaypointMovementGenerator<Creature> const* wpMMGen = dynamic_cast<WaypointMovementGenerator<Creature> const*>(wpOwner->GetMotionMaster()->CurrentMovementGenerator()))
                 wpMMGen->GetPathInformation(wpPathId, wpSource);
 
         if (wpSource == PATH_NO_PATH)
@@ -3193,7 +3189,7 @@ bool ChatHandler::HandleWpModifyCommand(char* args)
     }
     else if (subCmd == "move")                              // Move to player position, no additional command required
     {
-        float x,y,z;
+        float x, y, z;
         m_session->GetPlayer()->GetPosition(x, y, z);
 
         // Move visual waypoint
@@ -3235,20 +3231,20 @@ bool ChatHandler::HandleWpModifyCommand(char* args)
 }
 
 /**
- * .wp show info | on | off | first | last [dbGuid] [pathId [wpOrigin] ]
- *
- * info -> User has selected a visual waypoint before
- *
- * on -> User has selected an NPC; all visual waypoints for this
- *       NPC are added to the world
- *
- * on <dbGuid> -> User did not select an NPC - instead the dbGuid of the
- *              NPC is provided. All visual waypoints for this NPC
- *              are added from the world.
- *
- * off -> User has selected an NPC; all visual waypoints for this
- *        NPC are removed from the world.
- */
+* .wp show info | on | off | first | last [dbGuid] [pathId [wpOrigin] ]
+*
+* info -> User has selected a visual waypoint before
+*
+* on -> User has selected an NPC; all visual waypoints for this
+*       NPC are added to the world
+*
+* on <dbGuid> -> User did not select an NPC - instead the dbGuid of the
+*              NPC is provided. All visual waypoints for this NPC
+*              are added from the world.
+*
+* off -> User has selected an NPC; all visual waypoints for this
+*        NPC are removed from the world.
+*/
 bool ChatHandler::HandleWpShowCommand(char* args)
 {
     DEBUG_LOG("DEBUG: HandleWpShowCommand");
@@ -3356,7 +3352,7 @@ bool ChatHandler::HandleWpShowCommand(char* args)
     else
     {
         if (wpOwner->GetMotionMaster()->GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
-            if (WaypointMovementGenerator<Creature> const* wpMMGen = dynamic_cast<WaypointMovementGenerator<Creature> const*>(wpOwner->GetMotionMaster()->GetCurrent()))
+            if (WaypointMovementGenerator<Creature> const* wpMMGen = dynamic_cast<WaypointMovementGenerator<Creature> const*>(wpOwner->GetMotionMaster()->CurrentMovementGenerator()))
             {
                 wpMMGen->GetPathInformation(wpPathId, wpOrigin);
                 wpPath = sWaypointMgr.GetPathFromOrigin(wpOwner->GetEntry(), wpOwner->GetGUIDLow(), wpPathId, wpOrigin);
@@ -3397,7 +3393,7 @@ bool ChatHandler::HandleWpShowCommand(char* args)
             PSendSysMessage(" ModelId2: %u", behaviour->model2);
             PSendSysMessage(" Emote: %u", behaviour->emote);
             PSendSysMessage(" Spell: %u", behaviour->spell);
-            for (int i = 0;  i < MAX_WAYPOINT_TEXT; ++i)
+            for (int i = 0; i < MAX_WAYPOINT_TEXT; ++i)
                 PSendSysMessage(" TextId%i: %i \'%s\'", i + 1, behaviour->textid[i], (behaviour->textid[i] ? GetMangosString(behaviour->textid[i]) : ""));
         }
 
@@ -3457,112 +3453,65 @@ bool ChatHandler::HandleWpShowCommand(char* args)
     return false;
 }                                                           // HandleWpShowCommand
 
-/// [Guid if no selected unit] <filename> [pathId [wpOrigin] ]
 bool ChatHandler::HandleWpExportCommand(char* args)
 {
     if (!*args)
         return false;
 
-    Creature* wpOwner = NULL;
-    WaypointPathOrigin wpOrigin = PATH_NO_PATH;
-    int32 wpPathId = 0;
+    // Next arg is: <GUID> <ARGUMENT>
 
-    if (Creature* targetCreature = getSelectedCreature())
+    // Did user provide a GUID
+    // or did the user select a creature?
+    // -> variable lowguid is filled with the GUID of the NPC
+    uint32 lowguid = 0;
+    Creature* target = getSelectedCreature();
+    char* arg_str = NULL;
+    if (target)
     {
-        // Check if the user did specify a visual waypoint
-        if (targetCreature->GetEntry() == VISUAL_WAYPOINT && targetCreature->GetSubtype() == CREATURE_SUBTYPE_TEMPORARY_SUMMON)
+        if (target->GetEntry() != VISUAL_WAYPOINT)
+            lowguid = target->GetGUIDLow();
+        else
         {
-            TemporarySummonWaypoint* wpTarget = dynamic_cast<TemporarySummonWaypoint*>(targetCreature);
-            if (!wpTarget)
+            QueryResult* result = WorldDatabase.PQuery("SELECT id FROM creature_movement WHERE wpguid = %u LIMIT 1", target->GetGUIDLow());
+            if (!result)
             {
-                PSendSysMessage(LANG_WAYPOINT_VP_SELECT);
-                SetSentErrorMessage(true);
-                return false;
+                PSendSysMessage(LANG_WAYPOINT_NOTFOUNDDBPROBLEM, target->GetGUIDLow());
+                return true;
             }
-
-            // Who moves along this waypoint?
-            wpOwner = targetCreature->GetMap()->GetAnyTypeCreature(wpTarget->GetSummonerGuid());
-            if (!wpOwner)
-            {
-                PSendSysMessage(LANG_WAYPOINT_NOTFOUND_NPC, wpTarget->GetSummonerGuid().GetString().c_str());
-                SetSentErrorMessage(true);
-                return false;
-            }
-            wpOrigin = (WaypointPathOrigin)wpTarget->GetPathOrigin();
-            wpPathId = wpTarget->GetPathId();
+            Field* fields = result->Fetch();
+            lowguid = fields[0].GetUInt32();;
+            delete result;
         }
-        else // normal creature selected
-            wpOwner = targetCreature;
+
+        arg_str = strtok(args, " ");
     }
     else
     {
-        uint32 dbGuid;
-        if (!ExtractUInt32(&args, dbGuid))
+        // user provided <GUID>
+        char* guid_str = strtok(args, " ");
+        if (!guid_str)
         {
-            PSendSysMessage(LANG_WAYPOINT_NOGUID);
-            SetSentErrorMessage(true);
+            SendSysMessage(LANG_WAYPOINT_NOGUID);
             return false;
         }
+        lowguid = atoi((char*)guid_str);
 
-        CreatureData const* data = sObjectMgr.GetCreatureData(dbGuid);
-        if (!data)
-        {
-            PSendSysMessage(LANG_WAYPOINT_CREATNOTFOUND, dbGuid);
-            SetSentErrorMessage(true);
-            return false;
-        }
-
-        if (m_session->GetPlayer()->GetMapId() != data->mapid)
-        {
-            PSendSysMessage(LANG_COMMAND_CREATUREATSAMEMAP, dbGuid);
-            SetSentErrorMessage(true);
-            return false;
-        }
-
-        wpOwner = m_session->GetPlayer()->GetMap()->GetAnyTypeCreature(data->GetObjectGuid(dbGuid));
-        if (!wpOwner)
-        {
-            PSendSysMessage(LANG_WAYPOINT_CREATNOTFOUND, dbGuid);
-            SetSentErrorMessage(true);
-            return false;
-        }
+        arg_str = strtok((char*)NULL, " ");
     }
 
-    // wpOwner is now known, in case of export by visual waypoint also the to be exported path
-    char* export_str = ExtractLiteralArg(&args);
-    if (!export_str)
+    if (!arg_str)
     {
         PSendSysMessage(LANG_WAYPOINT_ARGUMENTREQ, "export");
-        SetSentErrorMessage(true);
         return false;
     }
 
-    if (wpOrigin == PATH_NO_PATH)                           // No WP selected, Extract optional arguments
-    {
-        if (ExtractOptInt32(&args, wpPathId, 0))            // Fill path-id and source
-        {
-            uint32 src = (uint32)PATH_NO_PATH;
-            if (ExtractOptUInt32(&args, src, src))
-                wpOrigin = (WaypointPathOrigin)src;
-            else // pathId provided but no destination
-            {
-                if (wpPathId != 0)
-                    wpOrigin = PATH_FROM_ENTRY;             // Multiple Paths must only be assigned by entry
-            }
-        }
+    PSendSysMessage("DEBUG: wp export, GUID: %u", lowguid);
 
-        if (wpOrigin == PATH_NO_PATH)
-        {
-            if (wpOwner->GetMotionMaster()->GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
-                if (WaypointMovementGenerator<Creature> const* wpMMGen = dynamic_cast<WaypointMovementGenerator<Creature> const*>(wpOwner->GetMotionMaster()->GetCurrent()))
-                    wpMMGen->GetPathInformation(wpPathId, wpOrigin);
-            if (wpOrigin == PATH_NO_PATH)
-                sWaypointMgr.GetDefaultPath(wpOwner->GetEntry(), wpOwner->GetGUIDLow(), &wpOrigin);
-        }
-    }
+    QueryResult* result = WorldDatabase.PQuery(
+        //          0      1           2           3           4            5       6       7         8      9      10       11       12       13       14       15
+        "SELECT point, position_x, position_y, position_z, orientation, model1, model2, waittime, emote, spell, textid1, textid2, textid3, textid4, textid5, id FROM creature_movement WHERE id = '%u' ORDER BY point", lowguid);
 
-    WaypointPath const* wpPath = sWaypointMgr.GetPathFromOrigin(wpOwner->GetEntry(), wpOwner->GetGUIDLow(), wpPathId, wpOrigin);
-    if (!wpPath || wpPath->empty())
+    if (!result)
     {
         PSendSysMessage(LANG_WAYPOINT_NOTHINGTOEXPORT);
         SetSentErrorMessage(true);
@@ -3570,47 +3519,81 @@ bool ChatHandler::HandleWpExportCommand(char* args)
     }
 
     std::ofstream outfile;
-    outfile.open(export_str);
+    outfile.open(arg_str);
 
-    std::string table;
-    char const* key_field;
-    uint32 key;
-    switch (wpOrigin)
+    do
     {
-        case PATH_FROM_ENTRY: key = wpOwner->GetEntry();    key_field = "entry";    table = "creature_movement_template"; break;
-        case PATH_FROM_GUID: key = wpOwner->GetGUIDLow();   key_field = "id";       table = "creature_movement"; break;
-        case PATH_FROM_EXTERNAL: key = wpOwner->GetEntry(); key_field = "entry";    table = sWaypointMgr.GetExternalWPTable(); break;
-        case PATH_NO_PATH:
-            return false;
-    }
+        Field* fields = result->Fetch();
 
-    outfile << "DELETE FROM " << table << " WHERE " << key_field << "=" << key << ";\n";
-    if (wpOrigin != PATH_FROM_EXTERNAL)
-        outfile << "INSERT INTO " << table << " (" << key_field << ", point, position_x, position_y, position_z, orientation, waittime, script_id) VALUES\n";
-    else
-        outfile << "INSERT INTO " << table << " (" << key_field << ", point, position_x, position_y, position_z, orientation, waittime) VALUES\n";
+        outfile << "INSERT INTO creature_movement ";
+        outfile << "(id, point, position_x, position_y, position_z, orientation, model1, model2, waittime, emote, spell, textid1, textid2, textid3, textid4, textid5) VALUES ";
 
-    WaypointPath::const_iterator itr = wpPath->begin();
-    uint32 countDown = wpPath->size();
-    for (; itr != wpPath->end(); ++itr, --countDown)
-    {
-        outfile << "(" << key << ",";
-        outfile << itr->first << ",";
-        outfile << itr->second.x << ",";
-        outfile << itr->second.y << ",";
-        outfile << itr->second.z << ",";
-        outfile << itr->second.orientation << ",";
-        outfile << itr->second.delay << ",";
-        if (wpOrigin != PATH_FROM_EXTERNAL)                 // Only for normal waypoints
-            outfile << itr->second.script_id << ")";
-        if (countDown > 1)
-            outfile << ",\n";
-        else
-            outfile << ";\n";
-    }
+        outfile << "( ";
+        outfile << fields[15].GetUInt32();                  // id
+        outfile << ", ";
+        outfile << fields[0].GetUInt32();                   // point
+        outfile << ", ";
+        outfile << fields[1].GetFloat();                    // position_x
+        outfile << ", ";
+        outfile << fields[2].GetFloat();                    // position_y
+        outfile << ", ";
+        outfile << fields[3].GetUInt32();                   // position_z
+        outfile << ", ";
+        outfile << fields[4].GetUInt32();                   // orientation
+        outfile << ", ";
+        outfile << fields[5].GetUInt32();                   // model1
+        outfile << ", ";
+        outfile << fields[6].GetUInt32();                   // model2
+        outfile << ", ";
+        outfile << fields[7].GetUInt16();                   // waittime
+        outfile << ", ";
+        outfile << fields[8].GetUInt32();                   // emote
+        outfile << ", ";
+        outfile << fields[9].GetUInt32();                   // spell
+        outfile << ", ";
+        outfile << fields[10].GetUInt32();                  // textid1
+        outfile << ", ";
+        outfile << fields[11].GetUInt32();                  // textid2
+        outfile << ", ";
+        outfile << fields[12].GetUInt32();                  // textid3
+        outfile << ", ";
+        outfile << fields[13].GetUInt32();                  // textid4
+        outfile << ", ";
+        outfile << fields[14].GetUInt32();                  // textid5
+        outfile << ");\n ";
+
+    } while (result->NextRow());
+    delete result;
 
     PSendSysMessage(LANG_WAYPOINT_EXPORTED);
     outfile.close();
+
+    return true;
+}
+
+bool ChatHandler::HandleWpImportCommand(char* args)
+{
+    if (!*args)
+        return false;
+
+    char* arg_str = strtok(args, " ");
+    if (!arg_str)
+        return false;
+
+    std::string line;
+    std::ifstream infile(arg_str);
+    if (infile.is_open())
+    {
+        while (!infile.eof())
+        {
+            getline(infile, line);
+            // cout << line << endl;
+            QueryResult* result = WorldDatabase.Query(line.c_str());
+            delete result;
+        }
+        infile.close();
+    }
+    PSendSysMessage(LANG_WAYPOINT_IMPORTED);
 
     return true;
 }
@@ -5072,7 +5055,7 @@ bool ChatHandler::HandleMmapPathCommand(char* args)
 
     if (followPath)
     {
-        Movement::MoveSplineInit init(*player);
+        Movement::MoveSplineInit<Unit*> init(*player);
         init.MovebyPath(pointPath);
         init.SetWalk(false);
         init.Launch();

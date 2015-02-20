@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,9 +16,9 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include "RandomMovementGenerator.h"
 #include "Creature.h"
 #include "MapManager.h"
-#include "RandomMovementGenerator.h"
 #include "Map.h"
 #include "Util.h"
 #include "movement/MoveSplineInit.h"
@@ -29,46 +29,56 @@ RandomMovementGenerator<Creature>::RandomMovementGenerator(const Creature& creat
 {
     float respX, respY, respZ, respO, wander_distance;
     creature.GetRespawnCoord(respX, respY, respZ, &respO, &wander_distance);
+
     i_nextMoveTime = ShortTimeTracker(0);
     i_x = respX;
     i_y = respY;
     i_z = respZ;
     i_radius = wander_distance;
+    // TODO - add support for flying mobs using some distance
+    i_verticalZ = 0.0f;
 }
 
 template<>
 void RandomMovementGenerator<Creature>::_setRandomLocation(Creature& creature)
 {
+    if (!creature.GetMap())
+    {
+        i_nextMoveTime.Reset(urand(1000, 3000));
+        return;
+    }
+
     float destX = i_x;
     float destY = i_y;
     float destZ = i_z;
 
-    creature.addUnitState(UNIT_STAT_ROAMING_MOVE);
-
-    // check if new random position is assigned, GetReachableRandomPosition may fail
-    if (creature.GetMap()->GetReachableRandomPosition(&creature, destX, destY, destZ, i_radius))
+    // check if new random position is assigned, GetRandomPoint may fail
+    if (creature.GetRandomPosition(destX, destY, destZ, i_radius * 1.5f))
     {
-        Movement::MoveSplineInit init(creature);
+        creature.addUnitState(UNIT_STAT_ROAMING_MOVE);
+
+        Movement::MoveSplineInit<Unit*> init(creature);
         init.MoveTo(destX, destY, destZ, true);
         init.SetWalk(true);
+        init.SetSmooth();
         init.Launch();
+
         if (roll_chance_i(MOVEMENT_RANDOM_MMGEN_CHANCE_NO_BREAK))
             i_nextMoveTime.Reset(50);
         else
-            i_nextMoveTime.Reset(urand(3000, 10000));       // Keep a short wait time
+            i_nextMoveTime.Reset(urand(3000, 10000));       // keep a short wait time
     }
     else
-        i_nextMoveTime.Reset(50);                           // Retry later
-    return;
+        i_nextMoveTime.Reset(0); // Retry in next update
 }
 
 template<>
 void RandomMovementGenerator<Creature>::Initialize(Creature& creature)
 {
-    creature.addUnitState(UNIT_STAT_ROAMING);               // _MOVE set in _setRandomLocation
-
-    if (!creature.isAlive() || creature.hasUnitState(UNIT_STAT_NOT_MOVE))
+    if (!creature.isAlive())
         return;
+
+    creature.addUnitState(UNIT_STAT_ROAMING | UNIT_STAT_ROAMING_MOVE);
 
     _setRandomLocation(creature);
 }
@@ -91,7 +101,7 @@ template<>
 void RandomMovementGenerator<Creature>::Finalize(Creature& creature)
 {
     creature.clearUnitState(UNIT_STAT_ROAMING | UNIT_STAT_ROAMING_MOVE);
-    creature.SetWalk(!creature.hasUnitState(UNIT_STAT_RUNNING_STATE), false);
+    creature.SetWalk(!creature.hasUnitState(UNIT_STAT_RUNNING_STATE) && !creature.IsLevitating(), false);
 }
 
 template<>

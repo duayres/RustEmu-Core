@@ -45,18 +45,17 @@ void WorldSession::HandleMoveWorldportAckOpcode()
         return;
 
     // get start teleport coordinates (will used later in fail case)
-    WorldLocation old_loc;
-    GetPlayer()->GetPosition(old_loc);
+    WorldLocation const& old_loc = GetPlayer()->GetPosition();
 
     // get the teleport destination
     WorldLocation& loc = GetPlayer()->GetTeleportDest();
 
     // possible errors in the coordinate validity check (only cheating case possible)
-    if (!MapManager::IsValidMapCoord(loc.mapid, loc.coord_x, loc.coord_y, loc.coord_z, loc.orientation))
+    if (!MapManager::IsValidMapCoord(loc))
     {
         sLog.outError("WorldSession::HandleMoveWorldportAckOpcode: %s was teleported far to a not valid location "
-                      "(map:%u, x:%f, y:%f, z:%f) We port him to his homebind instead..",
-                      GetPlayer()->GetGuidStr().c_str(), loc.mapid, loc.coord_x, loc.coord_y, loc.coord_z);
+            "(map:%u, x:%f, y:%f, z:%f) We port him to his homebind instead..",
+            GetPlayer()->GetGuidStr().c_str(), loc.GetMapId(), loc.x, loc.y, loc.z);
         // stop teleportation else we would try this again and again in LogoutPlayer...
         GetPlayer()->SetSemaphoreTeleportFar(false);
         // and teleport the player to a valid place
@@ -65,7 +64,7 @@ void WorldSession::HandleMoveWorldportAckOpcode()
     }
 
     // get the destination map entry, not the current one, this will fix homebind and reset greeting
-    MapEntry const* mEntry = sMapStore.LookupEntry(loc.mapid);
+    MapEntry const* mEntry = sMapStore.LookupEntry(loc.GetMapId());
 
     Map* map = NULL;
 
@@ -73,28 +72,28 @@ void WorldSession::HandleMoveWorldportAckOpcode()
     if (mEntry->IsBattleGroundOrArena())
     {
         if (GetPlayer()->GetBattleGroundId())
-            map = sMapMgr.FindMap(loc.mapid, GetPlayer()->GetBattleGroundId());
+            map = sMapMgr.FindMap(loc.GetMapId(), GetPlayer()->GetBattleGroundId());
 
         if (!map)
         {
             DETAIL_LOG("WorldSession::HandleMoveWorldportAckOpcode: %s was teleported far to nonexisten battleground instance "
-                       " (map:%u, x:%f, y:%f, z:%f) Trying to port him to his previous place..",
-                       GetPlayer()->GetGuidStr().c_str(), loc.mapid, loc.coord_x, loc.coord_y, loc.coord_z);
+                " (map:%u, x:%f, y:%f, z:%f) Trying to port him to his previous place..",
+                GetPlayer()->GetGuidStr().c_str(), loc.GetMapId(), loc.x, loc.y, loc.z);
 
             GetPlayer()->SetSemaphoreTeleportFar(false);
 
             // Teleport to previous place, if cannot be ported back TP to homebind place
-            if (!GetPlayer()->TeleportTo(old_loc))
+            if (!GetPlayer()->TeleportTo(old_loc, TELE_TO_NODELAY))
             {
                 DETAIL_LOG("WorldSession::HandleMoveWorldportAckOpcode: %s cannot be ported to his previous place, teleporting him to his homebind place...",
-                           GetPlayer()->GetGuidStr().c_str());
+                    GetPlayer()->GetGuidStr().c_str());
                 GetPlayer()->TeleportToHomebind();
             }
             return;
         }
     }
 
-    InstanceTemplate const* mInstance = ObjectMgr::GetInstanceTemplate(loc.mapid);
+    InstanceTemplate const* mInstance = ObjectMgr::GetInstanceTemplate(loc.GetMapId());
 
     // reset instance validity, except if going to an instance inside an instance
     if (GetPlayer()->m_InstanceValid == false && !mInstance)
@@ -104,28 +103,33 @@ void WorldSession::HandleMoveWorldportAckOpcode()
 
     // relocate the player to the teleport destination
     if (!map)
-        map = sMapMgr.CreateMap(loc.mapid, GetPlayer());
+        map = sMapMgr.CreateMap(loc.GetMapId(), GetPlayer());
 
-    GetPlayer()->SetMap(map);
-    GetPlayer()->Relocate(loc.coord_x, loc.coord_y, loc.coord_z, loc.orientation);
+    if (!map)
+    {
+        DETAIL_LOG("WorldSession::HandleMoveWorldportAckOpcode: cannot create requested map %u for teleport player %s!", loc.GetMapId(), GetPlayer()->GetGuidStr().c_str());
+        GetPlayer()->SetSemaphoreTeleportFar(false);
+        GetPlayer()->TeleportToHomebind();
+        return;
+    }
 
     GetPlayer()->SendInitialPacketsBeforeAddToMap();
     // the CanEnter checks are done in TeleporTo but conditions may change
     // while the player is in transit, for example the map may get full
-    if (!GetPlayer()->GetMap()->Add(GetPlayer()))
+    if (!map->Add(GetPlayer()))
     {
         // if player wasn't added to map, reset his map pointer!
         GetPlayer()->ResetMap();
 
         DETAIL_LOG("WorldSession::HandleMoveWorldportAckOpcode: %s was teleported far but couldn't be added to map "
-                   " (map:%u, x:%f, y:%f, z:%f) Trying to port him to his previous place..",
-                   GetPlayer()->GetGuidStr().c_str(), loc.mapid, loc.coord_x, loc.coord_y, loc.coord_z);
+            " (map:%u, x:%f, y:%f, z:%f) Trying to port him to his previous place..",
+            GetPlayer()->GetGuidStr().c_str(), loc.GetMapId(), loc.x, loc.y, loc.z);
 
         // Teleport to previous place, if cannot be ported back TP to homebind place
-        if (!GetPlayer()->TeleportTo(old_loc))
+        if (!GetPlayer()->TeleportTo(old_loc, TELE_TO_NODELAY))
         {
             DETAIL_LOG("WorldSession::HandleMoveWorldportAckOpcode: %s cannot be ported to his previous place, teleporting him to his homebind place...",
-                       GetPlayer()->GetGuidStr().c_str());
+                GetPlayer()->GetGuidStr().c_str());
             GetPlayer()->TeleportToHomebind();
         }
         return;
@@ -159,13 +163,13 @@ void WorldSession::HandleMoveWorldportAckOpcode()
         if (!_player->InBattleGround())
         {
             // short preparations to continue flight
-            FlightPathMovementGenerator* flight = (FlightPathMovementGenerator*)(GetPlayer()->GetMotionMaster()->top());
+            FlightPathMovementGenerator* flight = (FlightPathMovementGenerator*)(GetPlayer()->GetMotionMaster()->CurrentMovementGenerator());
             flight->Reset(*GetPlayer());
             return;
         }
 
         // battleground state prepare, stop flight
-        GetPlayer()->GetMotionMaster()->MovementExpired();
+        GetPlayer()->GetUnitStateMgr().InitDefaults();
         GetPlayer()->m_taxi.ClearTaxiDestinations();
     }
 
@@ -228,7 +232,7 @@ void WorldSession::HandleMoveTeleportAckOpcode(WorldPacket& recv_data)
 
     WorldLocation const& dest = plMover->GetTeleportDest();
 
-    plMover->SetPosition(dest.coord_x, dest.coord_y, dest.coord_z, dest.orientation, true);
+    plMover->SetPosition(dest, true);
 
     uint32 newzone, newarea;
     plMover->GetZoneAndAreaId(newzone, newarea);
@@ -513,18 +517,13 @@ bool WorldSession::VerifyMovementInfo(MovementInfo const& movementInfo, ObjectGu
     if (guid != _player->GetMover()->GetObjectGuid())
         return false;
 
-    if (!MaNGOS::IsValidMapCoord(movementInfo.GetPos()->x, movementInfo.GetPos()->y, movementInfo.GetPos()->z, movementInfo.GetPos()->o))
+    if (!MaNGOS::IsValidMapCoord(movementInfo.GetPosition().getX(), movementInfo.GetPosition().getY(), movementInfo.GetPosition().getZ(), movementInfo.GetPosition().getO()))
         return false;
 
     if (movementInfo.HasMovementFlag(MOVEFLAG_ONTRANSPORT))
     {
-        // transports size limited
-        // (also received at zeppelin/lift leave by some reason with t_* as absolute in continent coordinates, can be safely skipped)
-        if (movementInfo.GetTransportPos()->x > 50 || movementInfo.GetTransportPos()->y > 50 || movementInfo.GetTransportPos()->z > 100)
-            return false;
-
-        if (!MaNGOS::IsValidMapCoord(movementInfo.GetPos()->x + movementInfo.GetTransportPos()->x, movementInfo.GetPos()->y + movementInfo.GetTransportPos()->y,
-                                     movementInfo.GetPos()->z + movementInfo.GetTransportPos()->z, movementInfo.GetPos()->o + movementInfo.GetTransportPos()->o))
+        if (!MaNGOS::IsValidMapCoord(movementInfo.GetPosition().getX() + movementInfo.GetTransportPosition().getX(), movementInfo.GetPosition().getY() + movementInfo.GetTransportPosition().getY(),
+            movementInfo.GetPosition().getZ() + movementInfo.GetTransportPosition().getZ(), movementInfo.GetPosition().getO() + movementInfo.GetTransportPosition().getO()))
         {
             return false;
         }
@@ -537,32 +536,21 @@ void WorldSession::HandleMoverRelocation(MovementInfo& movementInfo)
 {
     movementInfo.UpdateTime(WorldTimer::getMSTime());
 
-    Unit* mover = _player->GetMover();
+    Unit *mover = _player->GetMover();
 
-    if (Player* plMover = mover->GetTypeId() == TYPEID_PLAYER ? (Player*)mover : NULL)
+    if (Player *plMover = mover->GetTypeId() == TYPEID_PLAYER ? (Player*)mover : NULL)
     {
         if (movementInfo.HasMovementFlag(MOVEFLAG_ONTRANSPORT))
         {
-            if (!plMover->m_transport)
+            if (!plMover->IsOnTransport() && plMover->GetMap())
             {
                 // elevators also cause the client to send MOVEFLAG_ONTRANSPORT - just unmount if the guid can be found in the transport list
-                for (MapManager::TransportSet::const_iterator iter = sMapMgr.m_Transports.begin(); iter != sMapMgr.m_Transports.end(); ++iter)
-                {
-                    if ((*iter)->GetObjectGuid() == movementInfo.GetTransportGuid())
-                    {
-                        plMover->m_transport = (*iter);
-                        (*iter)->AddPassenger(plMover);
-                        break;
-                    }
-                }
+                if (Transport* transport = plMover->GetMap()->GetTransport(movementInfo.GetTransportGuid()))
+                    transport->AddPassenger(plMover, movementInfo.GetTransportPosition());
             }
         }
-        else if (plMover->m_transport)               // if we were on a transport, leave
-        {
-            plMover->m_transport->RemovePassenger(plMover);
-            plMover->m_transport = NULL;
-            movementInfo.ClearTransportData();
-        }
+        else if (plMover->IsOnTransport())               // if we were on a transport, leave
+            plMover->GetTransport()->RemovePassenger(plMover);
 
         if (movementInfo.HasMovementFlag(MOVEFLAG_SWIMMING) != plMover->IsInWater())
         {
@@ -570,13 +558,17 @@ void WorldSession::HandleMoverRelocation(MovementInfo& movementInfo)
             plMover->SetInWater(!plMover->IsInWater() || plMover->GetTerrain()->IsUnderWater(movementInfo.GetPos()->x, movementInfo.GetPos()->y, movementInfo.GetPos()->z));
         }
 
-        plMover->SetPosition(movementInfo.GetPos()->x, movementInfo.GetPos()->y, movementInfo.GetPos()->z, movementInfo.GetPos()->o);
+        plMover->SetPosition(movementInfo.GetPosition());
+        if (plMover->IsOnTransport())
+            plMover->SetTransportPosition(movementInfo.GetTransportPosition());
+
         plMover->m_movementInfo = movementInfo;
 
-        if (movementInfo.GetPos()->z < -500.0f)
+        if ((movementInfo.GetPos()->z < -500.0f) || (plMover->GetMapId() == 617 && movementInfo.GetPos()->z < 2.0f) || (plMover->GetMapId() == 572 && movementInfo.GetPos()->z < 20.0f)
+            || (plMover->GetMapId() == 562 && movementInfo.GetPos()->z < -20.0f)) // Prevent falling under textures on some arenas
         {
             if (plMover->GetBattleGround()
-                    && plMover->GetBattleGround()->HandlePlayerUnderMap(_player))
+                && plMover->GetBattleGround()->HandlePlayerUnderMap(_player))
             {
                 // do nothing, the handle already did if returned true
             }
@@ -606,6 +598,11 @@ void WorldSession::HandleMoverRelocation(MovementInfo& movementInfo)
     else                                                    // creature charmed
     {
         if (mover->IsInWorld())
-            mover->GetMap()->CreatureRelocation((Creature*)mover, movementInfo.GetPos()->x, movementInfo.GetPos()->y, movementInfo.GetPos()->z, movementInfo.GetPos()->o);
+        {
+            mover->m_movementInfo = movementInfo;
+            mover->SetPosition(movementInfo.GetPosition());
+            if (mover->IsOnTransport())
+                mover->SetTransportPosition(movementInfo.GetTransportPosition());
+        }
     }
 }
