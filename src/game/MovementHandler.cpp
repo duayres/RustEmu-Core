@@ -558,7 +558,7 @@ void WorldSession::HandleMoverRelocation(MovementInfo& movementInfo)
             plMover->SetInWater(!plMover->IsInWater() || plMover->GetTerrain()->IsUnderWater(movementInfo.GetPos()->x, movementInfo.GetPos()->y, movementInfo.GetPos()->z));
         }
 
-        plMover->SetPosition(movementInfo.GetPosition());
+        plMover->SetPosition(Position(movementInfo.GetPosition(), plMover->GetPosition().GetPhaseMask()));
         if (plMover->IsOnTransport())
             plMover->SetTransportPosition(movementInfo.GetTransportPosition());
 
@@ -600,7 +600,7 @@ void WorldSession::HandleMoverRelocation(MovementInfo& movementInfo)
         if (mover->IsInWorld())
         {
             mover->m_movementInfo = movementInfo;
-            mover->SetPosition(movementInfo.GetPosition());
+            mover->SetPosition(Position(movementInfo.GetPosition(), mover->GetPosition().GetPhaseMask()));
             if (mover->IsOnTransport())
                 mover->SetTransportPosition(movementInfo.GetTransportPosition());
         }

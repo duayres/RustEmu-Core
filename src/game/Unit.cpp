@@ -13205,6 +13205,27 @@ void Unit::SetPhaseMask(uint32 newPhaseMask, bool update)
 
     if (IsInWorld())
     {
+        // if phase mask changed for player on vehicle, set new phase mask to vehicle and all vehicle passengers
+        if (GetTypeId() == TYPEID_PLAYER)
+        {
+            if (VehicleKit* vehicle = GetVehicle())
+            {
+                if (Unit* vehUnit = vehicle->GetBase())
+                {
+                    for (uint8 i = 0; i < MAX_VEHICLE_SEAT; ++i)
+                    {
+                        if (Unit* passenger = vehicle->GetPassenger(i))
+                        {
+                            if (passenger != this)
+                                passenger->SetPhaseMask(newPhaseMask, true);
+                        }
+                    }
+
+                    vehUnit->SetPhaseMask(newPhaseMask, true);
+                }
+            }
+        }
+
         RemoveNotOwnTrackedTargetAuras(newPhaseMask);       // we can lost access to caster or target
 
         // all controlled except not owned charmed units
@@ -14348,9 +14369,6 @@ void Unit::UpdateSplineMovement(uint32 t_diff)
         m_movesplineTimer.Reset(sWorld.getConfig(CONFIG_UINT32_POSITION_UPDATE_DELAY));
         Position pos = movespline->ComputePosition();
         pos.SetPhaseMask(GetPhaseMask());
-
-        //if (GetTypeId() == TYPEID_UNIT && hasUnitState(UNIT_STAT_CANNOT_TURN))
-        //    pos.o = GetOrientation();
 
         if (IsBoarded())
         {
