@@ -269,17 +269,28 @@ void Log::Initialize()
     raLogfile = openLogFile("RaLogFile", NULL, "a");
     worldLogfile = openLogFile("WorldLogFile", "WorldLogTimestamp", "a");
 
+    ReloadConfigDefaults();
+}
+
+void Log::ReloadConfigDefaults()
+{
     // Main log file settings
-    m_includeTime  = sConfig.GetBoolDefault("LogTime", false);
-    m_logLevel     = LogLevel(sConfig.GetIntDefault("LogLevel", 0));
+    m_includeTime = sConfig.GetBoolDefault("LogTime", false);
+    m_logLevel = LogLevel(sConfig.GetIntDefault("LogLevel", 0));
     m_logFileLevel = LogLevel(sConfig.GetIntDefault("LogFileLevel", 0));
     InitColors(sConfig.GetStringDefault("LogColors", ""));
 
     m_logFilter = 0;
     for (int i = 0; i < LOG_FILTER_COUNT; ++i)
+    {
         if (*logFilterData[i].name)
+        {
             if (sConfig.GetBoolDefault(logFilterData[i].configName, logFilterData[i].defaultState))
                 m_logFilter |= (1 << i);
+            else
+                m_logFilter &= ~(1 << i);
+        }
+    }
 
     // Char log settings
     m_charLog_Dump = sConfig.GetBoolDefault("CharLogDump", false);

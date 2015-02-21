@@ -58,11 +58,17 @@ bool Socket::Open()
     // Store peer address.
     address_ = ObtainRemoteAddress();
     if (address_ == UNKNOWN_NETWORK_ADDRESS)
+    {
+        sLog.outError("bool Socket::Open() address_ == UNKNOWN_NETWORK_ADDRESS!");
         return false;
+    }
 
     // Hook for the manager.
     if (!manager_.OnSocketOpen(shared_from_this()))
+    {
+        sLog.outError("if (!manager_.OnSocketOpen(shared_from_this()))");
         return false;
+    }
 
     closed_ = false;
 

@@ -133,6 +133,7 @@ class Log : public MaNGOS::Singleton<Log, MaNGOS::ClassLevelLockable<Log, boost:
         }
     public:
         void Initialize();
+        void ReloadConfigDefaults();
         void InitColors(const std::string& init_str);
 
         void outCommand(uint32 account, const char* str, ...) ATTR_PRINTF(3, 4);

@@ -4210,12 +4210,12 @@ void Spell::update(uint32 difftime)
     }
 
     // check if the player caster has moved before the spell finished (exclude casting on vehicles)
-    if (!m_caster->GetVehicle() && (m_caster->GetTypeId() == TYPEID_PLAYER && m_timer != 0) &&
+    if (!m_caster->GetVehicle() && (m_caster->GetTypeId() == TYPEID_PLAYER || m_caster->GetTypeId() == TYPEID_UNIT) && m_timer != 0 &&
         (m_castPositionX != m_caster->GetPositionX() || m_castPositionY != m_caster->GetPositionY() || m_castPositionZ != m_caster->GetPositionZ()) &&
-        (m_spellInfo->Effect[EFFECT_INDEX_0] != SPELL_EFFECT_STUCK || !((Player*)m_caster)->m_movementInfo.HasMovementFlag(MOVEFLAG_FALLINGFAR)))
+        (m_spellInfo->Effect[EFFECT_INDEX_0] != SPELL_EFFECT_STUCK || !m_caster->m_movementInfo.HasMovementFlag(MOVEFLAG_FALLINGFAR)))
     {
-        // always cancel for channeled spells
-        if ( m_spellState == SPELL_STATE_CASTING )
+        // always cancel for channeled spells, exclude if exist attr
+        if (m_spellState == SPELL_STATE_CASTING && !m_spellInfo->HasAttribute(SPELL_ATTR_EX5_CAST_CHANNELING_BY_MOVE))
             cancel();
         // don't cancel for melee, autorepeat, triggered and instant spells
         else if(!IsNextMeleeSwingSpell() && !IsAutoRepeat() && !m_IsTriggeredSpell && (m_spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_MOVEMENT))
@@ -4245,10 +4245,10 @@ void Spell::update(uint32 difftime)
         {
             if (m_timer > 0)
             {
-                if ( m_caster->GetTypeId() == TYPEID_PLAYER )
+                if (m_caster->GetTypeId() == TYPEID_PLAYER || m_caster->GetTypeId() == TYPEID_UNIT)
                 {
                     // check if player has jumped before the channeling finished
-                    if(((Player*)m_caster)->m_movementInfo.HasMovementFlag(MOVEFLAG_FALLING))
+                    if (m_caster->m_movementInfo.HasMovementFlag(MOVEFLAG_FALLING))
                         cancel();
 
                     // check for incapacitating player states
