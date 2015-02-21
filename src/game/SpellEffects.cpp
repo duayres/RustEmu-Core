@@ -203,7 +203,7 @@ pEffect SpellEffects[TOTAL_SPELL_EFFECTS]=
     &Spell::EffectLeapBack,                                 //138 SPELL_EFFECT_LEAP_BACK                Leap back
     &Spell::EffectClearQuest,                               //139 SPELL_EFFECT_CLEAR_QUEST              (misc - is quest ID)
     &Spell::EffectForceCast,                                //140 SPELL_EFFECT_FORCE_CAST
-    &Spell::EffectNULL,                                     //141 SPELL_EFFECT_141                      damage and reduce speed?
+    &Spell::EffectForceCast,                                //141 SPELL_EFFECT_FORCE_CAST_WITH_VALUE
     &Spell::EffectTriggerSpellWithValue,                    //142 SPELL_EFFECT_TRIGGER_SPELL_WITH_VALUE
     &Spell::EffectApplyAreaAura,                            //143 SPELL_EFFECT_APPLY_AREA_AURA_OWNER
     &Spell::EffectKnockBackFromPosition,                    //144 SPELL_EFFECT_KNOCKBACK_FROM_POSITION  Spectral Blast
@@ -1547,6 +1547,14 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                     const uint32 spell_list[6] = {17863, 17939, 17943, 17944, 17946, 17948};
 
                     m_caster->CastSpell(unitTarget, spell_list[urand(0, 5)], true);
+                    return;
+                }
+                case 19395:                                 // Gordunni Trap
+                {
+                    if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
+                        return;
+                        
+                    unitTarget->CastSpell(unitTarget, urand(0, 1) ? 19394 : 11756, true);
                     return;
                 }
                 case 19411:                                 // Lava Bomb
@@ -3811,11 +3819,9 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                     if (!unitTarget)
                         return;
 
-                    Unit* caster = GetCaster();
-                    if (!caster)
-                        return;
+                    if (m_caster->getThreatManager().getThreat(unitTarget))
+                        m_caster->getThreatManager().modifyThreatPercent(unitTarget, -100);
 
-                    unitTarget->getHostileRefManager().deleteReferences();
                     return;
                 }
                 case 64172:                                 // Titanic Storm (Ulduar - Yogg Saron)
@@ -5294,7 +5300,21 @@ void Spell::EffectForceCast(SpellEffectIndex eff_idx)
         }
     }
 
-    unitTarget->CastSpell(b_castBack ? caster : unitTarget, spellInfo, true, m_CastItem, NULL, b_castBack ? unitTarget->GetObjectGuid() : m_originalCasterGuid, m_spellInfo);
+    int32 basePoints = damage;
+
+    // forced cast spells by vehicle on master always unboard the master
+    if (m_caster->IsVehicle() &&
+        m_spellInfo->EffectImplicitTargetA[eff_idx] == TARGET_MASTER)
+    {
+    if (sSpellStore.LookupEntry(basePoints))
+        m_caster->RemoveAurasDueToSpell(basePoints);
+    }
+
+    // spell effect 141 has BasePoints greater than 1
+    if (m_spellInfo->Effect[eff_idx] == SPELL_EFFECT_FORCE_CAST_WITH_VALUE)
+        unitTarget->CastCustomSpell(unitTarget, spellInfo, &basePoints, &basePoints, &basePoints, true, NULL, NULL, m_originalCasterGuid, m_spellInfo);
+    else
+        unitTarget->CastSpell(unitTarget, spellInfo, true, NULL, NULL, m_originalCasterGuid, m_spellInfo);
 }
 
 void Spell::EffectTriggerSpell(SpellEffectIndex effIndex)
@@ -5469,8 +5489,15 @@ void Spell::EffectTriggerMissileSpell(SpellEffectIndex effect_idx)
 
     if (!spellInfo)
     {
-        sLog.outError("Spell::EffectTriggerMissileSpell spell %u (eff: %u): triggering unknown spell id %u",
-            m_spellInfo->Id,effect_idx,triggered_spell_id);
+        if (unitTarget)
+        {
+            DEBUG_FILTER_LOG(LOG_FILTER_SPELL_CAST, "Spell ScriptStart spellid %u in EffectTriggerMissileSpell", m_spellInfo->Id);
+            m_caster->GetMap()->ScriptsStart(sSpellScripts, m_spellInfo->Id, m_caster, unitTarget);
+        }
+        else
+            sLog.outError("EffectTriggerMissileSpell of spell %u (eff: %u): triggering unknown spell id %u",
+                m_spellInfo->Id,effect_idx,triggered_spell_id);
+
         return;
     }
 
@@ -9290,6 +9317,8 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     return;
                 }
                 case 41055:                                 // Copy Weapon
+                case 63416:                                 // Copy Weapon
+                case 69891:                                 // Copy Weapon (No Threat)
                 {
                     if (m_caster->GetTypeId() != TYPEID_UNIT || !unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
                         return;
@@ -9302,6 +9331,14 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                         unitTarget->CastSpell(m_caster, m_spellInfo->CalculateSimpleValue(eff_idx), true);
                     }
 
+                    return;
+                }
+                case 41072:                                 // Bloodbolt
+                {
+                    if (!unitTarget)
+                        return;
+                        
+                    m_caster->CastSpell(unitTarget, m_spellInfo->CalculateSimpleValue(eff_idx), true);
                     return;
                 }
                 case 41126:                                 // Flame Crash
@@ -9542,6 +9579,7 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     return;
                 }
                 case 45206:                                 // Copy Off-hand Weapon
+                case 69892:                                 // Copy Off-hand Weapon (No Threat)
                 {
                     if (m_caster->GetTypeId() != TYPEID_UNIT || !unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
                         return;
@@ -10688,6 +10726,25 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     unitTarget->RemoveAuraHolderFromStack(spellId, numStacks);
                     return;
                 }
+                case 62552:                                 // Defend
+                {
+                    if (!unitTarget)
+                        return;
+                        
+                    unitTarget->CastSpell(unitTarget, 63119, true);
+                    return;
+                }
+                case 62575:                                 // Shield-Breaker (player)
+                case 68282:                                 // Charge (player)
+                {
+                    if (!unitTarget)
+                        return;
+                                
+                        unitTarget->RemoveAuraHolderFromStack(62719);
+                    unitTarget->RemoveAuraHolderFromStack(64100);
+                    unitTarget->RemoveAuraHolderFromStack(64192);
+                    return;
+                }
                 case 62688:                                 // Summon Wave - 10 Mob
                 {
                     uint32 spellId = m_spellInfo->CalculateSimpleValue(eff_idx);
@@ -10845,6 +10902,35 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     m_caster->CastSpell(unitTarget, (m_spellInfo->Id == 62707) ? 62717 : 63477, true); // DoT/Immunity
                     break;
                 }
+                case 63010:                                 // Charge
+                case 68307:                                 // Charge
+                case 68504:                                 // Shield-Breaker
+                {
+                    if (!unitTarget || unitTarget->GetTypeId() != TYPEID_UNIT)
+                        return;
+
+                    Unit* owner = unitTarget->GetCharmerOrOwnerPlayerOrPlayerItself();
+                    if (!owner)
+                        return;
+
+                    owner->RemoveAuraHolderFromStack(62552);
+                    owner->RemoveAuraHolderFromStack(63119);
+
+                    if (owner->HasAura(63132))
+                    {
+                        owner->RemoveAurasDueToSpell(63132);
+                        owner->CastSpell(unitTarget, 63131, true);
+                    }
+                    else if (owner->HasAura(63131))
+                    {
+                        owner->RemoveAurasDueToSpell(63131);
+                        owner->CastSpell(unitTarget, 63130, true);
+                    }
+                    else if (owner->HasAura(63130))
+                        owner->RemoveAurasDueToSpell(63130);
+
+                    return;
+                }
                 case 63027:                                 // Proximity Mines for Mimiron Encounter
                 {
                     if (!unitTarget)
@@ -10855,6 +10941,28 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                         unitTarget->CastSpell(unitTarget, 65347, true);
                     }
                     break;
+                }
+                case 63119:                                 // Block!
+                case 64192:                                 // Block!
+                {
+                    if (!unitTarget)
+                        return;
+
+                    if (unitTarget->HasAura(63132))
+                        return;
+                    else if (unitTarget->HasAura(63131))
+                    {
+                        unitTarget->RemoveAurasDueToSpell(63131);
+                        unitTarget->CastSpell(unitTarget, 63132, true);         // Shield Level 3
+                    }
+                    else if (unitTarget->HasAura(63130))
+                    {
+                        unitTarget->RemoveAurasDueToSpell(63130);
+                        unitTarget->CastSpell(unitTarget, 63131, true);         // Shield Level 2
+                    }
+                    else
+                        unitTarget->CastSpell(unitTarget, 63130, true);         // Shield Level 1
+                    return;
                 }
                 case 63122:                                 // Clear Insane (Ulduar - Yogg Saron)
                 {
@@ -11115,6 +11223,17 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                     unitTarget->CastSpell(unitTarget, 66622, true);
                     break;
                 }
+                case 66545:                                 // Summon Memory
+                {
+                    if (!unitTarget)
+                        return;
+                        
+                    uint32 memorySpells[25] = { 66543, 66691, 66692, 66694, 66695, 66696, 66697, 66698, 66699, 66700, 66701,
+                    66702, 66703, 66704, 66705, 66706, 66707, 66708, 66709, 66710, 66711, 66712, 66713, 66714, 66715 };
+                        
+                    m_caster->CastSpell(unitTarget, memorySpells[urand(0, 24)], true);
+                    return;
+                }
                 case 66741:                                 // Chum the Water
                 {
                     // maybe this check should be done sooner?
@@ -11197,6 +11316,15 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                         return;
 
                     m_caster->CastSpell(unitTarget, 67532, true);
+                    return;
+                }
+                case 67751:                                 // Ghoul Explode
+                {
+                    if (!unitTarget)
+                        return;
+                        
+                    unitTarget->InterruptNonMeleeSpells(false);
+                    unitTarget->CastSpell(unitTarget, 67729, false);
                     return;
                 }
                 case 68861:                                 // Consume Soul (ICC FoS: Bronjahm)

@@ -593,16 +593,22 @@ bool Spell::CheckTarget(Unit* target, SpellEffectIndex eff)
         if (target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE) && target->GetObjectGuid() != m_caster->GetCharmerOrOwnerGuid())
             return false;
 
-        // unselectable targets skipped in all cases except TARGET_SCRIPT targeting
+        // unselectable targets skipped in all cases except TARGET_SCRIPT targeting or vehicle passengers
         // in case TARGET_SCRIPT target selected by server always and can't be cheated
         if ((!m_IsTriggeredSpell || target != m_targets.getUnitTarget()) &&
             target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE) &&
+            (!target->GetTransportInfo() || (target->GetTransportInfo() &&
+            !((Unit*)target->GetTransportInfo()->GetTransport())->IsVehicle())) &&
             m_spellInfo->EffectImplicitTargetA[eff] != TARGET_SCRIPT &&
             m_spellInfo->EffectImplicitTargetB[eff] != TARGET_SCRIPT &&
             m_spellInfo->EffectImplicitTargetA[eff] != TARGET_AREAEFFECT_INSTANT &&
             m_spellInfo->EffectImplicitTargetB[eff] != TARGET_AREAEFFECT_INSTANT &&
             m_spellInfo->EffectImplicitTargetA[eff] != TARGET_AREAEFFECT_CUSTOM &&
-            m_spellInfo->EffectImplicitTargetB[eff] != TARGET_AREAEFFECT_CUSTOM)
+            m_spellInfo->EffectImplicitTargetB[eff] != TARGET_AREAEFFECT_CUSTOM &&
+            m_spellInfo->EffectImplicitTargetA[eff] != TARGET_NARROW_FRONTAL_CONE &&
+            m_spellInfo->EffectImplicitTargetB[eff] != TARGET_NARROW_FRONTAL_CONE &&
+            m_spellInfo->EffectImplicitTargetA[eff] != TARGET_NARROW_FRONTAL_CONE_2 &&
+            m_spellInfo->EffectImplicitTargetB[eff] != TARGET_NARROW_FRONTAL_CONE_2)
             return false;
     }
 
@@ -2869,8 +2875,53 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, UnitList&
             FillAreaTargets(targetUnitMap, radius, PUSH_IN_FRONT_30, SPELL_TARGETS_FRIENDLY);
             break;
         case TARGET_NARROW_FRONTAL_CONE:
-            FillAreaTargets(targetUnitMap, radius, PUSH_IN_FRONT_15, SPELL_TARGETS_AOE_DAMAGE);
+        case TARGET_NARROW_FRONTAL_CONE_2:
+        {
+            SpellTargets targetB = SPELL_TARGETS_AOE_DAMAGE;
+
+            if (m_spellInfo->Effect[effIndex] == SPELL_EFFECT_SCRIPT_EFFECT)
+                targetB = SPELL_TARGETS_ALL;
+
+            UnitList tempTargetUnitMap;
+            SQLMultiStorage::SQLMSIteratorBounds<SpellTargetEntry> bounds = sSpellScriptTargetStorage.getBounds<SpellTargetEntry>(m_spellInfo->Id);
+
+            // fill real target list if no spell script target defined
+            FillAreaTargets(bounds.first != bounds.second ? tempTargetUnitMap : targetUnitMap,
+                radius, PUSH_IN_FRONT_15, bounds.first != bounds.second ? SPELL_TARGETS_ALL : targetB);
+
+            if (!tempTargetUnitMap.empty())
+            {
+                for (UnitList::const_iterator iter = tempTargetUnitMap.begin(); iter != tempTargetUnitMap.end(); ++iter)
+                {
+                    if ((*iter)->GetTypeId() != TYPEID_UNIT)
+                        continue;
+
+                    for (SQLMultiStorage::SQLMultiSIterator<SpellTargetEntry> i_spellST = bounds.first; i_spellST != bounds.second; ++i_spellST)
+                    {
+                        if (i_spellST->CanNotHitWithSpellEffect(effIndex))
+                            continue;
+
+                        // only creature entries supported for this target type
+                        if (i_spellST->type == SPELL_TARGET_TYPE_GAMEOBJECT)
+                            continue;
+
+                        if ((*iter)->GetEntry() == i_spellST->targetEntry)
+                        {
+                            if (i_spellST->type == SPELL_TARGET_TYPE_DEAD && ((Creature*)(*iter))->IsCorpse())
+                            {
+                                targetUnitMap.push_back((*iter));
+                            }
+                            else if (i_spellST->type == SPELL_TARGET_TYPE_CREATURE && (*iter)->isAlive())
+                            {
+                                targetUnitMap.push_back((*iter));
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
             break;
+        }
         case TARGET_IN_FRONT_OF_CASTER_30:
             // Incorrect name for target. Must be _FRONTAL_CONE_90
             FillAreaTargets(targetUnitMap, radius, PUSH_IN_FRONT_90, SPELL_TARGETS_AOE_DAMAGE);
@@ -6694,21 +6745,37 @@ SpellCastResult Spell::CheckCast(bool strict)
             }
             case SPELL_EFFECT_RESURRECT:
             case SPELL_EFFECT_RESURRECT_NEW:
-            case SPELL_EFFECT_SELF_RESURRECT:
             {
-                if (m_caster->isInCombat())
-                    return SPELL_FAILED_AFFECTING_COMBAT;
-
-                if (m_spellInfo->Effect[i] == SPELL_EFFECT_SELF_RESURRECT)
+                if (m_targets.m_targetMask & (TARGET_FLAG_CORPSE | TARGET_FLAG_PVP_CORPSE))
                 {
-                    if (m_caster->HasAuraType(SPELL_AURA_PREVENT_RESURRECTION))
+                    if (Corpse* corpse = m_caster->GetMap()->GetCorpse(m_targets.getCorpseTargetGuid()))
+                    {
+                        if (Player* owner = ObjectAccessor::FindPlayer(corpse->GetOwnerGuid()))
+                        {
+                            if (owner->HasAuraType(SPELL_AURA_PREVENT_RESURRECTION))
+                                return SPELL_FAILED_TARGET_CANNOT_BE_RESURRECTED;
+                        }
+                        else
+                            return SPELL_FAILED_TARGET_CANNOT_BE_RESURRECTED;
+                    }
+                    else
                         return SPELL_FAILED_TARGET_CANNOT_BE_RESURRECTED;
                 }
-                else if (unitTarget && unitTarget->HasAuraType(SPELL_AURA_PREVENT_RESURRECTION))
+                else if (m_targets.m_targetMask & TARGET_FLAG_UNIT)
+                {
+                    Unit* target = m_targets.getUnitTarget();
+                    if (!target || target->HasAuraType(SPELL_AURA_PREVENT_RESURRECTION))
+                        return SPELL_FAILED_TARGET_CANNOT_BE_RESURRECTED;
+                }
+                else
                     return SPELL_FAILED_TARGET_CANNOT_BE_RESURRECTED;
 
-                if (m_caster->GetTypeId() == TYPEID_PLAYER && ((Player*)m_caster)->isTotalImmune())
-                    return SPELL_FAILED_CANT_DO_THAT_RIGHT_NOW;
+                break;
+            }
+            case SPELL_EFFECT_SELF_RESURRECT:
+            {
+                if (m_caster->HasAuraType(SPELL_AURA_PREVENT_RESURRECTION))
+                    return SPELL_FAILED_TARGET_CANNOT_BE_RESURRECTED;
 
                 break;
             }

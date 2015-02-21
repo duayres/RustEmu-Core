@@ -297,7 +297,7 @@ pAuraHandler AuraHandler[TOTAL_AURAS]=
     &Aura::HandleAuraModExpertise,                          //240 SPELL_AURA_MOD_EXPERTISE
     &Aura::HandleForceMoveForward,                          //241 Forces the caster to move forward
     &Aura::HandleUnused,                                    //242 SPELL_AURA_MOD_SPELL_DAMAGE_FROM_HEALING (only 2 test spels in 3.2.2a)
-    &Aura::HandleAuraFactionChange,                         //243 faction change
+    &Aura::HandleFactionOverride,                           //243 faction change
     &Aura::HandleComprehendLanguage,                        //244 SPELL_AURA_COMPREHEND_LANGUAGE
     &Aura::HandleNoImmediateEffect,                         //245 SPELL_AURA_MOD_DURATION_OF_MAGIC_EFFECTS     implemented in Unit::CalculateAuraDuration
     &Aura::HandleNoImmediateEffect,                         //246 SPELL_AURA_MOD_DURATION_OF_EFFECTS_BY_DISPEL implemented in Unit::CalculateAuraDuration
@@ -2607,6 +2607,9 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                             target->CastSpell(target, 45957, true);
                         return;
                     }
+                    case 46637:                             // Break Ice
+                        target->CastSpell(target, 46638, true, NULL, this);
+                        return;
                     case 46699:                             // Requires No Ammo
                         if (target->GetTypeId() == TYPEID_PLAYER)
                             // not use ammo and not allow use
@@ -2616,6 +2619,12 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                         target->CastSpell(target, 47189, true, NULL, this);
                         // allow script to process further (text)
                         break;
+                    case 47563:                             // Freezing Cloud
+                        target->CastSpell(target, 47574, true, NULL, this);
+                        return;
+                    case 47593:                             // Freezing Cloud
+                        target->CastSpell(target, 47594, true, NULL, this);
+                        return;
                     case 47669:                             // Awaken Subboss (Gortok - Utgarde Pinnacle)
                     {
                         if (target && target->GetTypeId() == TYPEID_UNIT)
@@ -3268,7 +3277,7 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
             }
             case 46637:                                     // Break Ice
             {
-                target->CastSpell(target, 46638, true);
+                target->CastSpell(target, 47030, true, NULL, this);
                 return;
             }
             case 47744:                                     // Rage of Jin'arrak
@@ -3762,6 +3771,13 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                     else
                         target->m_AuraFlags &= ~UNIT_AURAFLAG_ALIVE_INVISIBLE;
                     return;
+                case 66936:                                     // Submerge
+                case 66948:                                     // Submerge
+                    if (apply)
+                        target->CastSpell(target, 66969, true);
+                    else
+                        target->RemoveAurasDueToSpell(66969);
+                    return;
                 case 70733:                                 // Stoneform (ICC))
                 {
                     target->ApplyModFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_OOC_NOT_ATTACKABLE, apply);
@@ -4146,6 +4162,9 @@ void Aura::HandleAuraModShapeshift(bool apply, bool Real)
     uint32 modelid = 0;
     Powers PowerType = POWER_MANA;
     Unit* target = GetTarget();
+
+    // remove SPELL_AURA_EMPATHY
+    target->RemoveSpellsCausingAura(SPELL_AURA_EMPATHY);
 
     if (ssEntry->modelID_A)
         modelid = target->GetModelForForm(ssEntry);
@@ -8360,12 +8379,12 @@ void Aura::HandleShapeshiftBoosts(bool apply)
 
 void Aura::HandleAuraEmpathy(bool apply, bool /*Real*/)
 {
-    if (GetTarget()->GetTypeId() != TYPEID_UNIT)
-        return;
+    Unit* target = GetTarget();
 
-    CreatureInfo const * ci = ObjectMgr::GetCreatureTemplate(GetTarget()->GetEntry());
-    if (ci && ci->CreatureType == CREATURE_TYPE_BEAST)
-        GetTarget()->ApplyModUInt32Value(UNIT_DYNAMIC_FLAGS, UNIT_DYNFLAG_SPECIALINFO, apply);
+    // This aura is expected to only work with CREATURE_TYPE_BEAST or players
+    CreatureInfo const* ci = ObjectMgr::GetCreatureTemplate(target->GetEntry());
+    if (target->GetTypeId() == TYPEID_PLAYER || (target->GetTypeId() == TYPEID_UNIT && ci && ci->CreatureType == CREATURE_TYPE_BEAST))
+        target->ApplyModUInt32Value(UNIT_DYNAMIC_FLAGS, UNIT_DYNFLAG_SPECIALINFO, apply);
 }
 
 void Aura::HandleAuraUntrackable(bool apply, bool /*Real*/)
@@ -9626,7 +9645,7 @@ void Aura::PeriodicDummyTick()
                             break;
                         }
                     }
-                    break;
+                    return;
                 }
 //              // Headless Horseman - Conflagrate, Periodic Aura
 //              case 42637: break;
@@ -9634,8 +9653,9 @@ void Aura::PeriodicDummyTick()
 //              case 42774: break;
 //              // Headless Horseman Climax - Summoning Rhyme Aura
 //              case 42879: break;
-//              // Tricky Treat
-//              case 42919: break;
+                case 42919:                                 // Tricky Treat
+                    target->CastSpell(target, 42966, true);
+                    return;
 //              // Giddyup!
 //              case 42924: break;
 //              // Ram - Trot
@@ -9965,6 +9985,12 @@ void Aura::PeriodicDummyTick()
                         target->CastSpell(target, target->GetMap()->IsRegularDifficulty() ? 63387 : 64531, true);
                     return;
                 }
+                case 64101:                                 // Defend
+                {
+                    target->CastSpell(target, 62719, true);
+                    target->CastSpell(target, 64192, true);
+                    return;
+                }
                 case 64217:                                 // Overcharged
                 {
                     Unit *caster = GetCaster();
@@ -10047,6 +10073,16 @@ void Aura::PeriodicDummyTick()
                 {
                     uint32 triggerSpells[8] = {68898, 68904, 68886, 68905, 68896, 68906, 68897, 68907};
                     target->CastSpell(target, triggerSpells[GetAuraTicks() % 8], true);
+                    return;
+                }
+                case 66798:                                 // Death's Respite
+                {
+                    Unit* caster = GetCaster();
+                    if (!caster)
+                        return;
+
+                    caster->CastSpell(target, 66797, true, NULL, this);
+                    target->RemoveAurasDueToSpell(GetId());
                     return;
                 }
                 case 68875:                                 // Wailing Souls
@@ -12927,21 +12963,19 @@ void Aura::HandleAuraSetVehicle(bool apply, bool real)
 
 }
 
-void Aura::HandleAuraFactionChange(bool apply, bool real)
+void Aura::HandleFactionOverride(bool apply, bool Real)
 {
-    if (!real)
+    if (!Real)
         return;
 
     Unit* target = GetTarget();
-
-    if (!target || !target->IsInWorld())
+    if (!target || !sFactionTemplateStore.LookupEntry(GetMiscValue()))
         return;
 
-    uint32 newFaction = apply ? GetMiscValue() : target->GetOriginalFaction();
-
-    if (newFaction && newFaction != target->getFaction())
-        target->setFaction(newFaction);
-
+    if (apply)
+        target->setFaction(GetMiscValue());
+    else
+        target->RestoreOriginalFaction();
 }
 
 // FIXME: this is only temp. fix for not allowing charmed player to deal damage/heal
@@ -13071,9 +13105,9 @@ void Aura::HandleInitializeImages(bool apply, bool real)
     }
 }
 
-void Aura::HandlePreventResurrection(bool apply, bool real)
+void Aura::HandlePreventResurrection(bool apply, bool Real)
 {
-    if (!real)
+    if (!Real)
         return;
 
     Unit* target = GetTarget();

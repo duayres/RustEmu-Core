@@ -789,6 +789,7 @@ bool IsPositiveEffect(SpellEntry const *spellproto, SpellEffectIndex effIndex)
         // some explicitly required script effect sets
         switch (spellproto->Id)
         {
+        case 42436:                                 // Drink!
         case 46650:                                 // Open Brutallus Back Door
         case 62488:                                 // Activate Construct
         case 64503:                                 // Water
@@ -957,6 +958,7 @@ bool IsPositiveEffect(SpellEntry const *spellproto, SpellEffectIndex effIndex)
         case SPELL_AURA_PERIODIC_LEECH:
         case SPELL_AURA_MOD_STALKED:
         case SPELL_AURA_PERIODIC_DAMAGE_PERCENT:
+        case SPELL_AURA_PREVENT_RESURRECTION:
             return false;
         case SPELL_AURA_PERIODIC_DAMAGE:            // used in positive spells also.
             // part of negative spell if casted at self (prevent cancel)
@@ -1518,7 +1520,7 @@ struct DoSpellProcEvent
             ++count;
     }
 
-    bool HasEntry(uint32 spellId) { return spe_map.count(spellId) > 0; }
+    bool HasEntry(uint32 spellId) { return spe_map.find(spellId) != spe_map.end(); }
     bool SetStateToEntry(uint32 spellId) { return (state = spe_map.find(spellId)) != spe_map.end(); }
     SpellProcEventMap& spe_map;
     SpellProcEventMap::const_iterator state;
@@ -2354,6 +2356,11 @@ bool SpellMgr::IsNoStackSpellDueToSpell(uint32 spellId_1, uint32 spellId_2) cons
         // Empowered (dummy) and Empowered
         if (MatchedSpellIdPair(64161, 65294) || MatchedSpellIdPair(64161, 65294))
             return false;
+
+        // Spectral Realm (reaction) and Spectral Realm (invisibility)
+        if (MatchedSpellIdPair(44852, 46021) || MatchedSpellIdPair(44852, 65294))
+            return false;
+
         break;
     }
     case SPELLFAMILY_WARLOCK:
@@ -3800,7 +3807,11 @@ void SpellMgr::LoadSpellScriptTarget()
                 spellProto->EffectImplicitTargetA[i] == TARGET_AREAEFFECT_GO_AROUND_SOURCE ||
                 spellProto->EffectImplicitTargetB[i] == TARGET_AREAEFFECT_GO_AROUND_SOURCE ||
                 spellProto->EffectImplicitTargetA[i] == TARGET_AREAEFFECT_GO_AROUND_DEST ||
-                spellProto->EffectImplicitTargetB[i] == TARGET_AREAEFFECT_GO_AROUND_DEST)
+                spellProto->EffectImplicitTargetB[i] == TARGET_AREAEFFECT_GO_AROUND_DEST ||
+                spellProto->EffectImplicitTargetA[i] == TARGET_NARROW_FRONTAL_CONE ||
+                spellProto->EffectImplicitTargetB[i] == TARGET_NARROW_FRONTAL_CONE ||
+                spellProto->EffectImplicitTargetA[i] == TARGET_NARROW_FRONTAL_CONE_2 ||
+                spellProto->EffectImplicitTargetB[i] == TARGET_NARROW_FRONTAL_CONE_2)
             {
                 targetfound = true;
                 break;
