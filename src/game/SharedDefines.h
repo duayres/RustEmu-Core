@@ -429,7 +429,7 @@ enum SpellAttributesEx4
 
 enum SpellAttributesEx5
 {
-    SPELL_ATTR_EX5_CAST_CHANNELING_BY_MOVE     = 0x00000001,// 0 available casting channel spell by moving ( miner and miner car in dk zone )
+    SPELL_ATTR_EX5_CAST_CHANNEL_WHEN_MOVEING   = 0x00000001,// 0 available casting channel spell when moving ( miner and miner car in dk zone )
     SPELL_ATTR_EX5_NO_REAGENT_WHILE_PREP       = 0x00000002,// 1 not need reagents if UNIT_FLAG_PREPARATION
     SPELL_ATTR_EX5_REMOVE_AT_ENTER_ARENA       = 0x00000004,// 2 removed at enter arena (e.g. 31850 since 3.3.3)
     SPELL_ATTR_EX5_USABLE_WHILE_STUNNED        = 0x00000008,// 3 usable while stunned
