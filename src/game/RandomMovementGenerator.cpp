@@ -35,8 +35,6 @@ RandomMovementGenerator<Creature>::RandomMovementGenerator(const Creature& creat
     i_y = respY;
     i_z = respZ;
     i_radius = wander_distance;
-    // TODO - add support for flying mobs using some distance
-    i_verticalZ = 0.0f;
 }
 
 template<>
@@ -52,24 +50,23 @@ void RandomMovementGenerator<Creature>::_setRandomLocation(Creature& creature)
     float destY = i_y;
     float destZ = i_z;
 
-    // check if new random position is assigned, GetRandomPoint may fail
-    if (creature.GetRandomPosition(destX, destY, destZ, i_radius * 1.5f))
-    {
-        creature.addUnitState(UNIT_STAT_ROAMING_MOVE);
+    creature.addUnitState(UNIT_STAT_ROAMING_MOVE);
 
+    // check if new random position is assigned, GetReachableRandomPosition may fail
+    if (creature.GetMap()->GetReachableRandomPosition(&creature, destX, destY, destZ, i_radius))
+    {
         Movement::MoveSplineInit<Unit*> init(creature);
         init.MoveTo(destX, destY, destZ, true);
         init.SetWalk(true);
         init.SetSmooth();
         init.Launch();
-
         if (roll_chance_i(MOVEMENT_RANDOM_MMGEN_CHANCE_NO_BREAK))
             i_nextMoveTime.Reset(50);
         else
-            i_nextMoveTime.Reset(urand(3000, 10000));       // keep a short wait time
+            i_nextMoveTime.Reset(urand(3000, 10000));       // Keep a short wait time
     }
     else
-        i_nextMoveTime.Reset(0); // Retry in next update
+        i_nextMoveTime.Reset(50);                           // Retry later
 }
 
 template<>
