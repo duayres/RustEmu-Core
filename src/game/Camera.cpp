@@ -30,10 +30,14 @@ Camera::Camera(Player& player) : m_owner(player), m_sourceGuid(ObjectGuid())
 
 Camera::~Camera()
 {
+    // Don't cleanup/log for not fully created Player object.
+    if (!GetOwner()->IsInitialized())
+        return;
+
     // view of camera should be already reseted to owner (RemoveFromWorld -> Event_RemovedFromWorld -> ResetView)
-    if (m_sourceGuid != GetOwner()->GetObjectGuid())
+    if (!m_sourceGuid.IsEmpty() && m_sourceGuid != GetOwner()->GetObjectGuid())
         sLog.outError("Camera destuctor called: camera for %s not reseted (setted to %s)",
-        GetOwner()->GetObjectGuid().GetString().c_str(), m_sourceGuid.IsEmpty() ? "<none>" : m_sourceGuid.GetString().c_str());
+            GetOwner()->GetObjectGuid().GetString().c_str(), m_sourceGuid.IsEmpty() ? "<none>" : m_sourceGuid.GetString().c_str());
 
     // for symmetry with constructor and way to make viewpoint's list empty
     GetBody()->GetViewPoint().Detach(GetOwner()->GetObjectGuid());
@@ -175,15 +179,15 @@ void Camera::UpdateVisibilityForOwner()
         return;
 
     MaNGOS::VisibleNotifier notifier(*this);
-    Cell::VisitAllObjects(m_source, notifier, m_source->GetMap()->GetVisibilityDistance(), false);
+    Cell::VisitAllObjects(m_source, notifier, m_source->GetMap()->GetVisibilityDistance(m_source), false);
     notifier.Notify();
 }
 
 WorldObject* Camera::GetBody()
 {
-    if (m_sourceGuid.IsEmpty()
+    if (m_sourceGuid.IsEmpty() 
         || GetOwner()->GetObjectGuid() == m_sourceGuid
-        || !m_owner.IsInWorld()
+        || !m_owner.IsInWorld() 
         || !m_owner.GetMap())
         return &m_owner;
 
@@ -199,17 +203,16 @@ ViewPoint::~ViewPoint()
     if (!m_cameras.empty())
     {
         sLog.outError("ViewPoint destructor for %s called, but %u camera(s) referenced to it",
-            m_body.GetObjectGuid().GetString().c_str(), m_cameras.size());
-        m_cameras.clear();
+            m_body.IsInitialized() ? m_body.GetObjectGuid().GetString().c_str() : "<uninitialized>", m_cameras.size());
     }
 }
 
-void ViewPoint::Attach(ObjectGuid const& cameraOwnerGuid)
+void ViewPoint::Attach(ObjectGuid const& cameraOwnerGuid) 
 {
     m_cameras.insert(cameraOwnerGuid);
 }
 
-void ViewPoint::Detach(ObjectGuid const& cameraOwnerGuid)
+void ViewPoint::Detach(ObjectGuid const& cameraOwnerGuid) 
 {
     m_cameras.erase(cameraOwnerGuid);
 }
@@ -219,15 +222,17 @@ void ViewPoint::CameraCall(void (Camera::*handler)())
     if (!m_cameras.empty())
     {
 
-        for (CameraList::iterator itr = m_cameras.begin(); itr != m_cameras.end();)
+        for (CameraList::iterator itr = m_cameras.begin(), next; itr != m_cameras.end(); itr = next)
         {
+            next = itr;
+            ++next;
             ObjectGuid guid = *itr;
+
             if (m_body.GetTypeId() == TYPEID_PLAYER && guid == m_body.GetObjectGuid())
             {
                 if (Camera* camera = ((Player*)&m_body)->GetCamera())
                     if (camera->IsInitialized())
                         (camera->*handler)();
-                ++itr;
             }
             else if (m_body.GetMap() && guid.IsPlayer())
             {
@@ -236,7 +241,6 @@ void ViewPoint::CameraCall(void (Camera::*handler)())
                     if (Camera* camera = player->GetCamera())
                         if (camera->IsInitialized())
                             (camera->*handler)();
-                    ++itr;
                 }
                 else
                     m_cameras.erase(guid);
