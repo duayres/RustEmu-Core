@@ -105,13 +105,8 @@ void WorldSession::HandleMoveWorldportAckOpcode()
     if (!map)
         map = sMapMgr.CreateMap(loc.GetMapId(), GetPlayer());
 
-    if (!map)
-    {
-        DETAIL_LOG("WorldSession::HandleMoveWorldportAckOpcode: cannot create requested map %u for teleport player %s!", loc.GetMapId(), GetPlayer()->GetGuidStr().c_str());
-        GetPlayer()->SetSemaphoreTeleportFar(false);
-        GetPlayer()->TeleportToHomebind();
-        return;
-    }
+    GetPlayer()->SetMap(map);
+    GetPlayer()->Relocate(loc.x, loc.y, loc.z, loc.orientation);
 
     GetPlayer()->SendInitialPacketsBeforeAddToMap();
     // the CanEnter checks are done in TeleporTo but conditions may change
