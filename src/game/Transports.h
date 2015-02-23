@@ -29,7 +29,7 @@
 
 class TransportKit;
 
-class Transport : public GameObject
+class MANGOS_DLL_SPEC Transport : public GameObject
 {
     public:
         explicit Transport();
@@ -61,7 +61,7 @@ class Transport : public GameObject
         TransportKit* m_transportKit;
 };
 
-class MOTransport : public Transport
+class MANGOS_DLL_SPEC MOTransport : public Transport
 {
     public:
         explicit MOTransport();
@@ -121,7 +121,7 @@ class MOTransport : public Transport
         WayPoint const& GetWayPoint(uint32 index) { return index < m_WayPoints.size() ? m_WayPoints[index] : m_WayPoints[0]; }
 };
 
-class  TransportKit : public TransportBase
+class  MANGOS_DLL_SPEC TransportKit : public TransportBase
 {
     public:
         explicit TransportKit(Transport& base);

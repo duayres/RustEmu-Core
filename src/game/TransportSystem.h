@@ -49,7 +49,7 @@ class TransportBase;
  * - Accessors to get the transporter
  */
 
-class TransportInfo
+class MANGOS_DLL_SPEC TransportInfo
 {
     public:
         TransportInfo(WorldObject& owner, TransportBase& transport, Position const& pos, int8 seat) :
@@ -91,7 +91,7 @@ typedef UNORDERED_MAP < ObjectGuid /*passenger*/, TransportInfo /*passengerInfo*
  * - Providing helper for calculating between local and global coordinates
  */
 
-class TransportBase
+class MANGOS_DLL_SPEC TransportBase
 {
     public:
         explicit TransportBase(WorldObject* owner);

@@ -29,7 +29,7 @@ class MovementInfo;
 
 using G3D::Vector3;
 
-struct Location : public Vector3
+struct MANGOS_DLL_SPEC Location : public Vector3
 {
     Location() 
         : Vector3(0.0f, 0.0f, 0.0f), orientation(0.0f)
@@ -71,7 +71,7 @@ struct Location : public Vector3
     };
 };
 
-struct Position : public Location
+struct MANGOS_DLL_SPEC Position : public Location
 {
     Position() 
         : Location(), m_phaseMask(PHASEMASK_NORMAL)
@@ -111,7 +111,7 @@ struct Position : public Location
 
 class WorldObject;
 
-struct WorldLocation : public Position
+struct MANGOS_DLL_SPEC WorldLocation : public Position
 {
 
     public:
