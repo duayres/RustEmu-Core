@@ -1,3 +1,16 @@
+## RustEmu Core - specifics
+
+It's Cmangos project fork:
+
+Implemented (from R2 project):
+ * Group System v2 with [multi invites](http://www.youtube.com/watch?v=XiItnBrvi4k)
+ * Random BG
+ * LFG system
+ * UnitStateMgr
+ * Worldlocation
+ * Transport, MOTransport, Vehicle, VehicleKit systems
+ * Spell system and SpellAura system
+
 # C(ontinued)-MaNGOS -- README
 
 This file is part of the CMaNGOS Project. See [AUTHORS](AUTHORS.md) file for Copyright information
