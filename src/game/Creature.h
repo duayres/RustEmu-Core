@@ -526,9 +526,18 @@ class MANGOS_DLL_SPEC Creature : public Unit
 
         char const* GetSubName() const { return GetCreatureInfo()->SubName; }
 
-        virtual void Update(uint32 update_diff, uint32 time) override;  // overwrite Unit::Update
+        void Update(uint32 update_diff, uint32 time) override;  // overwrite Unit::Update
 
         virtual void RegenerateAll(uint32 update_diff);
+
+        void GetRespawnCoord(float& x, float& y, float& z, float* ori = NULL, float* dist = NULL) const;
+        void SetSummonPoint(CreatureCreatePos const& pos) { m_respawnPos = pos.m_pos; }
+        void SetRespawnCoord(float x, float y, float z, float ori) { m_respawnPos.x = x; m_respawnPos.y = y; m_respawnPos.z = z; m_respawnPos.o = ori; }
+        void SetRespawnCoord(CreatureCreatePos const& pos) { m_respawnPos = pos.m_pos; }
+        void ResetRespawnCoord();
+        WorldLocation const& GetRespawnCoord() const { return m_respawnPos; };
+        void SetRespawnCoord(WorldLocation const& loc) { m_respawnPos = loc; }
+
         uint32 GetEquipmentId() const { return m_equipmentId; }
 
         CreatureSubtype GetSubtype() const { return m_subtype; }
@@ -581,9 +590,9 @@ class MANGOS_DLL_SPEC Creature : public Unit
             return GetCreatureInfo()->Rank == CREATURE_ELITE_WORLDBOSS;
         }
 
-        uint32 GetLevelForTarget(Unit const* target) const override; // overwrite Unit::GetLevelForTarget for boss level support
+        uint32 GetLevelForTarget(Unit const* target) const; // overwrite Unit::GetLevelForTarget for boss level support
 
-        uint8 getRace() const override;
+        uint8 getRace() const;
 
         bool IsInEvadeMode() const override;
 
@@ -604,7 +613,7 @@ class MANGOS_DLL_SPEC Creature : public Unit
         void FocusTarget(Spell const* focusSpell, WorldObject* target);
         void ReleaseFocus(Spell const* focusSpell);
 
-        uint32 GetShieldBlockValue() const override         // dunno mob block value
+        uint32 GetShieldBlockValue() const                  // dunno mob block value
         {
             return (getLevel() / 2 + uint32(GetStat(STAT_STRENGTH) / 20));
         }
@@ -651,7 +660,7 @@ class MANGOS_DLL_SPEC Creature : public Unit
         uint32 GetScriptId() const;
 
         // overwrite WorldObject function for proper name localization
-        const char* GetNameForLocaleIdx(int32 locale_idx) const override;
+        const char* GetNameForLocaleIdx(int32 locale_idx) const;
 
         void SetDeathState(DeathState s);                   // overwrite virtual Unit::SetDeathState
 
@@ -706,7 +715,7 @@ class MANGOS_DLL_SPEC Creature : public Unit
         Cell const& GetCurrentCell() const { return m_currentCell; }
         void SetCurrentCell(Cell const& cell) { m_currentCell = cell; }
 
-        bool IsVisibleInGridForPlayer(Player* pl) const override;
+        bool IsVisibleInGridForPlayer(Player* pl) const;
 
         void RemoveCorpse();
         bool IsDeadByDefault() const { return m_isDeadByDefault; };
@@ -717,7 +726,7 @@ class MANGOS_DLL_SPEC Creature : public Unit
         time_t GetRespawnTimeEx() const;
         void SetRespawnTime(uint32 respawn) { m_respawnTime = respawn ? time(NULL) + respawn : 0; }
         void Respawn();
-        void SaveRespawnTime() override;
+        void SaveRespawnTime();
 
         uint32 GetRespawnDelay() const { return m_respawnDelay; }
         void SetRespawnDelay(uint32 delay) { m_respawnDelay = delay; }
@@ -740,8 +749,8 @@ class MANGOS_DLL_SPEC Creature : public Unit
 
         virtual Unit* SelectPreferredTargetForSpell(SpellEntry const* spellInfo);
 
-        bool HasQuest(uint32 quest_id) const override;
-        bool HasInvolvedQuest(uint32 quest_id)  const override;
+        bool HasQuest(uint32 quest_id) const;
+        bool HasInvolvedQuest(uint32 quest_id)  const;
 
         GridReference<Creature>& GetGridRef() { return m_gridRef; }
         bool IsRegeneratingHealth() { return GetCreatureInfo()->RegenerateStats & REGEN_FLAG_HEALTH; }
@@ -758,14 +767,6 @@ class MANGOS_DLL_SPEC Creature : public Unit
         void SetCombatStartPosition(float x, float y, float z) { m_combatStart = WorldLocation(GetMapId(), x, y, z); }
         void GetCombatStartPosition(float& x, float& y, float& z) { x = m_combatStart.x; y = m_combatStart.y; z = m_combatStart.z; }
         WorldLocation const& GetCombatStartPosition() const { return m_combatStart; };
-
-        void GetRespawnCoord(float& x, float& y, float& z, float* ori = NULL, float* dist = NULL) const;
-        void SetSummonPoint(CreatureCreatePos const& pos) { m_respawnPos = pos.m_pos; }
-        void SetRespawnCoord(float x, float y, float z, float ori) { m_respawnPos.x = x; m_respawnPos.y = y; m_respawnPos.z = z; m_respawnPos.o = ori; }
-        void SetRespawnCoord(CreatureCreatePos const& pos) { m_respawnPos = pos.m_pos; }
-        void ResetRespawnCoord();
-        WorldLocation const& GetRespawnCoord() const { return m_respawnPos; };
-        void SetRespawnCoord(WorldLocation const& loc) { m_respawnPos = loc; }
 
         void SetDeadByDefault(bool death_state) { m_isDeadByDefault = death_state; }
 

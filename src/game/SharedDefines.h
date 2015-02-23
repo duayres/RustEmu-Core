@@ -155,10 +155,25 @@ enum Powers
     POWER_HAPPINESS                     = 4,            // UNIT_FIELD_POWER5
     POWER_RUNE                          = 5,            // UNIT_FIELD_POWER6
     POWER_RUNIC_POWER                   = 6,            // UNIT_FIELD_POWER7
+    POWER_SOUL_SHARDS                   = 7,
+    POWER_ECLIPSE                       = 8,
+    POWER_HOLY_POWER                    = 9,
+    POWER_ALTERNATIVE                   = 10,
+    MAX_POWERS                          = 7,            // in 3.xx client only 7 power types
     POWER_HEALTH                        = 0xFFFFFFFE    // (-2 as signed value)
 };
 
-#define MAX_POWERS                        7
+enum EnergyType
+{
+    ENERGY_TYPE_UNK0      = 0,                          // Possible mana or flat energy.
+    ENERGY_TYPE_UNK1      = 1,                          // 2 vehicles in 3.3.5a
+    ENERGY_TYPE_PYRITE    = 41,                         // 2 vehicles in 3.3.5a
+    ENERGY_TYPE_STEAM     = 61,                         // 9 vehicles in 3.3.5a
+    ENERGY_TYPE_HEAT      = 101,
+    ENERGY_TYPE_OOZE      = 121,                        // 1 vehicle  in 3.3.5a
+    ENERGY_TYPE_BLOOD     = 141,                        // 1 vehicle  in 3.3.5a
+    ENERGY_TYPE_WRATH     = 142,                        // 1 vehicle  in 3.3.5a
+};
 
 /**
  * The different spell schools that are available, used in both damage calculation

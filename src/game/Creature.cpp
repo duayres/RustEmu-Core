@@ -23,7 +23,6 @@
 #include "ObjectMgr.h"
 #include "ScriptMgr.h"
 #include "ObjectGuid.h"
-#include "SQLStorages.h"
 #include "SpellMgr.h"
 #include "QuestDef.h"
 #include "GossipDef.h"
@@ -36,6 +35,7 @@
 #include "MapManager.h"
 #include "CreatureAI.h"
 #include "CreatureAISelector.h"
+#include "PetAI.h"
 #include "Formulas.h"
 #include "WaypointMovementGenerator.h"
 #include "InstanceData.h"
@@ -46,6 +46,7 @@
 #include "Util.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
+#include "TemporarySummon.h"
 #include "CellImpl.h"
 #include "movement/MoveSplineInit.h"
 #include "CreatureLinkingMgr.h"
@@ -151,7 +152,8 @@ Creature::Creature(CreatureSubtype subtype) : Unit(),
     m_AlreadyCallAssistance(false), m_AlreadySearchedAssistance(false),
     m_AI_locked(false), m_isDeadByDefault(false), m_temporaryFactionFlags(TEMPFACTION_NONE),
     m_meleeDamageSchoolMask(SPELL_SCHOOL_MASK_NORMAL), m_originalEntry(0),
-    m_creatureInfo(NULL)
+    m_creatureInfo(NULL), m_focusSpell(NULL),
+    m_modelInhabitType(-1)
 {
     m_regenTimer = 200;
     m_valuesCount = UNIT_END;
@@ -171,13 +173,11 @@ Creature::~Creature()
 
 void Creature::AddToWorld()
 {
-    ///- Register the creature for guid lookup
     Unit::AddToWorld();
 
-    // Make active if required
-    std::set<uint32> const* mapList = sWorld.getConfigForceLoadMapIds();
-    if ((mapList && mapList->find(GetMapId()) != mapList->end()) || (GetCreatureInfo()->ExtraFlags & CREATURE_FLAG_EXTRA_ACTIVE))
-        SetActiveObjectState(true);
+    // Not one time call this "added to world" creatures, spawned with negative spawn time (BG events mostly)
+    if (GetVehicleKit())
+        GetVehicleKit()->Reset();
 }
 
 void Creature::RemoveCorpse()
@@ -189,7 +189,7 @@ void Creature::RemoveCorpse()
     if (!IsInWorld())                                       // can be despawned by update pool
         return;
 
-    if ((getDeathState() != CORPSE && !m_isDeadByDefault) || (getDeathState() != ALIVE && m_isDeadByDefault))
+    if (((getDeathState() != CORPSE && getDeathState() != GHOULED) && !m_isDeadByDefault) || (getDeathState() != ALIVE && m_isDeadByDefault))
         return;
 
     DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "Removing corpse of %s ", GetGuidStr().c_str());
@@ -219,6 +219,7 @@ void Creature::RemoveCorpse()
 
     WorldLocation loc = GetRespawnCoord();
     GetMap()->Relocation(this, loc);
+    DisableSpline();
 
     // forced recreate creature object at clients
     UnitVisibility currentVis = GetVisibility();
@@ -636,32 +637,25 @@ void Creature::StopGroupLoot()
 
 void Creature::RegenerateAll(uint32 update_diff)
 {
-    if (m_regenTimer > 0)
+    if (m_regenTimer > update_diff)
     {
-        if (update_diff >= m_regenTimer)
-            m_regenTimer = 0;
-        else
-            m_regenTimer -= update_diff;
-    }
-    if (m_regenTimer != 0)
+        m_regenTimer -= update_diff;
         return;
+    }
+    m_regenTimer = REGEN_TIME_FULL;
 
-    if (!isInCombat() || IsPolymorphed())
+    if ((!isInCombat() && !IsInEvadeMode()) || IsPolymorphed())
         RegenerateHealth();
 
     RegeneratePower();
-
-    m_regenTimer = REGEN_TIME_FULL;
 }
 
 void Creature::RegeneratePower()
 {
-    if (!IsRegeneratingPower())
-        return;
-
     Powers powerType = GetPowerType();
     uint32 curValue = GetPower(powerType);
     uint32 maxValue = GetMaxPower(powerType);
+
 
     if (curValue >= maxValue)
         return;
@@ -670,48 +664,62 @@ void Creature::RegeneratePower()
 
     switch (powerType)
     {
-        case POWER_MANA:
-            // Combat and any controlled creature
-            if (isInCombat() || GetCharmerOrOwnerGuid())
+    case POWER_MANA:
+    {
+        // Combat and any controlled creature
+        if (isInCombat() || GetCharmerOrOwnerGuid())
+        {
+            if (!IsUnderLastManaUseEffect())
             {
-                if (!IsUnderLastManaUseEffect())
-                {
-                    float ManaIncreaseRate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_MANA);
-                    float Spirit = GetStat(STAT_SPIRIT);
+                float ManaIncreaseRate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_MANA);
+                float Spirit = GetStat(STAT_SPIRIT);
 
-                    addValue = (Spirit / 5.0f + 17.0f) * ManaIncreaseRate;
-                }
+                addValue = (Spirit / 5.0f + 17.0f) * ManaIncreaseRate;
             }
-            else
-                addValue = maxValue / 3.0f;
-            break;
-        case POWER_ENERGY:
-            // ToDo: for vehicle this is different - NEEDS TO BE FIXED!
-            addValue = 20 * sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_ENERGY);
-            break;
-        case POWER_FOCUS:
-            addValue = 24 * sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_FOCUS);
-            break;
-        default:
-            return;
+        }
+        else
+            addValue = maxValue / 3;
+        break;
+    }
+    case POWER_ENERGY:
+    {
+        float rate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_ENERGY);
+
+        if (IsVehicle())
+        {
+            switch (GetVehicleInfo()->m_powerDisplayID)
+            {
+            case ENERGY_TYPE_PYRITE:
+            case ENERGY_TYPE_BLOOD:
+            case ENERGY_TYPE_OOZE:
+                break;
+            case ENERGY_TYPE_STEAM:
+            default:
+                addValue = 10.0f * rate;
+                break;
+            }
+        }
+        else
+            addValue = 20.0f * rate;
+        break;
+    }
+    case POWER_FOCUS:
+        addValue = 24.0f * sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_FOCUS);
+        break;
+    default:
+        return;
     }
 
     // Apply modifiers (if any)
     AuraList const& ModPowerRegenAuras = GetAurasByType(SPELL_AURA_MOD_POWER_REGEN);
     for (AuraList::const_iterator i = ModPowerRegenAuras.begin(); i != ModPowerRegenAuras.end(); ++i)
-    {
-        Modifier const* modifier = (*i)->GetModifier();
-        if (modifier->m_miscvalue == int32(powerType))
-            addValue += modifier->m_amount;
-    }
+        if ((*i)->GetModifier()->m_miscvalue == int32(powerType))
+            addValue += (*i)->GetModifier()->m_amount;
 
     AuraList const& ModPowerRegenPCTAuras = GetAurasByType(SPELL_AURA_MOD_POWER_REGEN_PERCENT);
     for (AuraList::const_iterator i = ModPowerRegenPCTAuras.begin(); i != ModPowerRegenPCTAuras.end(); ++i)
-    {
-        Modifier const* modifier = (*i)->GetModifier();
-        if (modifier->m_miscvalue == int32(powerType))
-            addValue *= (modifier->m_amount + 100) / 100.0f;
-    }
+        if ((*i)->GetModifier()->m_miscvalue == int32(powerType))
+            addValue *= ((*i)->GetModifier()->m_amount + 100) / 100.0f;
 
     ModifyPower(powerType, int32(addValue));
 }
@@ -721,13 +729,12 @@ void Creature::RegenerateHealth()
     if (!IsRegeneratingHealth())
         return;
 
-    uint32 curValue = GetHealth();
-    uint32 maxValue = GetMaxHealth();
+    uint32 maxvalue = GetMaxHealth();
 
-    if (curValue >= maxValue)
+    if (GetHealth() >= maxvalue)
         return;
 
-    uint32 addvalue = 0;
+    float addvalue = 0.0f;
 
     // Not only pet, but any controlled creature
     if (GetCharmerOrOwnerGuid())
@@ -736,35 +743,54 @@ void Creature::RegenerateHealth()
         float Spirit = GetStat(STAT_SPIRIT);
 
         if (GetPower(POWER_MANA) > 0)
-            addvalue = uint32(Spirit * 0.25 * HealthIncreaseRate);
+            addvalue = Spirit * 0.25f * HealthIncreaseRate;
         else
-            addvalue = uint32(Spirit * 0.80 * HealthIncreaseRate);
+            addvalue = Spirit * 0.80f * HealthIncreaseRate;
     }
     else
-        addvalue = maxValue / 3;
+        addvalue = maxvalue / 3.0f;
 
-    ModifyHealth(addvalue);
+    // Currenly creatures regenerate health only out of combat, but i'm think, that it's wrong /dev/rsa
+    if (!isInCombat())
+    {
+        AuraList const& mModHealthRegenPct = GetAurasByType(SPELL_AURA_MOD_HEALTH_REGEN_PERCENT);
+        if (!mModHealthRegenPct.empty())
+        {
+            for (AuraList::const_iterator i = mModHealthRegenPct.begin(); i != mModHealthRegenPct.end(); ++i)
+                addvalue *= (100.0f + (*i)->GetModifier()->m_amount) * 0.01f;
+        }
+    }
+    else if (HasAuraType(SPELL_AURA_MOD_REGEN_DURING_COMBAT))
+        addvalue *= GetTotalAuraModifier(SPELL_AURA_MOD_REGEN_DURING_COMBAT) * 0.01f;
+
+    if (addvalue > M_NULL_F)
+        ModifyHealth(uint32(addvalue));
 }
 
 void Creature::DoFleeToGetAssistance()
 {
-    if (!getVictim())
-        return;
-
     float radius = sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_FLEE_ASSISTANCE_RADIUS);
-    if (radius > 0)
+    if (radius > 0.0f)
     {
+        Unit* pVictim = getVictim();
+        if (!pVictim)
+            return;
+
         Creature* pCreature = NULL;
 
-        MaNGOS::NearestAssistCreatureInCreatureRangeCheck u_check(this, getVictim(), radius);
+        MaNGOS::NearestAssistCreatureInCreatureRangeCheck u_check(this, pVictim, radius);
         MaNGOS::CreatureLastSearcher<MaNGOS::NearestAssistCreatureInCreatureRangeCheck> searcher(pCreature, u_check);
         Cell::VisitGridObjects(this, searcher, radius);
 
         SetNoSearchAssistance(true);
         UpdateSpeed(MOVE_RUN, false);
 
+        // Interrupt spells cause of flee movement
+        if (IsNonMeleeSpellCasted(false))
+            InterruptNonMeleeSpells(false);
+
         if (!pCreature)
-            SetFeared(true, getVictim()->GetObjectGuid(), 0, sWorld.getConfig(CONFIG_UINT32_CREATURE_FAMILY_FLEE_DELAY));
+            SetFeared(true, pVictim->GetObjectGuid(), 0, sWorld.getConfig(CONFIG_UINT32_CREATURE_FAMILY_FLEE_DELAY));
         else
         {
             SetTargetGuid(ObjectGuid());        // creature flee loose its target
@@ -776,16 +802,21 @@ void Creature::DoFleeToGetAssistance()
 bool Creature::AIM_Initialize()
 {
     // make sure nothing can change the AI during AI update
-    if (m_AI_locked)
+    if (IsAILocked())
     {
         DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "AIM_Initialize: failed to init, locked.");
         return false;
     }
 
+    LockAI(true);
     CreatureAI* oldAI = i_AI;
-    i_motionMaster.Initialize();
+
+    GetMotionMaster()->Initialize();
+
     i_AI = FactorySelector::selectAI(this);
     delete oldAI;
+
+    LockAI(false);
     return true;
 }
 
@@ -1144,8 +1175,8 @@ void Creature::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask)
     // data->guid = guid don't must be update at save
     data.id = GetEntry();
     data.mapid = mapid;
-    data.spawnMask = spawnMask;
     data.phaseMask = phaseMask;
+    data.spawnMask = spawnMask;    
     data.modelid_override = displayId;
     data.equipmentId = GetEquipmentId();
     data.posX = GetPositionX();
@@ -1706,15 +1737,17 @@ void Creature::ForcedDespawn(uint32 timeMSToDespawn)
         return;
     }
 
-    if (IsDespawned())
-        return;
-
-    if (isAlive())
+    if (IsInWorld() && isAlive())
         SetDeathState(JUST_DIED);
 
-    RemoveCorpse();
+    m_corpseDecayTimer = 1;                                 // Properly remove corpse on next tick (also pool system requires Creature::Update call with CORPSE state
 
-    SetHealth(0);                                           // just for nice GM-mode view
+    if (IsInWorld())
+        SetHealth(0);                                           // just for nice GM-mode view
+
+    if (IsTemporarySummon())
+        ((TemporarySummon*)this)->UnSummon();
+
 }
 
 bool Creature::IsImmuneToSpell(SpellEntry const* spellInfo, bool isFriendly) const
@@ -1905,25 +1938,31 @@ void Creature::SendAIReaction(AiReaction reactionType)
 void Creature::CallAssistance()
 {
     // FIXME: should player pets call for assistance?
-    if (!m_AlreadyCallAssistance && getVictim() && !isCharmed())
+    if (m_AlreadyCallAssistance || isCharmed())
+        return;
+
+    if (Unit* pVictim = getVictim())
     {
         SetNoCallAssistance(true);
 
         if (GetCreatureInfo()->ExtraFlags & CREATURE_FLAG_EXTRA_NO_CALL_ASSIST)
             return;
 
-        AI()->SendAIEventAround(AI_EVENT_CALL_ASSISTANCE, getVictim(), sWorld.getConfig(CONFIG_UINT32_CREATURE_FAMILY_ASSISTANCE_DELAY), sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS));
+        AI()->SendAIEventAround(AI_EVENT_CALL_ASSISTANCE, pVictim, sWorld.getConfig(CONFIG_UINT32_CREATURE_FAMILY_ASSISTANCE_DELAY), sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS));
     }
 }
 
 void Creature::CallForHelp(float fRadius)
 {
-    if (fRadius <= 0.0f || !getVictim() || IsPet() || isCharmed())
+    if (fRadius <= 0.0f || IsPet() || isCharmed())
         return;
 
-    MaNGOS::CallOfHelpCreatureInRangeDo u_do(this, getVictim(), fRadius);
-    MaNGOS::CreatureWorker<MaNGOS::CallOfHelpCreatureInRangeDo> worker(this, u_do);
-    Cell::VisitGridObjects(this, worker, fRadius);
+    if (Unit* pVictim = getVictim())
+    {
+        MaNGOS::CallOfHelpCreatureInRangeDo u_do(this, pVictim, fRadius);
+        MaNGOS::CreatureWorker<MaNGOS::CallOfHelpCreatureInRangeDo> worker(this, u_do);
+        Cell::VisitGridObjects(this, worker, fRadius);
+    }
 }
 
 /// if enemy provided, check for initial combat help against enemy
@@ -2336,12 +2375,7 @@ void Creature::GetRespawnCoord(float& x, float& y, float& z, float* ori, float* 
 void Creature::ResetRespawnCoord()
 {
     if (CreatureData const* data = sObjectMgr.GetCreatureData(GetGUIDLow()))
-    {
-        m_respawnPos.x = data->posX;
-        m_respawnPos.y = data->posY;
-        m_respawnPos.z = data->posZ;
-        m_respawnPos.o = data->orientation;
-    }
+        m_respawnPos = WorldLocation(data->mapid, data->posX, data->posY, data->posZ, data->orientation, data->phaseMask);
 }
 
 void Creature::AllLootRemovedFromCorpse()

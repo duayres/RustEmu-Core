@@ -69,6 +69,7 @@ class WorldPacket;
 class UpdateData;
 class WorldSession;
 class Creature;
+class GameObject;
 class Player;
 class Unit;
 class Group;
@@ -90,7 +91,7 @@ class WorldUpdateCounter
     public:
         WorldUpdateCounter() : m_tmStart(0) {}
 
-        time_t timeElapsed()
+        uint32 timeElapsed()
         {
             if (!m_tmStart)
                 m_tmStart = WorldTimer::tickPrevTime();

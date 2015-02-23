@@ -168,7 +168,7 @@ void Object::SendForcedObjectUpdate()
     UpdateDataMapType update_players;
 
     BuildUpdateData(update_players);
-    RemoveFromClientUpdateList();
+    //    RemoveFromClientUpdateList();
 
     WorldPacket packet;                                     // here we allocate a std::vector with a size of 0x10000
     for (UpdateDataMapType::iterator iter = update_players.begin(); iter != update_players.end(); ++iter)
@@ -182,32 +182,19 @@ void Object::SendForcedObjectUpdate()
 
         iter->second.BuildPacket(&packet);
         pPlayer->GetSession()->SendPacket(&packet);
-        packet.clear();                                     // clean the string
     }
 }
 
-void Object::BuildMovementUpdateBlock(UpdateData* data, uint16 flags) const
-{
-    ByteBuffer buf(500);
-
-    buf << uint8(UPDATETYPE_MOVEMENT);
-    buf << GetPackGUID();
-
-    BuildMovementUpdate(&buf, flags);
-
-    data->AddUpdateBlock(buf);
-}
-
-void Object::BuildCreateUpdateBlockForPlayer(UpdateData* data, Player* target) const
+void Object::BuildCreateUpdateBlockForPlayer(UpdateData *data, Player *target) const
 {
     if (!target)
         return;
 
-    uint8  updatetype   = UPDATETYPE_CREATE_OBJECT;
-    uint16 updateFlags  = m_updateFlag;
+    uint8  updatetype = UPDATETYPE_CREATE_OBJECT;
+    uint16 updateFlags = m_updateFlag;
 
     /** lower flag1 **/
-    if (target == this)                                     // building packet for yourself
+    if (target == this)                                      // building packet for yourself
         updateFlags |= UPDATEFLAG_SELF;
 
     if (updateFlags & UPDATEFLAG_HAS_POSITION)
@@ -225,17 +212,17 @@ void Object::BuildCreateUpdateBlockForPlayer(UpdateData* data, Player* target) c
         {
             switch (((GameObject*)this)->GetGoType())
             {
-                case GAMEOBJECT_TYPE_TRAP:
-                case GAMEOBJECT_TYPE_DUEL_ARBITER:
-                case GAMEOBJECT_TYPE_FLAGSTAND:
-                case GAMEOBJECT_TYPE_FLAGDROP:
-                    updatetype = UPDATETYPE_CREATE_OBJECT2;
-                    break;
-                case GAMEOBJECT_TYPE_TRANSPORT:
-                    updateFlags |= UPDATEFLAG_TRANSPORT;
-                    break;
-                default:
-                    break;
+            case GAMEOBJECT_TYPE_TRAP:
+            case GAMEOBJECT_TYPE_DUEL_ARBITER:
+            case GAMEOBJECT_TYPE_FLAGSTAND:
+            case GAMEOBJECT_TYPE_FLAGDROP:
+                updatetype = UPDATETYPE_CREATE_OBJECT2;
+                break;
+            case GAMEOBJECT_TYPE_TRANSPORT:
+                updateFlags |= UPDATEFLAG_TRANSPORT;
+                break;
+            default:
+                break;
             }
         }
 
@@ -246,9 +233,9 @@ void Object::BuildCreateUpdateBlockForPlayer(UpdateData* data, Player* target) c
         }
     }
 
-    // DEBUG_LOG("BuildCreateUpdate: update-type: %u, object-type: %u got updateFlags: %X", updatetype, m_objectTypeId, updateFlags);
+    //DEBUG_LOG("BuildCreateUpdate: update-type: %u, object-type: %u got updateFlags: %X", updatetype, m_objectTypeId, updateFlags);
 
-    ByteBuffer buf(500);
+    ByteBuffer buf;
     buf << uint8(updatetype);
     buf << GetPackGUID();
     buf << uint8(m_objectTypeId);
@@ -273,7 +260,7 @@ void Object::SendCreateUpdateToPlayer(Player* player)
     player->GetSession()->SendPacket(&packet);
 }
 
-void Object::BuildValuesUpdateBlockForPlayer(UpdateData* data, Player* target) const
+void Object::BuildValuesUpdateBlockForPlayer(UpdateData *data, Player *target) const
 {
     ByteBuffer buf(500);
 
@@ -496,7 +483,7 @@ void Object::BuildValuesUpdate(uint8 updatetype, ByteBuffer* data, UpdateMask* u
 
     if (updatetype == UPDATETYPE_CREATE_OBJECT || updatetype == UPDATETYPE_CREATE_OBJECT2)
     {
-        if (isType(TYPEMASK_GAMEOBJECT) && !((GameObject*)this)->IsTransport())
+        if (isType(TYPEMASK_GAMEOBJECT) && !((GameObject*)this)->IsDynTransport())
         {
             if (((GameObject*)this)->ActivateToQuest(target) || target->isGameMaster())
                 IsActivateToQuest = true;
@@ -512,7 +499,7 @@ void Object::BuildValuesUpdate(uint8 updatetype, ByteBuffer* data, UpdateMask* u
     }
     else                                                    // case UPDATETYPE_VALUES
     {
-        if (isType(TYPEMASK_GAMEOBJECT) && !((GameObject*)this)->IsTransport())
+        if (isType(TYPEMASK_GAMEOBJECT) && !((GameObject*)this)->IsDynTransport())
         {
             if (((GameObject*)this)->ActivateToQuest(target) || target->isGameMaster())
                 IsActivateToQuest = true;
@@ -1054,6 +1041,12 @@ void WorldObject::CleanupsBeforeDelete()
     ClearUpdateMask(true);
 }
 
+void WorldObject::_Create(ObjectGuid guid, uint32 phaseMask)
+{
+    Object::_Create(guid);
+    SetPhaseMask(phaseMask, false);
+}
+
 void WorldObject::AddToWorld()
 {
     MANGOS_ASSERT(m_currMap);
@@ -1067,20 +1060,19 @@ void WorldObject::AddToWorld()
 
 void WorldObject::RemoveFromWorld(bool remove)
 {
-    MANGOS_ASSERT(m_currMap);
+    Map* map = GetMap();
+    MANGOS_ASSERT(map);
 
     if (IsInWorld())
         Object::RemoveFromWorld(remove);
 
-    GetMap()->RemoveUpdateObject(GetObjectGuid());
-    if (remove)
-        GetMap()->EraseObject(GetObjectGuid());
-}
+    map->RemoveUpdateObject(GetObjectGuid());
 
-void WorldObject::_Create(ObjectGuid guid, uint32 phaseMask)
-{
-    Object::_Create(guid);
-    SetPhaseMask(phaseMask, false);
+    if (remove)
+    {
+        ResetMap();
+        map->EraseObject(GetObjectGuid());
+    }
 }
 
 // Attention! This method cannot must call while relocation to other map!
