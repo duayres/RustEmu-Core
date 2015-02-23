@@ -472,71 +472,107 @@ uint32 Creature::ChooseDisplayId(const CreatureInfo* cinfo, const CreatureData* 
 
 void Creature::Update(uint32 update_diff, uint32 diff)
 {
+    if (CanSwim())
+        SetSwim(IsInWater());
+
     switch (m_deathState)
     {
-        case JUST_ALIVED:
-            // Don't must be called, see Creature::SetDeathState JUST_ALIVED -> ALIVE promoting.
-            sLog.outError("Creature (GUIDLow: %u Entry: %u ) in wrong state: JUST_ALIVED (4)", GetGUIDLow(), GetEntry());
-            break;
-        case JUST_DIED:
-            // Don't must be called, see Creature::SetDeathState JUST_DIED -> CORPSE promoting.
-            sLog.outError("Creature (GUIDLow: %u Entry: %u ) in wrong state: JUST_DEAD (1)", GetGUIDLow(), GetEntry());
-            break;
-        case DEAD:
+    case JUST_ALIVED:
+        // Don't must be called, see Creature::SetDeathState JUST_ALIVED -> ALIVE promoting.
+        sLog.outError("Creature (GUIDLow: %u Entry: %u ) in wrong state: JUST_ALIVED (4)", GetGUIDLow(), GetEntry());
+        break;
+    case JUST_DIED:
+        // Don't must be called, see Creature::SetDeathState JUST_DIED -> CORPSE promoting.
+        sLog.outError("Creature (GUIDLow: %u Entry: %u ) in wrong state: JUST_DEAD (1)", GetGUIDLow(), GetEntry());
+        break;
+    case DEAD:
+    {
+        if (m_respawnTime <= time(NULL) && (!m_isSpawningLinked || GetMap()->GetCreatureLinkingHolder()->CanSpawn(this)))
         {
-            if (m_respawnTime <= time(NULL) && (!m_isSpawningLinked || GetMap()->GetCreatureLinkingHolder()->CanSpawn(this)))
+            DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "Respawning...");
+            m_respawnTime = 0;
+            m_aggroDelay = sWorld.getConfig(CONFIG_UINT32_CREATURE_RESPAWN_AGGRO_DELAY);
+            lootForPickPocketed = false;
+            lootForBody = false;
+            lootForSkin = false;
+
+            // Clear possible auras having IsDeathPersistent() attribute
+            RemoveAllAuras();
+
+            if (m_originalEntry != GetEntry())
             {
-                DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "Respawning...");
-                m_respawnTime = 0;
-                m_aggroDelay = sWorld.getConfig(CONFIG_UINT32_CREATURE_RESPAWN_AGGRO_DELAY);
-                lootForPickPocketed = false;
-                lootForBody         = false;
-                lootForSkin         = false;
-
-                // Clear possible auras having IsDeathPersistent() attribute
-                RemoveAllAuras();
-
-                if (m_originalEntry != GetEntry())
-                {
-                    // need preserver gameevent state
-                    GameEventCreatureData const* eventData = sGameEventMgr.GetCreatureUpdateDataForActiveEvent(GetGUIDLow());
-                    UpdateEntry(m_originalEntry, TEAM_NONE, NULL, eventData);
-                }
-
-                CreatureInfo const* cinfo = GetCreatureInfo();
-
-                SelectLevel(cinfo);
-                UpdateAllStats();  // to be sure stats is correct regarding level of the creature
-                SetUInt32Value(UNIT_DYNAMIC_FLAGS, UNIT_DYNFLAG_NONE);
-                if (m_isDeadByDefault)
-                {
-                    SetDeathState(JUST_DIED);
-                    SetHealth(0);
-                    GetUnitStateMgr().InitDefaults(true);
-                    clearUnitState(UNIT_STAT_ALL_STATE);
-                    LoadCreatureAddon(true);
-                }
-                else
-                    SetDeathState(JUST_ALIVED);
-
-                // Call AI respawn virtual function
-                if (AI())
-                    AI()->JustRespawned();
-
-                if (m_isCreatureLinkingTrigger)
-                    GetMap()->GetCreatureLinkingHolder()->DoCreatureLinkingEvent(LINKING_EVENT_RESPAWN, this);
-
-                GetMap()->Add(this);
+                // need preserver gameevent state
+                GameEventCreatureData const* eventData = sGameEventMgr.GetCreatureUpdateDataForActiveEvent(GetGUIDLow());
+                UpdateEntry(m_originalEntry, TEAM_NONE, NULL, eventData);
             }
+
+            if (GetDisplayId() != GetNativeDisplayId())
+                SetDisplayId(GetNativeDisplayId());
+
+            CreatureInfo const* cinfo = GetCreatureInfo();
+
+            SelectLevel(cinfo);
+            UpdateAllStats();  // to be sure stats is correct regarding level of the creature
+            SetUInt32Value(UNIT_DYNAMIC_FLAGS, UNIT_DYNFLAG_NONE);
+            if (m_isDeadByDefault)
+            {
+                SetDeathState(JUST_DIED);
+                SetHealth(0);
+                GetUnitStateMgr().InitDefaults(true);
+                clearUnitState(UNIT_STAT_ALL_STATE);
+                LoadCreatureAddon(true);
+            }
+            else
+                SetDeathState(JUST_ALIVED);
+
+            // Call AI respawn virtual function
+            if (AI())
+                AI()->JustRespawned();
+
+            if (m_isCreatureLinkingTrigger)
+                GetMap()->GetCreatureLinkingHolder()->DoCreatureLinkingEvent(LINKING_EVENT_RESPAWN, this);
+
+            GetMap()->Add(this);
+        }
+        break;
+    }
+    case CORPSE:
+    {
+        Unit::Update(update_diff, diff);
+
+        if (m_isDeadByDefault)
+            break;
+
+        if (m_corpseDecayTimer <= update_diff)
+        {
+            RemoveCorpse();
             break;
         }
-        case CORPSE:
+        else
+            m_corpseDecayTimer -= update_diff;
+
+        if (m_groupLootId)                              // Loot is stopped already if corpse got removed.
         {
-            Unit::Update(update_diff, diff);
+            if (m_groupLootTimer <= update_diff)
+                StopGroupLoot();
+            else
+                m_groupLootTimer -= update_diff;
+        }
 
-            if (m_isDeadByDefault)
-                break;
+        break;
+    }
+    case ALIVE:
+    {
+        if (m_aggroDelay)
+        {
+            if (m_aggroDelay <= update_diff)
+                m_aggroDelay = 0;
+            else
+                m_aggroDelay -= update_diff;
+        }
 
+        if (m_isDeadByDefault)
+        {
             if (m_corpseDecayTimer <= update_diff)
             {
                 RemoveCorpse();
@@ -544,62 +580,39 @@ void Creature::Update(uint32 update_diff, uint32 diff)
             }
             else
                 m_corpseDecayTimer -= update_diff;
-
-            if (m_groupLootId)                              // Loot is stopped already if corpse got removed.
-            {
-                if (m_groupLootTimer <= update_diff)
-                    StopGroupLoot();
-                else
-                    m_groupLootTimer -= update_diff;
-            }
-
-            break;
         }
-        case ALIVE:
+
+        Unit::Update(update_diff, diff);
+
+        // creature can be dead after Unit::Update call
+        // CORPSE/DEAD state will processed at next tick (in other case death timer will be updated unexpectedly)
+        if (!isAlive())
+            break;
+
+        if (!IsInEvadeMode())
         {
-            if (m_aggroDelay <= update_diff)
-                m_aggroDelay = 0;
-            else
-                m_aggroDelay -= update_diff;
-
-            if (m_isDeadByDefault)
+            if (AI())
             {
-                if (m_corpseDecayTimer <= update_diff)
-                {
-                    RemoveCorpse();
-                    break;
-                }
-                else
-                    m_corpseDecayTimer -= update_diff;
+                // do not allow the AI to be changed during update
+                LockAI(true);
+                AI()->UpdateAI((update_diff > 5 * diff) ? diff : update_diff);   // AI not react good at real update delays (while freeze in non-active part of map)
+                LockAI(false);
             }
-
-            Unit::Update(update_diff, diff);
-
-            // creature can be dead after Unit::Update call
-            // CORPSE/DEAD state will processed at next tick (in other case death timer will be updated unexpectedly)
-            if (!isAlive())
-                break;
-
-            if (!IsInEvadeMode())
-            {
-                if (AI())
-                {
-                    // do not allow the AI to be changed during update
-                    m_AI_locked = true;
-                    AI()->UpdateAI(diff);   // AI not react good at real update delays (while freeze in non-active part of map)
-                    m_AI_locked = false;
-                }
-            }
-
-            // creature can be dead after UpdateAI call
-            // CORPSE/DEAD state will processed at next tick (in other case death timer will be updated unexpectedly)
-            if (!isAlive())
-                break;
-            RegenerateAll(update_diff);
-            break;
         }
-        default:
+
+        // creature can be dead after UpdateAI call
+        // CORPSE/DEAD state will processed at next tick (in other case death timer will be updated unexpectedly)
+        if (!isAlive())
             break;
+
+        if (IsPet())                           // Regenerated before
+            break;
+
+        RegenerateAll(update_diff);
+        break;
+    }
+    default:
+        break;
     }
 }
 
@@ -1661,6 +1674,10 @@ void Creature::SetDeathState(DeathState s)
         RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE);
 
         SetWalk(true, true);
+
+        if (CanSwim())
+            SetSwim(IsInWater());
+
         GetMotionMaster()->Initialize();
     }
 }

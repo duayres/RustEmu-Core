@@ -4249,8 +4249,13 @@ bool ChatHandler::HandleNpcInfoCommand(char* /*args*/)
     uint32 npcflags = target->GetUInt32Value(UNIT_NPC_FLAGS);
     uint32 displayid = target->GetDisplayId();
     uint32 nativeid = target->GetNativeDisplayId();
+    uint32 phaseMask = target->GetPhaseMask();
     uint32 Entry = target->GetEntry();
     CreatureInfo const* cInfo = target->GetCreatureInfo();
+    uint32 VehicleId = cInfo ? cInfo->VehicleTemplateId : 0;
+    uint32 difficulty_entry_1 = cInfo ? cInfo->DifficultyEntry[0] : 0;
+    uint32 difficulty_entry_2 = cInfo ? cInfo->DifficultyEntry[1] : 0;
+    uint32 difficulty_entry_3 = cInfo ? cInfo->DifficultyEntry[2] : 0;
 
     time_t curRespawnDelay = target->GetRespawnTimeEx() - time(NULL);
     if (curRespawnDelay < 0)
@@ -4267,18 +4272,26 @@ bool ChatHandler::HandleNpcInfoCommand(char* /*args*/)
 
     if (diff < MAX_DIFFICULTY)
         PSendSysMessage(LANG_NPCINFO_CHAR_DIFFICULTY, target->GetGuidStr().c_str(), faction, npcflags,
-                        Entry, target->GetCreatureInfo()->Entry, diff,
-                        displayid, nativeid);
+        Entry, target->GetCreatureInfo()->Entry, diff,
+        displayid, nativeid);
     else
         PSendSysMessage(LANG_NPCINFO_CHAR, target->GetGuidStr().c_str(), faction, npcflags, Entry, displayid, nativeid);
+
+    PSendSysMessage("VehicleId: %u", VehicleId);
+    PSendSysMessage("difficulty_entry_1: %u, difficulty_entry_2: %u, difficulty_entry_3: %u", difficulty_entry_1, difficulty_entry_2, difficulty_entry_3);
 
     PSendSysMessage(LANG_NPCINFO_LEVEL, target->getLevel());
     PSendSysMessage(LANG_NPCINFO_HEALTH, target->GetCreateHealth(), target->GetMaxHealth(), target->GetHealth());
     PSendSysMessage(LANG_NPCINFO_FLAGS, target->GetUInt32Value(UNIT_FIELD_FLAGS), target->GetUInt32Value(UNIT_DYNAMIC_FLAGS), target->getFaction());
     PSendSysMessage(LANG_COMMAND_RAWPAWNTIMES, defRespawnDelayStr.c_str(), curRespawnDelayStr.c_str());
-    PSendSysMessage(LANG_NPCINFO_LOOT,  cInfo->LootId, cInfo->PickpocketLootId, cInfo->SkinningLootId);
+    PSendSysMessage(LANG_NPCINFO_LOOT, cInfo->LootId, cInfo->PickpocketLootId, cInfo->SkinningLootId);
     PSendSysMessage(LANG_NPCINFO_DUNGEON_ID, target->GetInstanceId());
     PSendSysMessage(LANG_NPCINFO_POSITION, float(target->GetPositionX()), float(target->GetPositionY()), float(target->GetPositionZ()));
+
+    PSendSysMessage("Phasemask %u, " SIZEFMTD " SpellAuraHolders, " SIZEFMTD " unit states",
+        phaseMask,
+        target->GetSpellAuraHolderMap().size(),
+        target->GetUnitStateMgr().GetActions().size());
 
     if ((npcflags & UNIT_NPC_FLAG_VENDOR))
     {
@@ -6150,7 +6163,7 @@ bool ChatHandler::HandleMovegensCommand(char* /*args*/)
 
     UnitStateMgr& statemgr = unit->GetUnitStateMgr();
 
-    float x, y, z, o;
+    float x, y, z;
     for (int32 i = UNIT_ACTION_PRIORITY_IDLE; i != UNIT_ACTION_PRIORITY_END; ++i)
     {
         ActionInfo* actionInfo = statemgr.GetAction(UnitActionPriority(i));
@@ -6172,6 +6185,7 @@ bool ChatHandler::HandleMovegensCommand(char* /*args*/)
         case DISTRACT_MOTION_TYPE:
         case EFFECT_MOTION_TYPE:
             break;
+
         case CHASE_MOTION_TYPE:
         {
             Unit* target = NULL;
@@ -6197,7 +6211,7 @@ bool ChatHandler::HandleMovegensCommand(char* /*args*/)
         case HOME_MOTION_TYPE:
             if (unit->GetTypeId() == TYPEID_UNIT)
             {
-                static_cast<HomeMovementGenerator<Creature> const*>(&*action)->GetResetPosition(*unit, x, y, z, o);
+                ((Creature*)unit)->GetRespawnCoord(x, y, z);
                 PSendSysMessage(LANG_MOVEGENS_HOME_CREATURE, x, y, z);
             }
             else
@@ -6214,7 +6228,6 @@ bool ChatHandler::HandleMovegensCommand(char* /*args*/)
             break;
         }
     }
-
     return true;
 }
 
