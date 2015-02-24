@@ -4,11 +4,11 @@
 DROP TABLE IF EXISTS `spell_pet_auras`;
 CREATE TABLE `spell_pet_auras` (
   `spell` mediumint(8) unsigned NOT NULL COMMENT 'dummy spell id',
-  `effectId` tinyint(3) unsigned NOT NULL,
+  `effectId` tinyint(3) unsigned NOT NULL DEFAULT '0',
   `pet` mediumint(8) unsigned NOT NULL DEFAULT '0' COMMENT 'pet id; 0 = all',
   `aura` mediumint(8) unsigned NOT NULL COMMENT 'pet aura id',
   PRIMARY KEY (`spell`,`effectId`,`pet`,`aura`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
 -- ----------------------------
 -- Records of spell_pet_auras
@@ -72,7 +72,6 @@ INSERT INTO `spell_pet_auras` VALUES ('0', '0', '31216', '34947');
 INSERT INTO `spell_pet_auras` VALUES ('0', '0', '31216', '49866');
 INSERT INTO `spell_pet_auras` VALUES ('0', '0', '37994', '34947');
 INSERT INTO `spell_pet_auras` VALUES ('0', '0', '37994', '34956');
-INSERT INTO `spell_pet_auras` VALUES ('0', '0', '37995', '34947');
 INSERT INTO `spell_pet_auras` VALUES ('19028', '0', '0', '25228');
 INSERT INTO `spell_pet_auras` VALUES ('19578', '0', '0', '19579');
 INSERT INTO `spell_pet_auras` VALUES ('20895', '0', '0', '24529');

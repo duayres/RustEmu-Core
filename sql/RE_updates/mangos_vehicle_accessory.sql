@@ -1,474 +1,171 @@
--- Vehicle accessory
-
-ALTER TABLE `vehicle_accessory`
-    ADD COLUMN `flags` int(10) UNSIGNED NOT NULL DEFAULT '0' COMMENT 'various flags' AFTER `accessory_entry`,
-    ADD COLUMN `offset_x` FLOAT NOT NULL DEFAULT '0' COMMENT 'custom passenger offset X' AFTER `flags`,
-    ADD COLUMN `offset_y` FLOAT NOT NULL DEFAULT '0' COMMENT 'custom passenger offset Y' AFTER `offset_x`,
-    ADD COLUMN `offset_z` FLOAT NOT NULL DEFAULT '0' COMMENT 'custom passenger offset Z' AFTER `offset_y`,
-    ADD COLUMN `offset_o` FLOAT NOT NULL DEFAULT '0' COMMENT 'custom passenger offset O' AFTER `offset_z`;
-
-UPDATE creature_template SET VehicleTemplateId = 53 WHERE entry = 26590;
-UPDATE creature_template SET VehicleTemplateId = 200 WHERE entry = 28605;
-UPDATE creature_template SET VehicleTemplateId = 200 WHERE entry = 28607;
-UPDATE creature_template SET VehicleTemplateId = 174 WHERE entry = 31722;
-UPDATE creature_template SET VehicleTemplateId = 312 WHERE entry = 31857;
-UPDATE creature_template SET VehicleTemplateId = 312 WHERE entry = 31858;
-UPDATE creature_template SET VehicleTemplateId = 165 WHERE entry = 32535;
-UPDATE creature_template SET VehicleTemplateId = 479 WHERE entry = 35634;
-UPDATE creature_template SET VehicleTemplateId = 489 WHERE entry = 35768;
-UPDATE creature_template SET VehicleTemplateId = 223 WHERE entry = 30248;
-UPDATE creature_template SET VehicleTemplateId = 736 WHERE  entry = 31788;
-UPDATE creature_template SET VehicleTemplateId = 0   WHERE  entry IN (33297,33298,33300,33301,33408,33409,33414,33416,33418,34125,36558,36557);
-UPDATE creature_template SET VehicleTemplateId = 106 WHERE  entry = 34802;
-UPDATE creature_template SET VehicleTemplateId = 106 WHERE  entry = 35419;
-UPDATE creature_template SET VehicleTemplateId = 106 WHERE  entry = 35421;
-UPDATE creature_template SET VehicleTemplateId = 106 WHERE  entry = 35415;
-UPDATE creature_template SET VehicleTemplateId = 36  WHERE  entry = 35413;
-UPDATE creature_template SET VehicleTemplateId = 79  WHERE  entry = 35427;
-UPDATE creature_template SET VehicleTemplateId = 79  WHERE  entry = 35429;
-UPDATE creature_template SET VehicleTemplateId = 223 WHERE  entry = 31749;
-
-UPDATE creature_template SET IconName = 'vehichleCursor' WHERE VehicleTemplateId > 0 AND IconName IS NULL;
-
-DELETE FROM npc_spellclick_spells WHERE npc_entry IN (33109, 33167, 33062, 33060, 33067);
-INSERT INTO npc_spellclick_spells (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES
-(33109, 62309, 0, 0, 0, 1),  -- Demolisher
-(33167, 62309, 0, 0, 0, 1),  -- Demolisher mechanic seat
-(33062, 65030, 0, 0, 0, 1),  -- Chopper
-(33060, 65031, 0, 0, 0, 1),  -- Siege engine
-(33067, 65031, 0, 0, 0, 1);  -- Siege engine turret
-
--- Salvaged Chopper
-UPDATE `creature_template` SET `AIName` = 'NullAI' WHERE `entry` IN (33062, 34045);
-
--- Siege engine
-UPDATE `creature_template` SET `AIName` = 'NullAI' WHERE `entry` IN (33060);
-REPLACE INTO `creature_template_spells` SET `entry` = 33060, `spell1` = 62345, `spell2` = 62522, `spell3` = 62346;
-UPDATE `creature_template` SET `AIName` = 'NullAI' WHERE `entry` IN (33067);
-
--- demolisher
-UPDATE `creature_template` SET `AIName` = 'NullAI' WHERE `entry` IN (33109);
-REPLACE INTO `creature_template_spells` SET `entry` = 33109, `spell1` = 62306, `spell2` = 62490, `spell3` = 62308, `spell4` = 62324;
-
--- Salvaged Siege Turret by traponinet
-DELETE FROM `creature_spell` WHERE `guid` IN (33067);
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(33067, 62358, 0, 0, 0, 0),
-(33067, 62359, 1, 0, 0, 0),
-(33067, 64677, 2, 0, 0, 0);
-
--- Salvaged Demolisher Mechanic Seat
-DELETE FROM `creature_spell` WHERE `guid` IN (33167);
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(33167, 62634, 0, 0, 0, 0),
-(33167, 64979, 1, 0, 0, 0),
-(33167, 62479, 2, 0, 0, 0),
-(33167, 62471, 3, 0, 0, 0),
-(33167, 62428, 5, 0, 0, 0);
-
--- Flame Leviathan mechanic seat
-DELETE FROM `npc_spellclick_spells` WHERE `npc_entry` IN (33114);
-INSERT INTO `npc_spellclick_spells` (npc_entry, spell_id, quest_start, quest_start_active, quest_end, cast_flags) VALUES
-(33114,46598, 0, 0, 0, 1);
-
-UPDATE `creature_template` SET `AIName` = 'NullAI' WHERE `entry` IN (33114, 33142, 33143);
-
--- Earthen Stoneshaper
-UPDATE creature_template SET UnitFlags = 33587968 WHERE entry=33620;
--- Ymirjar Skycaller true fix (delete hack from YTDB)
-DELETE FROM creature_template_addon WHERE entry IN (31260, 37643);
--- Traveler's Tundra Mammoth
--- Grand Ice Mammoth
--- Grand Black War Mammoth
--- Grand Caravan Mammoth
-DELETE FROM creature_template_addon WHERE entry = 32638;
-UPDATE creature_template SET VehicleTemplateId = 312, IconName = 'vehichleCursor' WHERE entry IN (32640, 31857, 31858, 31861, 31862, 32212, 32213);
-
--- Quests
-DELETE FROM `creature_spell` WHERE `guid` IN (28605, 28606, 28607);
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(28605, 52264, 0, 0, 0, 0),
-(28605, 52268, 1, 0, 0, 0),
-(28606, 52264, 0, 0, 0, 0),
-(28606, 52268, 1, 0, 0, 0),
-(28607, 52264, 0, 0, 0, 0),
-(28607, 52268, 1, 0, 0, 0);
-
--- From Lanc
--- quest 12953
-REPLACE INTO `creature_template_spells` SET `entry` = 30066, `spell1` = 55812;
-
-DELETE FROM npc_spellclick_spells WHERE npc_entry IN (30066);
-INSERT INTO npc_spellclick_spells (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES
-(30066, 44002, 12953, 1, 12953, 1);
--- INSERT IGNORE INTO spell_script_target VALUES (55812, 1, 30096); -- listed for TargetEntry 30096 does not have any implicit target TARGET_SCRIPT(38) or TARGET_SCRIPT_COORDINATES (46) or TARGET_FOCUS_OR_SCRIPTED_GAMEOBJECT (40).
-
--- From lanc
-/* 7th Legion Chain Gun */
-UPDATE `creature_template` SET `IconName` = 'Gunner' WHERE `entry` IN (27714);
-
-DELETE FROM npc_spellclick_spells WHERE npc_entry IN (27714);
-INSERT INTO npc_spellclick_spells (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES
-(27714, 67373, 0, 0, 0, 1);
-
-/* Broken-down Shredder */
-DELETE FROM `npc_spellclick_spells` WHERE `npc_entry` IN (27354);
-INSERT INTO `npc_spellclick_spells` (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES
-(27354, 48533, 12244, 1, 12244, 1),
-(27354, 48533, 12270, 1, 12270, 1);
-
-DELETE FROM `spell_script_target` WHERE `entry` IN (48610);
-INSERT INTO `spell_script_target` (`entry`, `type`, `targetEntry`) VALUES
-(48610, 1, 27423), (48610, 1, 27371);
-
-/* Forsaken Blight Spreader */
-DELETE FROM npc_spellclick_spells WHERE npc_entry IN (26523);
-INSERT INTO npc_spellclick_spells (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES
-(26523, 47961, 0, 0, 0, 1);
-
-/* Argent Tournament mount */
-DELETE FROM `creature_spell` WHERE `guid` IN (33844,33845);
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(33844, 62544, 0, 0, 0, 0),
-(33844, 64342, 1, 0, 0, 0),
-(33844, 63010, 2, 0, 0, 0),
-(33844, 62552, 3, 0, 0, 0),
-(33844, 64077, 4, 0, 0, 0),
-(33844, 62863, 5, 0, 0, 0),
-(33844, 63034, 6, 0, 0, 0),
-(33845, 62544, 0, 0, 0, 0),
-(33845, 64342, 1, 0, 0, 0),
-(33845, 63010, 2, 0, 0, 0),
-(33845, 62552, 3, 0, 0, 0),
-(33845, 64077, 4, 0, 0, 0),
-(33845, 62863, 5, 0, 0, 0),
-(33845, 63034, 6, 0, 0, 0);
-
-UPDATE creature_template SET KillCredit1 = 33340 WHERE entry IN (33272);
-UPDATE creature_template SET KillCredit1 = 33339 WHERE entry IN (33243);
-
-DELETE FROM npc_spellclick_spells WHERE npc_entry IN (33842, 33843);
-INSERT INTO npc_spellclick_spells (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES
-(33842, 63791, 13829, 1, 0, 3),
-(33842, 63791, 13839, 1, 0, 3),
-(33842, 63791, 13838, 1, 0, 3),
-(33843, 63792, 13828, 1, 0, 3),
-(33843, 63792, 13837, 1, 0, 3),
-(33843, 63792, 13835, 1, 0, 3);
-
--- Quest vehicles Support: Going Bearback (12851)
-UPDATE `creature_template` SET `VehicleTemplateId` = 308 WHERE entry IN (29598);
-REPLACE INTO `creature_template_spells` SET `entry` = 29598, `spell1` = 54897, `spell2` = 54907;
-
-DELETE FROM npc_spellclick_spells WHERE npc_entry IN (29598);
-INSERT INTO npc_spellclick_spells (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES
-(29598, 54908, 12851, 1, 12851, 1);
-
--- INSERT IGNORE INTO spell_script_target VALUES (54897, 1, 29358); --listed for TargetEntry 29358 does not have any implicit target TARGET_SCRIPT(38) or TARGET_SCRIPT_COORDINATES (46) or TARGET_FOCUS_OR_SCRIPTED_GAMEOBJECT (40).
-
-/* Frostbrood Vanquisher */
-UPDATE `creature_template` SET `InhabitType` = 3 WHERE `entry` = 28670;
-
--- from lanc
--- Infected Kodo fix quest (11690)
-INSERT IGNORE INTO `spell_script_target` (`entry`, `type`, `targetEntry`) VALUES
-(45877, 1, 25596);
-
-DELETE FROM npc_spellclick_spells WHERE npc_entry IN (25334, 27107);
-INSERT INTO npc_spellclick_spells (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES
-(25334, 47917, 11652, 1, 11652, 1);
-
--- REPLACE INTO spell_script_target VALUES (47962, 1, 27107); -- listed for TargetEntry 27107 does not have any implicit target TARGET_SCRIPT(38) or TARGET_SCRIPT_COORDINATES (46) or TARGET_FOCUS_OR_SCRIPTED_GAMEOBJECT (40).
-
--- from lanc
--- Refurbished Shredder (quest 12050)
-UPDATE `creature_template` SET `VehicleTemplateId` = 300 WHERE `entry` IN (27061);
-DELETE FROM `creature_spell` WHERE `guid` IN (27061);
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(27061, 47939, 0, 0, 0, 0),
-(27061, 47921, 1, 0, 0, 0),
-(27061, 47966, 2, 0, 0, 0),
-(27061, 47938, 3, 0, 0, 0);
-
-DELETE FROM npc_spellclick_spells WHERE npc_entry IN (27061);
-INSERT INTO npc_spellclick_spells (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES (27061, 47920, 0, 0, 0, 1);
-REPLACE INTO `spell_script_target` (`entry`, `type`, `targetEntry`) VALUES 
-(47939, 0, 188539);
-
--- Argent Cannon (quest 13086)
-UPDATE `creature_template` SET `VehicleTemplateId` = 244 WHERE `entry` IN (30236);
-UPDATE `npc_spellclick_spells` SET `quest_start` = 13086, `quest_start_active` = 1, `quest_end` = 13086 WHERE `npc_entry` = 30236 AND `spell_id` = 57573;
-
-DELETE FROM npc_spellclick_spells WHERE npc_entry IN (27996);
-INSERT INTO npc_spellclick_spells (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES
-(27996, 50343, 12498, 1, 12498, 1);
-
--- Quest 13236 Gift of the Lich King
-REPLACE INTO `spell_script_target` (`entry`, `type`, `targetEntry`) VALUES
-(58916, 2, 31254),
-(58917, 1, 31276);
-
--- Quest: Defending Wyrmrest Temple (12372)
-UPDATE `dbscripts_on_gossip` SET `datalong2` = 3 WHERE `id` = 9568;
-
-UPDATE `creature_template` SET `InhabitType` = 3 WHERE `entry` = 27629;
-
-REPLACE INTO creature_ai_scripts VALUES (2769801,27698,8,0,100,0,49367,-1,0,0,33,27698,6,0,0,0,0,0,0,0,0,0,'q12372');
-UPDATE creature_template SET AIName='EventAI' WHERE entry=27698;
-
--- Quest King of the Mountain (13280)
-DELETE FROM npc_spellclick_spells WHERE npc_entry = 31736;
-INSERT INTO npc_spellclick_spells (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES (31736, 59592, 13280, 1, 0, 3);
-
--- Njorndar Proto-Drake
-UPDATE creature_template SET VehicleTemplateId = 228 WHERE entry = 30272;
-DELETE FROM npc_spellclick_spells WHERE npc_entry = 30272;
-INSERT INTO npc_spellclick_spells (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES (30272, 57401, 13071, 1, 13071, 1);
-
--- Updates vehicles by lanc
-DELETE FROM npc_spellclick_spells WHERE npc_entry IN (32189, 29433, 29555);
-INSERT INTO npc_spellclick_spells (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES 
-(32189, 46598, 0, 0, 0, 1),
-(29433, 47020, 0, 0, 0, 1),
-(29555, 47020, 0, 0, 0, 1);
-
-UPDATE `creature_template_addon` SET `emote` = 0 WHERE `entry` = 29433;
-UPDATE `creature_template_addon` SET `moveflags` = 0 WHERE `entry` = 29625;
-
--- from lanc
--- All Support Vehicles for mount The Argent Tournament
-DELETE FROM `creature_spell` WHERE `guid` IN (33324, 33323, 33322, 33321, 33320, 33319, 33318, 33317, 33316);
-
-SET @GUID := 33324;
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(@GUID, 62544, 0, 0, 0, 0),
-(@GUID, 64342, 1, 0, 0, 0),
-(@GUID, 63010, 2, 0, 0, 0),
-(@GUID, 62552, 3, 0, 0, 0),
-(@GUID, 64077, 4, 0, 0, 0),
-(@GUID, 62863, 5, 0, 0, 0),
-(@GUID, 63034, 6, 0, 0, 0);
-
-SET @GUID := 33323;
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(@GUID, 62544, 0, 0, 0, 0),
-(@GUID, 64342, 1, 0, 0, 0),
-(@GUID, 63010, 2, 0, 0, 0),
-(@GUID, 62552, 3, 0, 0, 0),
-(@GUID, 64077, 4, 0, 0, 0),
-(@GUID, 62863, 5, 0, 0, 0),
-(@GUID, 63034, 6, 0, 0, 0);
-
-SET @GUID := 33322;
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(@GUID, 62544, 0, 0, 0, 0),
-(@GUID, 64342, 1, 0, 0, 0),
-(@GUID, 63010, 2, 0, 0, 0),
-(@GUID, 62552, 3, 0, 0, 0),
-(@GUID, 64077, 4, 0, 0, 0),
-(@GUID, 62863, 5, 0, 0, 0),
-(@GUID, 63034, 6, 0, 0, 0);
-
-SET @GUID := 33321;
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(@GUID, 62544, 0, 0, 0, 0),
-(@GUID, 64342, 1, 0, 0, 0),
-(@GUID, 63010, 2, 0, 0, 0),
-(@GUID, 62552, 3, 0, 0, 0),
-(@GUID, 64077, 4, 0, 0, 0),
-(@GUID, 62863, 5, 0, 0, 0),
-(@GUID, 63034, 6, 0, 0, 0);
-
-SET @GUID := 33320;
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(@GUID, 62544, 0, 0, 0, 0),
-(@GUID, 64342, 1, 0, 0, 0),
-(@GUID, 63010, 2, 0, 0, 0),
-(@GUID, 62552, 3, 0, 0, 0),
-(@GUID, 64077, 4, 0, 0, 0),
-(@GUID, 62863, 5, 0, 0, 0),
-(@GUID, 63034, 6, 0, 0, 0);
-
-SET @GUID := 33319;
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(@GUID, 62544, 0, 0, 0, 0),
-(@GUID, 64342, 1, 0, 0, 0),
-(@GUID, 63010, 2, 0, 0, 0),
-(@GUID, 62552, 3, 0, 0, 0),
-(@GUID, 64077, 4, 0, 0, 0),
-(@GUID, 62863, 5, 0, 0, 0),
-(@GUID, 63034, 6, 0, 0, 0);
-
-SET @GUID := 33318;
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(@GUID, 62544, 0, 0, 0, 0),
-(@GUID, 64342, 1, 0, 0, 0),
-(@GUID, 63010, 2, 0, 0, 0),
-(@GUID, 62552, 3, 0, 0, 0),
-(@GUID, 64077, 4, 0, 0, 0),
-(@GUID, 62863, 5, 0, 0, 0),
-(@GUID, 63034, 6, 0, 0, 0);
-
-SET @GUID := 33317;
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(@GUID, 62544, 0, 0, 0, 0),
-(@GUID, 64342, 1, 0, 0, 0),
-(@GUID, 63010, 2, 0, 0, 0),
-(@GUID, 62552, 3, 0, 0, 0),
-(@GUID, 64077, 4, 0, 0, 0),
-(@GUID, 62863, 5, 0, 0, 0),
-(@GUID, 63034, 6, 0, 0, 0);
-
-SET @GUID := 33316;
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(@GUID, 62544, 0, 0, 0, 0),
-(@GUID, 64342, 1, 0, 0, 0),
-(@GUID, 63010, 2, 0, 0, 0),
-(@GUID, 62552, 3, 0, 0, 0),
-(@GUID, 64077, 4, 0, 0, 0),
-(@GUID, 62863, 5, 0, 0, 0),
-(@GUID, 63034, 6, 0, 0, 0);
-
-DELETE FROM `npc_spellclick_spells` WHERE npc_entry = 33870;
-INSERT INTO `npc_spellclick_spells` (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES
-(33870, 63663, 13664, 1, 0, 3);
-
--- Typo fix for Argent Mount
-DELETE FROM `creature_spell` WHERE `guid` IN (33844, 33845);
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(33844, 62544, 0, 0, 0, 0),
-(33844, 64342, 1, 0, 0, 0),
-(33844, 63010, 2, 0, 0, 0),
-(33844, 62552, 3, 0, 0, 0),
-(33844, 64077, 4, 0, 0, 0),
-(33844, 62863, 5, 0, 0, 0),
-(33844, 63034, 6, 0, 0, 0),
-(33845, 62544, 0, 0, 0, 0),
-(33845, 64342, 1, 0, 0, 0),
-(33845, 63010, 2, 0, 0, 0),
-(33845, 62552, 3, 0, 0, 0),
-(33845, 64077, 4, 0, 0, 0),
-(33845, 62863, 5, 0, 0, 0),
-(33845, 63034, 6, 0, 0, 0);
-
-UPDATE `creature_template` SET `VehicleTemplateId` = 30 WHERE `entry` = 30021;
-REPLACE INTO `creature_template_spells` SET `entry` = 30021, `spell1` = 55982, `spell2` = 55980;
-UPDATE `creature_template` SET `VehicleTemplateId` = 529 WHERE `entry` = 33782;
-
-DELETE FROM `npc_spellclick_spells` WHERE `npc_entry` IN (30021, 33782);
-INSERT INTO `npc_spellclick_spells` (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES
-(30021, 55785, 0, 0, 0, 3),
-(33782, 63151, 0, 0, 0, 1);
-
--- Rocket Propelled Warhead (quest 12437)
-UPDATE `creature_template` SET `InhabitType` = 6, `UnitFlags` = `UnitFlags`|16384, `SpeedWalk` = 4, `SpeedRun` = 4 WHERE `entry` = 27593;
-UPDATE `creature_model_info` SET `bounding_radius` = 0.534723,`combat_reach` = 3.5 WHERE `modelid` = 26611;
-
-DELETE FROM `npc_spellclick_spells` WHERE `npc_entry` = 27593;
-INSERT INTO `npc_spellclick_spells` (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES
-(27593, 49177, 12437, 1, 0, 1);
-
--- Wintergrasp vehicles
-
--- Wintergrasp tower cannon
-SET @GUID := 28366;
-UPDATE `creature_template` SET AIName = 'NullAI' WHERE entry = @GUID;
-DELETE FROM `npc_spellclick_spells` WHERE `npc_entry` IN (@GUID);
-INSERT INTO `npc_spellclick_spells` (`npc_entry`, `spell_id`, `quest_start`, `quest_start_active`, `quest_end`, `cast_flags`) VALUES (@GUID, 60962, 0, 0, 0, 1);
-
--- Wintergrasp siege Engine (Alliance)
-SET @GUID := 28312;
-UPDATE `creature_template` SET `VehicleTemplateId` = 324, `AIName` = 'NullAI' WHERE `entry` = @GUID;
-
-DELETE FROM `creature_spell` WHERE `guid` IN (@GUID);
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
--- (@GUID, 51678, 0, 0, 0, 0);
-(@GUID, 54109, 0, 0, 0, 0);
-
--- Wintergrasp Alliance siege turret (accessory)
-SET @GUID := 28319;
-UPDATE `creature_template` SET AIName = 'NullAI' WHERE entry = @GUID;
-
-DELETE FROM `creature_spell` WHERE `guid` IN (@GUID);
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(@GUID, 57609, 0, 0, 0, 0);
-
--- Wintergrasp siege Engine (Horde)
-SET @GUID := 32627;
-UPDATE `creature_template` SET `AIName` = 'NullAI' WHERE `entry` = @GUID;
-
-DELETE FROM `creature_spell` WHERE `guid` IN (@GUID);
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
--- (@GUID, 51678, 0, 0, 0, 0);
-(@GUID, 54109, 0, 0, 0, 0);
-
--- Wintergrasp Horde siege turret (accessory)
-SET @GUID := 32629;
-UPDATE `creature_template` SET AIName = 'NullAI' WHERE entry = @GUID;
-
-DELETE FROM `creature_spell` WHERE `guid` IN (@GUID);
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
-(@GUID, 57609, 0, 0, 0, 0);
--- UPDATE `creature_template` SET faction_A = 1979, faction_H = 1979 WHERE entry = 32629;
-
--- Wintergrasp Demolisher
-SET @GUID := 28094;
-UPDATE `creature_template` SET AIName = 'NullAI' WHERE entry = @GUID;
-
-DELETE FROM `creature_spell` WHERE `guid` IN (@GUID);
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
--- (@GUID, 50652, 0, 0, 0, 0),
-(@GUID, 54107, 0, 0, 0, 0),
--- (@GUID, 50896, 1, 0, 0, 0),
-(@GUID, 57618, 1, 0, 0, 0);
-
--- Wintergrasp Catapult
-SET @GUID := 27881;
-UPDATE `creature_template` SET `AIName` = 'NullAI' WHERE `entry` = @GUID;
-
-DELETE FROM `creature_spell` WHERE `guid` IN (@GUID);
-INSERT INTO `creature_spell` (`guid`, `spell`, `index`, `active`, `disabled`, `flags`) VALUES
--- (@GUID, 50025, 0, 0, 0, 0),
-(@GUID, 57606, 0, 0, 0, 0),
-(@GUID, 50989, 1, 0, 0, 0);
-
--- Under Development
-
--- Highland Mustang
--- DELETE FROM npc_spellclick_spells WHERE npc_entry IN (26472);
--- INSERT INTO npc_spellclick_spells VALUES (26472, 67373, 0, 0, 0, 1);
-
--- Kor Kron war Rider
--- DELETE FROM npc_spellclick_spells WHERE npc_entry IN (26813);
--- INSERT INTO npc_spellclick_spells VALUES (26813, 47424, 0, 0, 0, 1);
-
--- Kor Kron war Rider 2
--- DELETE FROM npc_spellclick_spells WHERE npc_entry IN (26572);
--- INSERT INTO npc_spellclick_spells VALUES (26572, 47424, 0, 0, 0, 1);
-
--- Onslaught Warhorse
--- DELETE FROM npc_spellclick_spells WHERE npc_entry IN (27213);
--- INSERT INTO npc_spellclick_spells VALUES (27213, 67373, 0, 0, 0, 1);
-
--- Steel Gate Flying manchine
--- DELETE FROM npc_spellclick_spells WHERE npc_entry IN (24418);
--- INSERT INTO npc_spellclick_spells VALUES (24418, 67373, 0, 0, 0, 1);
-
-
--- Wooly mammoth bull
--- DELETE FROM npc_spellclick_spells WHERE npc_entry IN (25743);
--- INSERT INTO npc_spellclick_spells VALUES (25743, 43695, 0, 0, 0, 0);
-
--- Wyrmrest skytalon
--- DELETE FROM npc_spellclick_spells WHERE npc_entry = 32535;
--- INSERT INTO npc_spellclick_spells VALUES (32535, 61245, 0, 0, 0, 1);
-
---
--- `vehicle_accessory`
---
-
-UPDATE `vehicle_accessory` SET `flags` = 1 WHERE `vehicle_entry` IN (27626, 28312, 32627, 32930, 33109, 33060, 33113, 33114, 36678, 33214, 33778, 33687, 28018, 28614, 35069, 34776);
-
--- Hardcoded item Id's. Hide vehicle accessory.
-
-UPDATE vehicle_accessory SET flags = flags | 2 WHERE accessory_entry IN (33114, 33167);
+-- ----------------------------
+-- Table structure for vehicle_accessory
+-- ----------------------------
+DROP TABLE IF EXISTS `vehicle_accessory`;
+CREATE TABLE `vehicle_accessory` (
+  `vehicle_entry` int(10) unsigned NOT NULL COMMENT 'entry of the npc who has some accessory as vehicle',
+  `seat` mediumint(8) unsigned NOT NULL COMMENT 'onto which seat shall the passenger be boarded',
+  `accessory_entry` int(10) unsigned NOT NULL COMMENT 'entry of the passenger that is to be boarded',
+  `flags` int(10) unsigned NOT NULL DEFAULT '0' COMMENT 'various flags',
+  `offset_x` float NOT NULL DEFAULT '0' COMMENT 'custom passenger offset X',
+  `offset_y` float NOT NULL DEFAULT '0' COMMENT 'custom passenger offset Y',
+  `offset_z` float NOT NULL DEFAULT '0' COMMENT 'custom passenger offset Z',
+  `offset_o` float NOT NULL DEFAULT '0' COMMENT 'custom passenger offset O',
+  `comment` varchar(255) NOT NULL,
+  PRIMARY KEY (`vehicle_entry`,`seat`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED COMMENT='Vehicle Accessory';
+
+-- ----------------------------
+-- Records of vehicle_accessory
+-- ----------------------------
+INSERT INTO `vehicle_accessory` VALUES ('27241', '0', '27268', '0', '0', '0', '0', '0', 'Risen Gryphon');
+INSERT INTO `vehicle_accessory` VALUES ('27626', '0', '27627', '1', '0', '0', '0', '0', 'Tatjana\'s Horse');
+INSERT INTO `vehicle_accessory` VALUES ('27661', '0', '27662', '0', '0', '0', '0', '0', 'Wintergarde Gryphon');
+INSERT INTO `vehicle_accessory` VALUES ('28018', '0', '28006', '1', '0', '0', '0', '0', 'Thiassi the Light Bringer');
+INSERT INTO `vehicle_accessory` VALUES ('28054', '0', '28053', '0', '0', '0', '0', '0', 'Lucky Wilhelm - Apple');
+INSERT INTO `vehicle_accessory` VALUES ('28312', '7', '28319', '1', '0', '0', '0', '0', 'Wintergrasp Siege Engine');
+INSERT INTO `vehicle_accessory` VALUES ('28614', '0', '28616', '1', '0', '0', '0', '0', 'Scarlet Gryphon Rider');
+INSERT INTO `vehicle_accessory` VALUES ('29555', '0', '29556', '0', '0', '0', '0', '0', 'Goblin Sapper');
+INSERT INTO `vehicle_accessory` VALUES ('29625', '0', '29694', '0', '0', '0', '0', '0', 'Hyldsmeet Proto-Drake');
+INSERT INTO `vehicle_accessory` VALUES ('29698', '0', '29699', '0', '0', '0', '0', '0', 'Drakuru Raptor');
+INSERT INTO `vehicle_accessory` VALUES ('29931', '0', '29982', '0', '0', '0', '0', '0', 'Drakkari Rider on Drakkari Rhino');
+INSERT INTO `vehicle_accessory` VALUES ('30330', '0', '30332', '0', '0', '0', '0', '0', 'Jotunheim Proto-Drake');
+INSERT INTO `vehicle_accessory` VALUES ('32189', '0', '32190', '0', '0', '0', '0', '0', 'Skybreaker Recon Fighter');
+INSERT INTO `vehicle_accessory` VALUES ('32627', '7', '32629', '1', '0', '0', '0', '0', 'Wintergrasp Siege Engine');
+INSERT INTO `vehicle_accessory` VALUES ('32633', '1', '32638', '0', '0', '0', '0', '0', 'Traveler Mammoth (A) - Vendor');
+INSERT INTO `vehicle_accessory` VALUES ('32633', '2', '32639', '0', '0', '0', '0', '0', 'Traveler Mammoth (A) - Vendor & Repairer');
+INSERT INTO `vehicle_accessory` VALUES ('32640', '1', '32642', '0', '0', '0', '0', '0', 'Traveler Mammoth (H) - Vendor');
+INSERT INTO `vehicle_accessory` VALUES ('32640', '2', '32641', '0', '0', '0', '0', '0', 'Traveler Mammoth (H) - Vendor & Repairer');
+INSERT INTO `vehicle_accessory` VALUES ('34150', '4', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('34150', '5', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('33060', '7', '33067', '1', '0', '0', '0', '0', 'Salvaged Siege Engine');
+INSERT INTO `vehicle_accessory` VALUES ('33109', '1', '33167', '3', '0', '0', '0', '0', 'Salvaged Demolisher');
+INSERT INTO `vehicle_accessory` VALUES ('33109', '2', '33620', '1', '0', '0', '0', '0', 'Salvaged Demolisher');
+INSERT INTO `vehicle_accessory` VALUES ('33109', '3', '33167', '3', '0', '0', '0', '0', 'Salvaged Demolisher');
+INSERT INTO `vehicle_accessory` VALUES ('33113', '2', '33114', '3', '0', '0', '0', '0', 'Flame Leviathan');
+INSERT INTO `vehicle_accessory` VALUES ('33113', '3', '33114', '3', '0', '0', '0', '0', 'Flame Leviathan');
+INSERT INTO `vehicle_accessory` VALUES ('33113', '7', '33139', '1', '0', '0', '0', '0', 'Flame Leviathan');
+INSERT INTO `vehicle_accessory` VALUES ('33114', '1', '33142', '1', '0', '0', '0', '0', 'Overload Control Device');
+INSERT INTO `vehicle_accessory` VALUES ('33114', '2', '33143', '1', '0', '0', '0', '0', 'Leviathan Defense Turret');
+INSERT INTO `vehicle_accessory` VALUES ('33214', '1', '33218', '1', '0', '0', '0', '0', 'Mechanolift 304-A');
+INSERT INTO `vehicle_accessory` VALUES ('33669', '0', '33666', '0', '0', '0', '0', '0', 'Demolisher Engineer Blastwrench');
+INSERT INTO `vehicle_accessory` VALUES ('33687', '0', '33695', '1', '0', '0', '0', '0', 'Chillmaw');
+INSERT INTO `vehicle_accessory` VALUES ('33687', '1', '33695', '1', '0', '0', '0', '0', 'Chillmaw');
+INSERT INTO `vehicle_accessory` VALUES ('33687', '2', '33695', '1', '0', '0', '0', '0', 'Chillmaw');
+INSERT INTO `vehicle_accessory` VALUES ('33778', '0', '33780', '1', '0', '0', '0', '0', 'Tournament Hippogryph');
+INSERT INTO `vehicle_accessory` VALUES ('34658', '0', '34657', '0', '0', '0', '0', '0', 'Jaelyne Evensong\'s Mount');
+INSERT INTO `vehicle_accessory` VALUES ('34776', '7', '34777', '1', '0', '0', '0', '0', 'Isle of Conquest Siege Engine  - main turret (ally)');
+INSERT INTO `vehicle_accessory` VALUES ('34776', '1', '36356', '1', '0', '0', '0', '0', 'Isle of Conquest Siege Engine  - flame turret 1 (ally)');
+INSERT INTO `vehicle_accessory` VALUES ('34776', '2', '36356', '1', '0', '0', '0', '0', 'Isle of Conquest Siege Engine  - flame turret 2 (ally)');
+INSERT INTO `vehicle_accessory` VALUES ('35069', '7', '36355', '1', '0', '0', '0', '0', 'Isle of Conquest Siege Engine - main turret (horde)');
+INSERT INTO `vehicle_accessory` VALUES ('35069', '1', '34778', '1', '0', '0', '0', '0', 'Isle of Conquest Siege Engine - flame turret 1 (horde)');
+INSERT INTO `vehicle_accessory` VALUES ('35069', '2', '34778', '1', '0', '0', '0', '0', 'Isle of Conquest Siege Engine - flame turret 2 (horde)');
+INSERT INTO `vehicle_accessory` VALUES ('35633', '0', '34702', '0', '0', '0', '0', '0', 'Ambrose Boltspark\'s Mount');
+INSERT INTO `vehicle_accessory` VALUES ('35634', '0', '35617', '0', '0', '0', '0', '0', 'Deathstalker Visceri\'s Mount');
+INSERT INTO `vehicle_accessory` VALUES ('35635', '0', '35569', '0', '0', '0', '0', '0', 'Eressea Dawnsinger\'s Mount');
+INSERT INTO `vehicle_accessory` VALUES ('35636', '0', '34703', '0', '0', '0', '0', '0', 'Lana Stouthammer\'s Mount');
+INSERT INTO `vehicle_accessory` VALUES ('35637', '0', '34705', '0', '0', '0', '0', '0', 'Marshal Jacob Alerius\' Mount');
+INSERT INTO `vehicle_accessory` VALUES ('35638', '0', '35572', '0', '0', '0', '0', '0', 'Mokra the Skullcrusher\'s Mount');
+INSERT INTO `vehicle_accessory` VALUES ('35640', '0', '35571', '0', '0', '0', '0', '0', 'Runok Wildmane\'s Mount');
+INSERT INTO `vehicle_accessory` VALUES ('35641', '0', '35570', '0', '0', '0', '0', '0', 'Zul\'tore\'s Mount');
+INSERT INTO `vehicle_accessory` VALUES ('35768', '0', '34701', '0', '0', '0', '0', '0', 'Colosos\' Mount');
+INSERT INTO `vehicle_accessory` VALUES ('36678', '0', '38309', '1', '0', '0', '0', '0', 'Professor Putricide - trigger');
+INSERT INTO `vehicle_accessory` VALUES ('36678', '1', '38308', '1', '0', '0', '0', '0', 'Professor Putricide - trigger');
+INSERT INTO `vehicle_accessory` VALUES ('36891', '0', '31260', '0', '0', '0', '0', '0', 'Iceborn Proto-Drake');
+INSERT INTO `vehicle_accessory` VALUES ('28782', '0', '28768', '0', '0', '0', '0', '0', 'Acherus Deathcharger - Dark Rider of Acherus');
+INSERT INTO `vehicle_accessory` VALUES ('32823', '0', '34812', '0', '0', '0', '0', '0', 'Bountiful Table - The Turkey Chair');
+INSERT INTO `vehicle_accessory` VALUES ('32823', '1', '34823', '0', '0', '0', '0', '0', 'Bountiful Table - The Cranberry Chair');
+INSERT INTO `vehicle_accessory` VALUES ('32823', '2', '34819', '0', '0', '0', '0', '0', 'Bountiful Table - The Stuffing Chair');
+INSERT INTO `vehicle_accessory` VALUES ('32823', '3', '34824', '0', '0', '0', '0', '0', 'Bountiful Table - The Sweet Potato Chair');
+INSERT INTO `vehicle_accessory` VALUES ('32823', '4', '34822', '0', '0', '0', '0', '0', 'Bountiful Table - The Pie Chair');
+INSERT INTO `vehicle_accessory` VALUES ('32823', '5', '32830', '0', '0', '0', '0', '0', 'Bountiful Table - Food Holder');
+INSERT INTO `vehicle_accessory` VALUES ('32823', '6', '32840', '0', '0', '0', '0', '0', 'Bountiful Table - Plate Holder');
+INSERT INTO `vehicle_accessory` VALUES ('32830', '0', '32824', '0', '0', '0', '0', '0', 'Food Holder - [PH] Pilgrim\'s Bounty Table - Turkey');
+INSERT INTO `vehicle_accessory` VALUES ('32830', '1', '32827', '0', '0', '0', '0', '0', 'Food Holder - [PH] Pilgrim\'s Bounty Table - Cranberry Sauce');
+INSERT INTO `vehicle_accessory` VALUES ('32830', '2', '32831', '0', '0', '0', '0', '0', 'Food Holder - [PH] Pilgrim\'s Bounty Table - Stuffing');
+INSERT INTO `vehicle_accessory` VALUES ('32830', '3', '32825', '0', '0', '0', '0', '0', 'Food Holder - [PH] Pilgrim\'s Bounty Table - Yams');
+INSERT INTO `vehicle_accessory` VALUES ('32830', '4', '32829', '0', '0', '0', '0', '0', 'Food Holder - [PH] Pilgrim\'s Bounty Table - Pie');
+INSERT INTO `vehicle_accessory` VALUES ('32840', '0', '32839', '0', '0', '0', '0', '0', 'Plate Holder - Sturdy Plate');
+INSERT INTO `vehicle_accessory` VALUES ('32840', '1', '32839', '0', '0', '0', '0', '0', 'Plate Holder - Sturdy Plate');
+INSERT INTO `vehicle_accessory` VALUES ('32840', '2', '32839', '0', '0', '0', '0', '0', 'Plate Holder - Sturdy Plate');
+INSERT INTO `vehicle_accessory` VALUES ('32840', '3', '32839', '0', '0', '0', '0', '0', 'Plate Holder - Sturdy Plate');
+INSERT INTO `vehicle_accessory` VALUES ('32840', '4', '32839', '0', '0', '0', '0', '0', 'Plate Holder - Sturdy Plate');
+INSERT INTO `vehicle_accessory` VALUES ('27213', '0', '27206', '0', '0', '0', '0', '0', 'Onslaught Warhorse - Onslaught Knight');
+INSERT INTO `vehicle_accessory` VALUES ('24083', '0', '24849', '0', '0', '0', '0', '0', 'Proto Drake Rider mounted to Enslaved Proto Drake');
+INSERT INTO `vehicle_accessory` VALUES ('24750', '0', '24751', '0', '0', '0', '0', '0', 'Excelsior rides Hidalgo the Master Falconer');
+INSERT INTO `vehicle_accessory` VALUES ('28710', '0', '28646', '0', '0', '0', '0', '0', 'Pilot Vic');
+INSERT INTO `vehicle_accessory` VALUES ('29433', '0', '29440', '0', '0', '0', '0', '0', 'Goblin Sapper in K3');
+INSERT INTO `vehicle_accessory` VALUES ('29579', '0', '29599', '0', '0', '0', '0', '0', 'Brann Snow Target');
+INSERT INTO `vehicle_accessory` VALUES ('29838', '0', '29836', '0', '0', '0', '0', '0', 'Drakkari Battle Rider on Drakkari Rhino, not minion');
+INSERT INTO `vehicle_accessory` VALUES ('29931', '1', '29982', '0', '0', '0', '0', '0', 'Drakkari Rider on Drakkari Rhino');
+INSERT INTO `vehicle_accessory` VALUES ('29931', '2', '29982', '0', '0', '0', '0', '0', 'Drakkari Rider on Drakkari Rhino');
+INSERT INTO `vehicle_accessory` VALUES ('30234', '0', '30245', '0', '0', '0', '0', '0', 'Hover Disk - Nexus Lord');
+INSERT INTO `vehicle_accessory` VALUES ('30248', '0', '30249', '0', '0', '0', '0', '0', 'Hover Disk - Scion of Eternity');
+INSERT INTO `vehicle_accessory` VALUES ('31262', '0', '31263', '0', '0', '0', '0', '0', 'Carrion Hunter rides Blight Falconer');
+INSERT INTO `vehicle_accessory` VALUES ('31269', '0', '27559', '0', '0', '0', '0', '0', 'Kor\'kron Battle Wyvern');
+INSERT INTO `vehicle_accessory` VALUES ('31406', '0', '31408', '0', '0', '0', '0', '0', 'Alliance Bomber Seat on Alliance Infra-green Bomber');
+INSERT INTO `vehicle_accessory` VALUES ('31406', '1', '31407', '0', '0', '0', '0', '0', 'Alliance Turret Seat on Alliance Infra-green Bomber');
+INSERT INTO `vehicle_accessory` VALUES ('31406', '2', '31409', '0', '0', '0', '0', '0', 'Alliance Engineering Seat on rides Alliance Infra-green Bomber');
+INSERT INTO `vehicle_accessory` VALUES ('31406', '3', '32217', '0', '0', '0', '0', '0', 'Banner Bunny, Hanging, Alliance on Alliance Infra-green Bomber');
+INSERT INTO `vehicle_accessory` VALUES ('31406', '4', '32221', '0', '0', '0', '0', '0', 'Banner Bunny, Side, Alliance on Alliance Infra-green Bomber');
+INSERT INTO `vehicle_accessory` VALUES ('31406', '5', '32221', '0', '0', '0', '0', '0', 'Banner Bunny, Side, Alliance on Alliance Infra-green Bomber');
+INSERT INTO `vehicle_accessory` VALUES ('31406', '6', '32256', '0', '0', '0', '0', '0', 'Shield Visual Loc Bunny on Alliance Infra-green Bomber');
+INSERT INTO `vehicle_accessory` VALUES ('31406', '7', '32274', '0', '0', '0', '0', '0', 'Alliance Bomber Pilot rides Alliance Infra-green Bomber');
+INSERT INTO `vehicle_accessory` VALUES ('31583', '1', '31630', '0', '0', '0', '0', '0', 'Skytalon Explosion Bunny on Frostbrood Skytalon');
+INSERT INTO `vehicle_accessory` VALUES ('31881', '0', '31891', '0', '0', '0', '0', '0', 'Kor\'kron Transport Pilot rides Kor\'kron Troop Transport');
+INSERT INTO `vehicle_accessory` VALUES ('31881', '1', '31884', '0', '0', '0', '0', '0', 'Kor\'kron Suppression Turret on Kor\'kron Troop Transport');
+INSERT INTO `vehicle_accessory` VALUES ('31881', '2', '31882', '0', '0', '0', '0', '0', 'Kor\'kron Infiltrator on Kor\'kron Troop Transport');
+INSERT INTO `vehicle_accessory` VALUES ('31881', '3', '31882', '0', '0', '0', '0', '0', 'Kor\'kron Infiltrator on Kor\'kron Troop Transport');
+INSERT INTO `vehicle_accessory` VALUES ('31881', '4', '31882', '0', '0', '0', '0', '0', 'Kor\'kron Infiltrator on Kor\'kron Troop Transport');
+INSERT INTO `vehicle_accessory` VALUES ('31881', '5', '31882', '0', '0', '0', '0', '0', 'Kor\'kron Infiltrator on Kor\'kron Troop Transport');
+INSERT INTO `vehicle_accessory` VALUES ('31884', '0', '31882', '0', '0', '0', '0', '0', 'Kor\'kron Infiltrator rides Kor\'kron Suppression Turret');
+INSERT INTO `vehicle_accessory` VALUES ('32225', '0', '32223', '0', '0', '0', '0', '0', 'Skybreaker Transport Pilot rides Skybreaker Troop Transport');
+INSERT INTO `vehicle_accessory` VALUES ('32225', '1', '32227', '0', '0', '0', '0', '0', 'Skybreaker Suppression Turret on Skybreaker Troop Transport');
+INSERT INTO `vehicle_accessory` VALUES ('32225', '2', '32222', '0', '0', '0', '0', '0', 'Skybreaker Infiltrator on Skybreaker Troop Transport');
+INSERT INTO `vehicle_accessory` VALUES ('32225', '3', '32222', '0', '0', '0', '0', '0', 'Skybreaker Infiltrator on Skybreaker Troop Transport');
+INSERT INTO `vehicle_accessory` VALUES ('32225', '4', '32222', '0', '0', '0', '0', '0', 'Skybreaker Infiltrator on Skybreaker Troop Transport');
+INSERT INTO `vehicle_accessory` VALUES ('32225', '5', '32222', '0', '0', '0', '0', '0', 'Skybreaker Infiltrator on Skybreaker Troop Transport');
+INSERT INTO `vehicle_accessory` VALUES ('32227', '0', '32222', '0', '0', '0', '0', '0', 'Skybreaker Infiltrator rides Skybreaker Suppression Turret');
+INSERT INTO `vehicle_accessory` VALUES ('32344', '0', '32274', '0', '0', '0', '0', '0', 'Alliance Bomber Pilot rides Alliance Rescue Craft');
+INSERT INTO `vehicle_accessory` VALUES ('32344', '2', '32531', '0', '0', '0', '0', '0', 'Banner Bunny, Side, Alliance, Small rides Alliance Rescue Craft');
+INSERT INTO `vehicle_accessory` VALUES ('32490', '0', '32486', '0', '0', '0', '0', '0', 'Scourge Death Knight rides Scourge Deathcharger');
+INSERT INTO `vehicle_accessory` VALUES ('33364', '1', '33365', '0', '0', '0', '0', '0', 'Thorim\'s Hammer Targetting Reticle');
+INSERT INTO `vehicle_accessory` VALUES ('36896', '1', '28717', '0', '0', '0', '0', '0', 'Overlord Drakuru on Stonespine Gargoyle');
+INSERT INTO `vehicle_accessory` VALUES ('40081', '0', '40083', '0', '0', '0', '0', '0', 'Orb Carrier');
+INSERT INTO `vehicle_accessory` VALUES ('40081', '1', '40100', '0', '0', '0', '0', '0', 'Orb Carrier');
+INSERT INTO `vehicle_accessory` VALUES ('40470', '0', '40083', '0', '0', '0', '0', '0', 'Orb Carrier');
+INSERT INTO `vehicle_accessory` VALUES ('40470', '1', '40100', '0', '0', '0', '0', '0', 'Orb Carrier');
+INSERT INTO `vehicle_accessory` VALUES ('40471', '0', '40083', '0', '0', '0', '0', '0', 'Orb Carrier');
+INSERT INTO `vehicle_accessory` VALUES ('40471', '1', '40100', '0', '0', '0', '0', '0', 'Orb Carrier');
+INSERT INTO `vehicle_accessory` VALUES ('40471', '2', '40468', '0', '0', '0', '0', '0', 'Orb Carrier');
+INSERT INTO `vehicle_accessory` VALUES ('40471', '3', '40469', '0', '0', '0', '0', '0', 'Orb Carrier');
+INSERT INTO `vehicle_accessory` VALUES ('40472', '0', '40083', '0', '0', '0', '0', '0', 'Orb Carrier');
+INSERT INTO `vehicle_accessory` VALUES ('40472', '1', '40100', '0', '0', '0', '0', '0', 'Orb Carrier');
+INSERT INTO `vehicle_accessory` VALUES ('40472', '2', '40468', '0', '0', '0', '0', '0', 'Orb Carrier');
+INSERT INTO `vehicle_accessory` VALUES ('40472', '3', '40469', '0', '0', '0', '0', '0', 'Orb Carrier');
+INSERT INTO `vehicle_accessory` VALUES ('36794', '0', '36658', '0', '0', '0', '0', '0', 'Scourgelord Tyrannus - intro');
+INSERT INTO `vehicle_accessory` VALUES ('33369', '1', '33370', '0', '0', '0', '0', '0', 'Mimiron\'s Inferno Targetting Reticle');
+INSERT INTO `vehicle_accessory` VALUES ('33108', '1', '33212', '0', '0', '0', '0', '0', 'Hodir\'s Fury Targetting Reticle');
+INSERT INTO `vehicle_accessory` VALUES ('33366', '1', '33367', '0', '0', '0', '0', '0', 'Freya\'s Ward Targetting Reticle');
+INSERT INTO `vehicle_accessory` VALUES ('34161', '1', '33216', '0', '0', '0', '0', '0', 'Mechanostriker 54-A');
+INSERT INTO `vehicle_accessory` VALUES ('34150', '3', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('34150', '2', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('34150', '1', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('34150', '0', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('34146', '3', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('34146', '2', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('34146', '1', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('34146', '0', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('34151', '1', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('34151', '2', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('34151', '3', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('34151', '4', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('34151', '5', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('34151', '6', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('34151', '7', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('34151', '0', '34137', '0', '0', '0', '0', '0', 'Winter Jormungar');
+INSERT INTO `vehicle_accessory` VALUES ('33651', '5', '34050', '0', '0', '0', '0', '0', 'Rocket (Mimiron Visual)');
+INSERT INTO `vehicle_accessory` VALUES ('33651', '6', '34050', '0', '0', '0', '0', '0', 'Rocket (Mimiron Visual)');
+INSERT INTO `vehicle_accessory` VALUES ('34183', '1', '34184', '0', '0', '0', '0', '0', 'Clockwork Mechanic');
+INSERT INTO `vehicle_accessory` VALUES ('29500', '0', '29498', '0', '0', '0', '0', '0', 'Brunnhildar Warmaiden');
+INSERT INTO `vehicle_accessory` VALUES ('30174', '0', '30175', '0', '0', '0', '0', '0', 'Hyldsmeet Bear Rider');
