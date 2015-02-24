@@ -1047,8 +1047,8 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         void SetInWater(bool apply);
 
-        bool IsInWater() const override { return m_isInWater; }
-        bool IsUnderWater() const override;
+        bool IsInWater() const { return m_isInWater; }
+        bool IsUnderWater() const;
 
         void SendInitialPacketsBeforeAddToMap();
         void SendInitialPacketsAfterAddToMap();
@@ -1117,7 +1117,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         void ResetTimeSync();
         void SendTimeSync();
 
-        void SetDeathState(DeathState s) override;          // overwrite Unit::SetDeathState
+        void SetDeathState(DeathState s);                   // overwrite Unit::SetDeathState
 
         float GetRestBonus() const { return m_rest_bonus; }
         void SetRestBonus(float rest_bonus_new);
@@ -1777,16 +1777,16 @@ class MANGOS_DLL_SPEC Player : public Unit
         float GetHealthBonusFromStamina();
         float GetManaBonusFromIntellect();
 
-        bool UpdateStats(Stats stat) override;
-        bool UpdateAllStats() override;
-        void UpdateResistances(uint32 school) override;
-        void UpdateArmor() override;
-        void UpdateMaxHealth() override;
-        void UpdateMaxPower(Powers power) override;
+        bool UpdateStats(Stats stat);
+        bool UpdateAllStats();
+        void UpdateResistances(uint32 school);
+        void UpdateArmor();
+        void UpdateMaxHealth();
+        void UpdateMaxPower(Powers power);
         void ApplyFeralAPBonus(int32 amount, bool apply);
-        void UpdateAttackPowerAndDamage(bool ranged = false) override;
+        void UpdateAttackPowerAndDamage(bool ranged = false);
         void UpdateShieldBlockValue();
-        void UpdateDamagePhysical(WeaponAttackType attType) override;
+        void UpdateDamagePhysical(WeaponAttackType attType);
         void ApplySpellPowerBonus(int32 amount, bool apply);
         void UpdateSpellDamageAndHealingBonus();
         void ApplyRatingMod(CombatRating cr, int32 value, bool apply);
@@ -1797,7 +1797,7 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         void UpdateDefenseBonusesMod();
         float GetMeleeCritFromAgility();
-        void GetDodgeFromAgility(float& diminishing, float& nondiminishing);
+        void GetDodgeFromAgility(float &diminishing, float &nondiminishing);
         float GetSpellCritFromIntellect();
         float OCTRegenHPPerSpirit();
         float OCTRegenMPPerSpirit();
@@ -1822,6 +1822,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         void ApplyManaRegenBonus(int32 amount, bool apply);
         void UpdateManaRegen();
         void UpdateRuneRegen(uint8 index);
+        void ApplyHealthRegenBonus(int32 amount, bool apply);
 
         ObjectGuid const& GetLootGuid() const { return m_lootGuid; }
         void SetLootGuid(ObjectGuid const& guid) { m_lootGuid = guid; }
@@ -2526,6 +2527,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         uint16 m_baseSpellPower;
         uint16 m_baseFeralAP;
         uint16 m_baseManaRegen;
+        uint16 m_baseHealthRegen;
         float m_armorPenetrationPct;
         int32 m_spellPenetrationItemMod;
 

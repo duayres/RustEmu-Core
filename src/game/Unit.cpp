@@ -750,25 +750,27 @@ uint32 Unit::DealDamage(DamageInfo* damageInfo)
     if (!damageInfo->HasFlag(DAMAGE_SHARED))
     {
         std::vector<DamageInfo> linkedDamageList;
-        // share damage by auras
-        AuraList const& vShareDamageAuras = pVictim->GetAurasByType(SPELL_AURA_SHARE_DAMAGE_PCT);
-        for (AuraList::const_iterator itr = vShareDamageAuras.begin(); itr != vShareDamageAuras.end(); ++itr)
         {
-            if (!(*itr) || !(*itr)->GetHolder() || (*itr)->GetHolder()->IsDeleted())
-                continue;
-
-            if (Unit* shareTarget = (*itr)->GetCaster())
+            // share damage by auras
+            AuraList const& vShareDamageAuras = pVictim->GetAurasByType(SPELL_AURA_SHARE_DAMAGE_PCT);
+            for (AuraList::const_iterator itr = vShareDamageAuras.begin(); itr != vShareDamageAuras.end(); ++itr)
             {
-                if (shareTarget != pVictim && ((*itr)->GetMiscValue() & damageInfo->GetSchoolMask()))
+                if (!(*itr) || !(*itr)->GetHolder() || (*itr)->GetHolder()->IsDeleted())
+                    continue;
+
+                if (Unit* shareTarget = (*itr)->GetCaster())
                 {
-                    SpellEntry const* shareSpell = (*itr)->GetSpellProto();
-                    int32 shareDamage = int32(damageInfo->damage * (*itr)->GetModifier()->m_amount / 100.0f);
-                    //linkedDamageList.push_back(DamageInfo(this, shareTarget, spellProto, shareDamage));
-                    linkedDamageList.push_back(DamageInfo(this, shareTarget, shareSpell, shareDamage));
-                    DamageInfo* sharedDamageInfo = &linkedDamageList.back();
-                    DealDamageMods(sharedDamageInfo);
-                    sharedDamageInfo->cleanDamage = shareDamage;
-                    sharedDamageInfo->AddFlag(DAMAGE_SHARED);
+                    if (shareTarget != pVictim && ((*itr)->GetMiscValue() & damageInfo->GetSchoolMask()))
+                    {
+                        SpellEntry const* shareSpell = (*itr)->GetSpellProto();
+                        int32 shareDamage = int32(damageInfo->damage * (*itr)->GetModifier()->m_amount / 100.0f);
+                        //linkedDamageList.push_back(DamageInfo(this, shareTarget, spellProto, shareDamage));
+                        linkedDamageList.push_back(DamageInfo(this, shareTarget, shareSpell, shareDamage));
+                        DamageInfo* sharedDamageInfo = &linkedDamageList.back();
+                        DealDamageMods(sharedDamageInfo);
+                        sharedDamageInfo->cleanDamage = shareDamage;
+                        sharedDamageInfo->AddFlag(DAMAGE_SHARED);
+                    }
                 }
             }
         }
@@ -1231,6 +1233,13 @@ void Unit::JustKilledCreature(Creature* victim, Player* responsiblePlayer)
     {
         if (CreatureInfo const* normalInfo = ObjectMgr::GetCreatureTemplate(victim->GetEntry()))
             ((Player*)this)->KilledMonster(normalInfo, victim->GetObjectGuid());
+    }
+
+    // if victim is vehicle and has passengers - remove his
+    if (victim->IsVehicle())
+    {
+        if (victim->GetVehicleKit())
+            victim->GetVehicleKit()->RemoveAllPassengers();
     }
 
     // Interrupt channeling spell when a Possessed Summoned is killed
@@ -10458,6 +10467,7 @@ void Unit::SetDeathState(DeathState s)
 {
     if (s != ALIVE && s != JUST_ALIVED)
     {
+        ExitVehicle(true);
         CombatStop();
         DeleteThreatList();
         ClearComboPointHolders();                           // any combo points pointed to unit lost at it death
@@ -10475,8 +10485,6 @@ void Unit::SetDeathState(DeathState s)
 
         GetUnitStateMgr().InitDefaults(false);
         StopMoving();
-        i_motionMaster.Clear(false, true);
-        i_motionMaster.MoveIdle();
 
         if (GetVehicleKit())
             GetVehicleKit()->RemoveAllPassengers();
@@ -10490,8 +10498,13 @@ void Unit::SetDeathState(DeathState s)
         // remove aurastates allowing special moves
         ClearAllReactives();
         ClearDiminishings();
+        ProcDamageAndSpell(this, PROC_FLAG_NONE, PROC_FLAG_ON_DEATH, PROC_EX_NONE, 0);
     }
     else if (s == JUST_ALIVED)
+    {
+        RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SKINNABLE); // clear skinnable for creature and player (at battleground)
+    }
+    else if (s == DEAD || s == CORPSE)
     {
         GetUnitStateMgr().DropAllStates();
     }

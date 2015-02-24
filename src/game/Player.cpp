@@ -1483,8 +1483,14 @@ void Player::SetDeathState(DeathState s)
         // remove form before other mods to prevent incorrect stats calculation
         RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT);
 
-        // FIXME: is pet dismissed at dying or releasing spirit? if second, add SetDeathState(DEAD) to HandleRepopRequestOpcode and define pet unsummon here with (s == DEAD)
-        RemovePet(PET_SAVE_REAGENTS);
+        if (Pet* pet = GetPet())
+        {
+            if (pet->getPetType() == HUNTER_PET)
+                SetTemporaryUnsummonedPetNumber(pet->GetCharmInfo()->GetPetNumber());
+
+            // FIXME: is pet dismissed at dying or releasing spirit? if second, add SetDeathState(DEAD) to HandleRepopRequestOpcode and define pet unsummon here with (s == DEAD)
+            RemovePet(PET_SAVE_REAGENTS);
+        }
 
         // save value before aura remove in Unit::SetDeathState
         ressSpellId = GetUInt32Value(PLAYER_SELF_RES_SPELL);
@@ -1507,9 +1513,15 @@ void Player::SetDeathState(DeathState s)
     if (s == JUST_DIED && cur && ressSpellId)
         SetUInt32Value(PLAYER_SELF_RES_SPELL, ressSpellId);
 
+    if (!cur && s == ALIVE)
+    {
+        _RemoveAllItemMods();
+        _ApplyAllItemMods();
+    }
+
     if (isAlive() && !cur)
     {
-        // clear aura case after resurrection by another way (spells will be applied before next death)
+        //clear aura case after resurrection by another way (spells will be applied before next death)
         SetUInt32Value(PLAYER_SELF_RES_SPELL, 0);
 
         // restore default warrior stance
@@ -4495,7 +4507,14 @@ void Player::ResurrectPlayer(uint32 restorePercent, bool applySickness)
     UpdateObjectVisibility();
 
     if (!applySickness)
+    {
+        if (Map* map = GetMap())
+        {
+            if (!map->Instanceable())
+                CastSpell(this, SPELL_ID_HONORLESS_TARGET, true);
+        }
         return;
+    }
 
     // Characters from level 1-10 are not affected by resurrection sickness.
     // Characters from level 11-19 will suffer from one minute of sickness
@@ -4515,7 +4534,7 @@ void Player::ResurrectPlayer(uint32 restorePercent, bool applySickness)
 
             if (SpellAuraHolder* holder = GetSpellAuraHolder(SPELL_ID_PASSIVE_RESURRECTION_SICKNESS))
             {
-                holder->SetAuraDuration(delta * IN_MILLISECONDS);
+                holder->SetAuraDuration(delta*IN_MILLISECONDS);
                 holder->SendAuraUpdate(false);
             }
         }
@@ -4525,7 +4544,6 @@ void Player::ResurrectPlayer(uint32 restorePercent, bool applySickness)
 void Player::KillPlayer()
 {
     SetRoot(true);
-
     StopMirrorTimers();                                     // disable timers(bars)
 
     SetDeathState(CORPSE);
@@ -7266,6 +7284,9 @@ void Player::_ApplyItemBonuses(ItemPrototype const* proto, uint8 slot, bool appl
                 break;
             case ITEM_MOD_SPELL_POWER:
                 ApplySpellPowerBonus(int32(val), apply);
+                break;
+            case ITEM_MOD_HEALTH_REGEN:
+                ApplyHealthRegenBonus(int32(val), apply);
                 break;
             case ITEM_MOD_SPELL_PENETRATION:
                 ApplyModInt32Value(PLAYER_FIELD_MOD_TARGET_RESISTANCE, -int32(val), apply);
@@ -12831,6 +12852,10 @@ void Player::ApplyEnchantment(Item* item, EnchantmentSlot slot, bool apply, bool
                         case ITEM_MOD_SPELL_POWER:
                             ApplySpellPowerBonus(enchant_amount, apply);
                             DEBUG_LOG("+ %u SPELL_POWER", enchant_amount);
+                            break;
+                        case ITEM_MOD_HEALTH_REGEN:
+                            ApplyHealthRegenBonus(enchant_amount, apply);
+                            DEBUG_LOG("+ %u HEALTH_REGENERATION", enchant_amount);
                             break;
                         case ITEM_MOD_BLOCK_VALUE:
                             HandleBaseModValue(SHIELD_BLOCK_VALUE, FLAT_MOD, float(enchant_amount), apply);
