@@ -8690,27 +8690,27 @@ void Player::SetSheath(SheathState sheathed)
 {
     switch (sheathed)
     {
-        case SHEATH_STATE_UNARMED:                          // no prepared weapon
-            SetVirtualItemSlot(0, NULL);
-            SetVirtualItemSlot(1, NULL);
-            SetVirtualItemSlot(2, NULL);
-            break;
-        case SHEATH_STATE_MELEE:                            // prepared melee weapon
-        {
-            SetVirtualItemSlot(0, GetWeaponForAttack(BASE_ATTACK, true, true));
-            SetVirtualItemSlot(1, GetWeaponForAttack(OFF_ATTACK, true, true));
-            SetVirtualItemSlot(2, NULL);
-        };  break;
-        case SHEATH_STATE_RANGED:                           // prepared ranged weapon
-            SetVirtualItemSlot(0, NULL);
-            SetVirtualItemSlot(1, NULL);
-            SetVirtualItemSlot(2, GetWeaponForAttack(RANGED_ATTACK, true, true));
-            break;
-        default:
-            SetVirtualItemSlot(0, NULL);
-            SetVirtualItemSlot(1, NULL);
-            SetVirtualItemSlot(2, NULL);
-            break;
+    case SHEATH_STATE_UNARMED:                          // no prepared weapon
+        SetVirtualItemSlot(0, NULL);
+        SetVirtualItemSlot(1, NULL);
+        SetVirtualItemSlot(2, NULL);
+        break;
+    case SHEATH_STATE_MELEE:                            // prepared melee weapon
+    {
+        SetVirtualItemSlot(0, GetWeaponForAttack(BASE_ATTACK, true, true));
+        SetVirtualItemSlot(1, GetWeaponForAttack(OFF_ATTACK, true, true));
+        SetVirtualItemSlot(2, NULL);
+    };  break;
+    case SHEATH_STATE_RANGED:                           // prepared ranged weapon
+        SetVirtualItemSlot(0, NULL);
+        SetVirtualItemSlot(1, NULL);
+        SetVirtualItemSlot(2, GetWeaponForAttack(RANGED_ATTACK, true, true));
+        break;
+    default:
+        SetVirtualItemSlot(0, NULL);
+        SetVirtualItemSlot(1, NULL);
+        SetVirtualItemSlot(2, NULL);
+        break;
     }
     Unit::SetSheath(sheathed);                              // this must visualize Sheath changing for other players...
 }
@@ -9138,7 +9138,6 @@ Item* Player::GetItemByPos(uint8 bag, uint8 slot) const
 uint32 Player::GetItemDisplayIdInSlot(uint8 bag, uint8 slot) const
 {
     const Item* pItem = GetItemByPos(bag, slot);
-
     if (!pItem)
         return 0;
 

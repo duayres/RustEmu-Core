@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,31 +26,28 @@
 #include "GridNotifiersImpl.h"
 #include "CellImpl.h"
 
-int
-TotemAI::Permissible(const Creature* creature)
+int TotemAI::Permissible(Creature const* creature)
 {
-    if (creature->IsTotem())
+    if( creature->IsTotem() )
         return PERMIT_BASE_PROACTIVE;
 
     return PERMIT_BASE_NO;
-}
+};
 
 TotemAI::TotemAI(Creature* c) : CreatureAI(c)
 {
-}
+};
 
-void
-TotemAI::MoveInLineOfSight(Unit*)
+void TotemAI::MoveInLineOfSight(Unit*)
 {
-}
+};
 
 void TotemAI::EnterEvadeMode()
 {
     m_creature->CombatStop(true);
-}
+};
 
-void
-TotemAI::UpdateAI(const uint32 /*diff*/)
+void TotemAI::UpdateAI(uint32 const /*diff*/)
 {
     if (getTotem().GetTotemType() != TOTEM_ACTIVE)
         return;
@@ -59,12 +56,12 @@ TotemAI::UpdateAI(const uint32 /*diff*/)
         return;
 
     // Search spell
-    SpellEntry const* spellInfo = sSpellStore.LookupEntry(getTotem().GetSpell());
+    SpellEntry const *spellInfo = sSpellStore.LookupEntry(getTotem().GetSpell());
     if (!spellInfo)
         return;
 
     // Get spell rangy
-    SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(spellInfo->rangeIndex);
+    SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(spellInfo->GetRangeIndex());
     float max_range = GetSpellMaxRange(srange);
 
     // SPELLMOD_RANGE not applied in this place just because nonexistent range mods for attacking totems
@@ -73,9 +70,9 @@ TotemAI::UpdateAI(const uint32 /*diff*/)
     Unit* victim = m_creature->GetMap()->GetUnit(i_victimGuid);
 
     // Search victim if no, not attackable, or out of range, or friendly (possible in case duel end)
-    if (!victim ||
-            !victim->isTargetableForAttack() || !m_creature->IsWithinDistInMap(victim, max_range) ||
-            m_creature->IsFriendlyTo(victim) || !victim->isVisibleForOrDetect(m_creature, m_creature, false))
+    if( !victim ||
+        !victim->isTargetableForAttack() || !m_creature->IsWithinDistInMap(victim, max_range) ||
+        m_creature->IsFriendlyTo(victim) || !victim->isVisibleForOrDetect(m_creature,m_creature,false) )
     {
         victim = NULL;
 
@@ -91,25 +88,32 @@ TotemAI::UpdateAI(const uint32 /*diff*/)
         i_victimGuid = victim->GetObjectGuid();
 
         // attack
-        m_creature->SetInFront(victim);                     // client change orientation by self
+        m_creature->SetInFront(victim);                      // client change orientation by self
         m_creature->CastSpell(victim, getTotem().GetSpell(), false);
     }
     else
         i_victimGuid.Clear();
-}
+};
 
-bool
-TotemAI::IsVisible(Unit*) const
+bool TotemAI::IsVisible(Unit*) const
 {
     return false;
-}
+};
 
-void
-TotemAI::AttackStart(Unit*)
+void TotemAI::AttackStart(Unit*)
 {
-}
+    // Sentry totem sends ping on attack
+    if (m_creature->GetEntry() == SENTRY_TOTEM_ENTRY && m_creature->GetOwner() && m_creature->GetOwner()->GetTypeId() == TYPEID_PLAYER)
+    {
+        WorldPacket data(MSG_MINIMAP_PING, (8+4+4));
+        data << m_creature->GetObjectGuid();
+        data << m_creature->GetPositionX();
+        data << m_creature->GetPositionY();
+        ((Player*)m_creature->GetOwner())->GetSession()->SendPacket(&data);
+    }
+};
 
 Totem& TotemAI::getTotem()
 {
     return static_cast<Totem&>(*m_creature);
-}
+};

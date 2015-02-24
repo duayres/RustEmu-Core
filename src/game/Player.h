@@ -23,7 +23,6 @@
 #include "ItemPrototype.h"
 #include "Unit.h"
 #include "Item.h"
-
 #include "Database/DatabaseEnv.h"
 #include "NPCHandler.h"
 #include "QuestDef.h"
@@ -48,7 +47,6 @@ class Channel;
 class DynamicObject;
 class Creature;
 class PlayerMenu;
-class Transport;
 class UpdateMask;
 class SpellCastTargets;
 class PlayerSocial;
@@ -1151,7 +1149,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         /*********************************************************/
 
         void SetVirtualItemSlot(uint8 i, Item* item);
-        void SetSheath(SheathState sheathed) override;      // overwrite Unit version
+        void SetSheath(SheathState sheathed);             // overwrite Unit version
         uint8 FindEquipSlot(ItemPrototype const* proto, uint32 slot, bool swap) const;
         uint32 GetItemCount(uint32 item, bool inBankAlso = false, Item* skipItem = NULL) const;
         uint32 GetItemCountWithLimitCategory(uint32 limitCategory, Item* skipItem = NULL) const;

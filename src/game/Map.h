@@ -270,7 +270,7 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>
         void InsertObject(WorldObject* object);
         void EraseObject(WorldObject* object);
         void EraseObject(ObjectGuid guid);
-        WorldObject* FindObject(ObjectGuid guid);
+        WorldObject* FindObject(ObjectGuid const& guid);
 
         // Manipulation with objects update queue
         void AddUpdateObject(ObjectGuid const& guid);

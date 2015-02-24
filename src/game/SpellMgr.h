@@ -1479,6 +1479,7 @@ public:
     void LoadPetLevelupSpellMap();
     void LoadPetDefaultSpells();
     void LoadSpellAreas();
+    void LoadSpellDbc();
 
 private:
     bool LoadPetDefaultSpells_helper(CreatureInfo const* cInfo, PetDefaultSpellsEntry& petDefSpells);

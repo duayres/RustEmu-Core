@@ -1934,7 +1934,7 @@ void Map::EraseObject(ObjectGuid guid)
     m_objectsStore.erase(guid);
 }
 
-WorldObject* Map::FindObject(ObjectGuid guid)
+WorldObject* Map::FindObject(ObjectGuid const& guid)
 {
     if (guid.IsEmpty())
         return NULL;
@@ -1944,13 +1944,13 @@ WorldObject* Map::FindObject(ObjectGuid guid)
 }
 
 /**
- * Function return player that in world at CURRENT map
- *
- * Note: This is function preferred if you sure that need player only placed at specific map
- *       This is not true for some spell cast targeting and most packet handlers
- *
- * @param guid must be player guid (HIGHGUID_PLAYER)
- */
+* Function return player that in world at CURRENT map
+*
+* Note: This is function preferred if you sure that need player only placed at specific map
+*       This is not true for some spell cast targeting and most packet handlers
+*
+* @param guid must be player guid (HIGHGUID_PLAYER)
+*/
 Player* Map::GetPlayer(ObjectGuid const& guid, bool globalSearch)
 {
     if (globalSearch)                                           // possible obsolete

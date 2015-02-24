@@ -786,6 +786,8 @@ class MANGOS_DLL_SPEC GameObject : public WorldObject
 
         void UpdateSplineMovement(uint32 t_diff);
 
+        float GetInteractionDistance();
+
         GameObjectModel* m_model;
 
     protected:

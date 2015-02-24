@@ -763,6 +763,8 @@ class MANGOS_DLL_SPEC WorldSession
         void HandleResetInstancesOpcode(WorldPacket& recv_data);
         void HandleHearthandResurrect(WorldPacket& recv_data);
 
+        void HandleUpdateMissileTrajectory(WorldPacket& recv_data);
+
         // LFG
         void HandleLfgJoinOpcode(WorldPacket& recv_data);
         void HandleLfgLeaveOpcode(WorldPacket& recv_data);
@@ -861,6 +863,7 @@ class MANGOS_DLL_SPEC WorldSession
         void HandleCalendarGetNumPending(WorldPacket& recv_data);
 
         void HandleSpellClick(WorldPacket& recv_data);
+        void HandleUpdateProjectilePosition(WorldPacket & recv_data);
         void HandleGetMirrorimageData(WorldPacket& recv_data);
         void HandleAlterAppearanceOpcode(WorldPacket& recv_data);
         void HandleRemoveGlyphOpcode(WorldPacket& recv_data);

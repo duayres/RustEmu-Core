@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,15 +30,15 @@ class TotemAI : public CreatureAI
 {
     public:
 
-        explicit TotemAI(Creature* c);
+        explicit TotemAI(Creature *c);
 
-        void MoveInLineOfSight(Unit*) override;
-        void AttackStart(Unit*) override;
-        void EnterEvadeMode() override;
-        bool IsVisible(Unit*) const override;
+        void MoveInLineOfSight(Unit *);
+        void AttackStart(Unit *);
+        void EnterEvadeMode();
+        bool IsVisible(Unit *) const;
 
-        void UpdateAI(const uint32) override;
-        static int Permissible(const Creature*);
+        void UpdateAI(const uint32);
+        static int Permissible(const Creature *);
     protected:
         Totem& getTotem();
 
