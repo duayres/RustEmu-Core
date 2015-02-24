@@ -29,143 +29,46 @@
 
 enum AuraFlags
 {
-    AFLAG_NONE              = 0x00,
-    AFLAG_EFF_INDEX_0       = 0x01,
-    AFLAG_EFF_INDEX_1       = 0x02,
-    AFLAG_EFF_INDEX_2       = 0x04,
-    AFLAG_NOT_CASTER        = 0x08,
-    AFLAG_POSITIVE          = 0x10,
-    AFLAG_DURATION          = 0x20,
-    AFLAG_UNK2              = 0x40,
-    AFLAG_NEGATIVE          = 0x80
+    AFLAG_NONE = 0x00,
+    AFLAG_EFF_INDEX_0 = 0x01,
+    AFLAG_EFF_INDEX_1 = 0x02,
+    AFLAG_EFF_INDEX_2 = 0x04,
+    AFLAG_NOT_CASTER = 0x08,
+    AFLAG_POSITIVE = 0x10,
+    AFLAG_DURATION = 0x20,
+    AFLAG_UNK2 = 0x40,
+    AFLAG_NEGATIVE = 0x80
 };
 
-/**
- * This is what's used in a Modifier by the Aura class
- * to tell what the Aura should modify.
- */
 enum AuraType
 {
     SPELL_AURA_NONE = 0,
     SPELL_AURA_BIND_SIGHT = 1,
     SPELL_AURA_MOD_POSSESS = 2,
-    /**
-     * The aura should do periodic damage, the function that handles
-     * this is Aura::HandlePeriodicDamage, the amount is usually decided
-     * by the Unit::SpellDamageBonusDone or Unit::MeleeDamageBonusDone
-     * which increases/decreases the Modifier::m_amount
-     */
     SPELL_AURA_PERIODIC_DAMAGE = 3,
-    /**
-     * Used by Aura::HandleAuraDummy
-     */
     SPELL_AURA_DUMMY = 4,
-    /**
-     * Used by Aura::HandleModConfuse, will either confuse or unconfuse
-     * the target depending on whether the apply flag is set
-     */
     SPELL_AURA_MOD_CONFUSE = 5,
     SPELL_AURA_MOD_CHARM = 6,
     SPELL_AURA_MOD_FEAR = 7,
-    /**
-     * The aura will do periodic heals of a target, handled by
-     * Aura::HandlePeriodicHeal, uses Unit::SpellHealingBonusDone
-     * to calculate whether to increase or decrease Modifier::m_amount
-     */
     SPELL_AURA_PERIODIC_HEAL = 8,
-    /**
-     * Changes the attackspeed, the Modifier::m_amount decides
-     * how much we change in percent, ie, if the m_amount is
-     * 50 the attackspeed will increase by 50%
-     */
     SPELL_AURA_MOD_ATTACKSPEED = 9,
-    /**
-     * Modifies the threat that the Aura does in percent,
-     * the Modifier::m_miscvalue decides which of the SpellSchools
-     * it should affect threat for.
-     * \see SpellSchoolMask
-     */
     SPELL_AURA_MOD_THREAT = 10,
-    /**
-     * Just applies a taunt which will change the threat a mob has
-     * Taken care of in Aura::HandleModThreat
-     */
     SPELL_AURA_MOD_TAUNT = 11,
-    /**
-     * Stuns targets in different ways, taken care of in
-     * Aura::HandleAuraModStun
-     */
     SPELL_AURA_MOD_STUN = 12,
-    /**
-     * Changes the damage done by a weapon in any hand, the Modifier::m_miscvalue
-     * will tell what school the damage is from, it's used as a bitmask
-     * \see SpellSchoolMask
-     */
     SPELL_AURA_MOD_DAMAGE_DONE = 13,
-    /**
-     * Not handled by the Aura class but instead this is implemented in
-     * Unit::MeleeDamageBonusTaken and Unit::SpellBaseDamageBonusTaken
-     */
     SPELL_AURA_MOD_DAMAGE_TAKEN = 14,
-    /**
-     * Not handled by the Aura class, implemented in Unit::DealMeleeDamage
-     */
     SPELL_AURA_DAMAGE_SHIELD = 15,
-    /**
-     * Taken care of in Aura::HandleModStealth, take note that this
-     * is not the same thing as invisibility
-     */
     SPELL_AURA_MOD_STEALTH = 16,
-    /**
-     * Not handled by the Aura class, implemented in Unit::isVisibleForOrDetect
-     * which does a lot of checks to determine whether the person is visible or not,
-     * the SPELL_AURA_MOD_STEALTH seems to determine how in/visible ie a rogue is.
-     */
     SPELL_AURA_MOD_STEALTH_DETECT = 17,
-    /**
-     * Handled by Aura::HandleInvisibility, the Modifier::m_miscvalue in the struct
-     * seems to decide what kind of invisibility it is with a bitflag. the miscvalue
-     * decides which bit is set, ie: 3 would make the 3rd bit be set.
-     */
     SPELL_AURA_MOD_INVISIBILITY = 18,
-    /**
-     * Adds one of the kinds of detections to the possible detections.
-     * As in SPEALL_AURA_MOD_INVISIBILITY the Modifier::m_miscvalue seems to decide
-     * what kind of invisibility the Unit should be able to detect.
-     */
     SPELL_AURA_MOD_INVISIBILITY_DETECTION = 19,
-    SPELL_AURA_OBS_MOD_HEALTH = 20,                         // 20,21 unofficial
+    SPELL_AURA_OBS_MOD_HEALTH = 20,                         //20,21 unofficial
     SPELL_AURA_OBS_MOD_MANA = 21,
-    /**
-     * Handled by Aura::HandleAuraModResistance, changes the resistance for a unit
-     * the field Modifier::m_miscvalue decides which kind of resistance that should
-     * be changed, for possible values see SpellSchools.
-     * \see SpellSchools
-     */
     SPELL_AURA_MOD_RESISTANCE = 22,
-    /**
-     * Currently just sets Aura::m_isPeriodic to apply and has a special case
-     * for Curse of the Plaguebringer.
-     */
     SPELL_AURA_PERIODIC_TRIGGER_SPELL = 23,
-    /**
-     * Just sets Aura::m_isPeriodic to apply
-     */
     SPELL_AURA_PERIODIC_ENERGIZE = 24,
-    /**
-     * Changes whether the target is pacified or not depending on the apply flag.
-     * Pacify makes the target silenced and have all it's attack skill disabled.
-     * See: http://www.wowhead.com/spell=6462/pacified
-     */
     SPELL_AURA_MOD_PACIFY = 25,
-    /**
-     * Roots or unroots the target
-     */
     SPELL_AURA_MOD_ROOT = 26,
-    /**
-     * Silences the target and stops and spell casts that should be stopped,
-     * they have the flag SpellPreventionType::SPELL_PREVENTION_TYPE_SILENCE
-     */
     SPELL_AURA_MOD_SILENCE = 27,
     SPELL_AURA_REFLECT_SPELLS = 28,
     SPELL_AURA_MOD_STAT = 29,
@@ -288,9 +191,9 @@ enum AuraType
     SPELL_AURA_ALLOW_TAME_PET_TYPE = 146,
     SPELL_AURA_MECHANIC_IMMUNITY_MASK = 147,
     SPELL_AURA_RETAIN_COMBO_POINTS = 148,
-    SPELL_AURA_REDUCE_PUSHBACK  = 149,                      //    Reduce Pushback
+    SPELL_AURA_REDUCE_PUSHBACK = 149,                      //    Reduce Pushback
     SPELL_AURA_MOD_SHIELD_BLOCKVALUE_PCT = 150,
-    SPELL_AURA_TRACK_STEALTHED  = 151,                      //    Track Stealthed
+    SPELL_AURA_TRACK_STEALTHED = 151,                      //    Track Stealthed
     SPELL_AURA_MOD_DETECTED_RANGE = 152,                    //    Mod Detected Range
     SPELL_AURA_SPLIT_DAMAGE_FLAT = 153,                     //    Split Damage Flat
     SPELL_AURA_MOD_STEALTH_LEVEL = 154,                     //    Stealth Level Modifier
@@ -333,8 +236,8 @@ enum AuraType
     SPELL_AURA_USE_NORMAL_MOVEMENT_SPEED = 191,
     SPELL_AURA_MOD_MELEE_RANGED_HASTE = 192,
     SPELL_AURA_HASTE_ALL = 193,
-    SPELL_AURA_MOD_IGNORE_ABSORB_SCHOOL  = 194,
-    SPELL_AURA_MOD_IGNORE_ABSORB_FOR_SPELL  = 195,
+    SPELL_AURA_MOD_IGNORE_ABSORB_SCHOOL = 194,
+    SPELL_AURA_MOD_IGNORE_ABSORB_FOR_SPELL = 195,
     SPELL_AURA_MOD_COOLDOWN = 196,                          // only 24818 Noxious Breath
     SPELL_AURA_MOD_ATTACKER_SPELL_AND_WEAPON_CRIT_CHANCE = 197,
     SPELL_AURA_198 = 198,                                   // old SPELL_AURA_MOD_ALL_WEAPON_SKILLS
@@ -423,7 +326,7 @@ enum AuraType
     SPELL_AURA_MOD_HONOR_GAIN = 281,
     SPELL_AURA_MOD_BASE_HEALTH_PCT = 282,
     SPELL_AURA_MOD_HEALING_RECEIVED = 283,                  // Possibly only for some spell family class spells
-    SPELL_AURA_TRIGGER_LINKED_AURA = 284,
+    SPELL_AURA_LINKED = 284,
     SPELL_AURA_MOD_ATTACK_POWER_OF_ARMOR = 285,
     SPELL_AURA_ABILITY_PERIODIC_CRIT = 286,
     SPELL_AURA_DEFLECT_SPELLS = 287,
