@@ -1934,7 +1934,7 @@ void Map::EraseObject(ObjectGuid guid)
     m_objectsStore.erase(guid);
 }
 
-WorldObject* Map::FindObject(ObjectGuid const& guid)
+WorldObject* Map::FindObject(ObjectGuid guid)
 {
     if (guid.IsEmpty())
         return NULL;
@@ -1951,7 +1951,7 @@ WorldObject* Map::FindObject(ObjectGuid const& guid)
 *
 * @param guid must be player guid (HIGHGUID_PLAYER)
 */
-Player* Map::GetPlayer(ObjectGuid const& guid, bool globalSearch)
+Player* Map::GetPlayer(ObjectGuid guid, bool globalSearch)
 {
     if (globalSearch)                                           // possible obsolete
     {
@@ -1967,7 +1967,7 @@ Player* Map::GetPlayer(ObjectGuid const& guid, bool globalSearch)
 *
 * @param guid must be creature or vehicle guid (HIGHGUID_UNIT HIGHGUID_VEHICLE)
 */
-Creature* Map::GetCreature(ObjectGuid const& guid)
+Creature* Map::GetCreature(ObjectGuid guid)
 {
     return (Creature*)FindObject(guid);
 }
@@ -1977,7 +1977,7 @@ Creature* Map::GetCreature(ObjectGuid const& guid)
 *
 * @param guid must be pet guid (HIGHGUID_PET)
 */
-Pet* Map::GetPet(ObjectGuid const& guid)
+Pet* Map::GetPet(ObjectGuid guid)
 {
     return (Pet*)FindObject(guid);
 }
@@ -1989,7 +1989,7 @@ Pet* Map::GetPet(ObjectGuid const& guid)
 *
 * @param guid must be corpse guid (HIGHGUID_CORPSE)
 */
-Corpse* Map::GetCorpse(ObjectGuid const& guid)
+Corpse* Map::GetCorpse(ObjectGuid guid)
 {
     Corpse * ret = ObjectAccessor::GetCorpseInMap(guid, GetId());
     return ret && ret->GetInstanceId() == GetInstanceId() ? ret : NULL;
@@ -2000,7 +2000,7 @@ Corpse* Map::GetCorpse(ObjectGuid const& guid)
 *
 * @param guid must be non-player unit guid (HIGHGUID_PET HIGHGUID_UNIT HIGHGUID_VEHICLE)
 */
-Creature* Map::GetAnyTypeCreature(ObjectGuid const& guid)
+Creature* Map::GetAnyTypeCreature(ObjectGuid guid)
 {
     switch (guid.GetHigh())
     {
@@ -2019,7 +2019,7 @@ Creature* Map::GetAnyTypeCreature(ObjectGuid const& guid)
 *
 * @param guid must be gameobject guid (HIGHGUID_GAMEOBJECT)
 */
-GameObject* Map::GetGameObject(ObjectGuid const& guid)
+GameObject* Map::GetGameObject(ObjectGuid guid)
 {
     return (GameObject*)FindObject(guid);
 }
@@ -2029,7 +2029,7 @@ GameObject* Map::GetGameObject(ObjectGuid const& guid)
 *
 * @param guid must be dynamic object guid (HIGHGUID_DYNAMICOBJECT)
 */
-DynamicObject* Map::GetDynamicObject(ObjectGuid const& guid)
+DynamicObject* Map::GetDynamicObject(ObjectGuid guid)
 {
     return (DynamicObject*)FindObject(guid);
 }
@@ -2039,7 +2039,7 @@ DynamicObject* Map::GetDynamicObject(ObjectGuid const& guid)
 *
 * @param guid must be dynamic object guid (HIGHGUID_MO_TRANSPORT)
 */
-Transport* Map::GetTransport(ObjectGuid const& guid)
+Transport* Map::GetTransport(ObjectGuid guid)
 {
     return (Transport*)FindObject(guid);
 }
@@ -2052,7 +2052,7 @@ Transport* Map::GetTransport(ObjectGuid const& guid)
 *
 * @param guid must be unit guid (HIGHGUID_PLAYER HIGHGUID_PET HIGHGUID_UNIT HIGHGUID_VEHICLE)
 */
-Unit* Map::GetUnit(ObjectGuid const& guid)
+Unit* Map::GetUnit(ObjectGuid guid)
 {
     if (guid.IsPlayer())
         return GetPlayer(guid);
@@ -2063,7 +2063,7 @@ Unit* Map::GetUnit(ObjectGuid const& guid)
 /**
 * Function return world object in world at CURRENT map, so any except transports
 */
-WorldObject* Map::GetWorldObject(ObjectGuid const& guid)
+WorldObject* Map::GetWorldObject(ObjectGuid guid)
 {
     switch (guid.GetHigh())
     {
