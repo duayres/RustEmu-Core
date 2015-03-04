@@ -7692,6 +7692,7 @@ void Unit::RemovePetFromList(Pet* pet)
 void Unit::AddGuardian(Pet* pet)
 {
     m_guardianPets.insert(pet->GetObjectGuid());
+    SetPetGuid(pet->GetObjectGuid());  //Using last pet guid for player
 }
 
 void Unit::RemoveGuardian(Pet* pet)
@@ -7739,7 +7740,7 @@ Pet* Unit::GetProtectorPet()
 {
     for (GuidSet::const_iterator itr = m_guardianPets.begin(); itr != m_guardianPets.end(); ++itr)
         if (Pet* pet = GetMap()->GetPet(*itr))
-            if (pet->getPetType() == PROTECTOR_PET)
+            if (pet->getPetType() == PROTECTOR_PET || pet->getPetType() == GUARDIAN_PET)
                 return pet;
 
     return NULL;

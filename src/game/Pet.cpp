@@ -807,6 +807,8 @@ void Pet::Unsummon(PetSaveMode mode, Unit* owner /*= NULL*/)
             case PROTECTOR_PET:
             case GUARDIAN_PET:
                 owner->RemoveGuardian(this);
+                if (owner->GetPetGuid() == GetObjectGuid())
+                    owner->SetPet(NULL);
                 break;
             default:
                 owner->RemovePetFromList(this);
@@ -2844,7 +2846,7 @@ bool Pet::Summon()
     if (owner->GetTypeId() == TYPEID_PLAYER)
     {
         CleanupActionBar();                                     // remove unknown spells from action bar after load
-        if (isControlled() && !GetPetCounter())
+        if ((isControlled() || (getPetType() == GUARDIAN_PET && GetCreatureInfo()->Entry == 26125)) && !GetPetCounter())
         {
             if (!GetPetCounter())
                 ((Player*)owner)->PetSpellInitialize();

@@ -18439,7 +18439,11 @@ void Player::PetSpellInitialize()
 {
     Pet* pet = GetPet();
     if (!pet)
-        return;
+    {
+        Pet* pet = GetProtectorPet();
+        if (!pet)
+            return;
+    }
 
     DEBUG_LOG("Pet Spells Groups");
 
