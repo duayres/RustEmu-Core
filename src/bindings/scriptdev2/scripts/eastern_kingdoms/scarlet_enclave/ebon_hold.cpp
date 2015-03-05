@@ -500,39 +500,39 @@ CreatureAI* GetAI_npc_a_special_surprise(Creature* pCreature)
 
 enum
 {
-    SAY_DUEL_A                  = -1609016,
-    SAY_DUEL_B                  = -1609017,
-    SAY_DUEL_C                  = -1609018,
-    SAY_DUEL_D                  = -1609019,
-    SAY_DUEL_E                  = -1609020,
-    SAY_DUEL_F                  = -1609021,
-    SAY_DUEL_G                  = -1609022,
-    SAY_DUEL_H                  = -1609023,
-    SAY_DUEL_I                  = -1609024,
+    SAY_DUEL_A = -1609016,
+    SAY_DUEL_B = -1609017,
+    SAY_DUEL_C = -1609018,
+    SAY_DUEL_D = -1609019,
+    SAY_DUEL_E = -1609020,
+    SAY_DUEL_F = -1609021,
+    SAY_DUEL_G = -1609022,
+    SAY_DUEL_H = -1609023,
+    SAY_DUEL_I = -1609024,
 
-    EMOTE_DUEL_BEGIN            = -1001137,
-    EMOTE_DUEL_BEGIN_3          = -1001138,
-    EMOTE_DUEL_BEGIN_2          = -1001139,
-    EMOTE_DUEL_BEGIN_1          = -1001140,
+    EMOTE_DUEL_BEGIN = -1001137,
+    EMOTE_DUEL_BEGIN_3 = -1001138,
+    EMOTE_DUEL_BEGIN_2 = -1001139,
+    EMOTE_DUEL_BEGIN_1 = -1001140,
 
-    GOSSIP_ITEM_ACCEPT_DUEL     = -3609000,
-    GOSSIP_TEXT_ID_DUEL         = 13433,
+    GOSSIP_ITEM_ACCEPT_DUEL = -3609000,
+    GOSSIP_TEXT_ID_DUEL = 13433,
 
-    SPELL_DUEL                  = 52996,
-    SPELL_DUEL_TRIGGERED        = 52990,
-    SPELL_DUEL_VICTORY          = 52994,
-    SPELL_DUEL_FLAG             = 52991,
+    SPELL_DUEL = 52996,
+    SPELL_DUEL_TRIGGERED = 52990,
+    SPELL_DUEL_VICTORY = 52994,
+    SPELL_DUEL_FLAG = 52991,
 
     // generic DK spells. used in many scripts here
-    SPELL_BLOOD_STRIKE          = 52374,
-    SPELL_DEATH_COIL            = 52375,
-    SPELL_ICY_TOUCH             = 52372,
-    SPELL_PLAGUE_STRIKE         = 52373,
+    SPELL_BLOOD_STRIKE = 52374,
+    SPELL_DEATH_COIL = 52375,
+    SPELL_ICY_TOUCH = 52372,
+    SPELL_PLAGUE_STRIKE = 52373,
 
-    GO_DUEL_FLAG                = 191126,
+    GO_DUEL_FLAG = 191126,
 
-    QUEST_DEATH_CHALLENGE       = 12733,
-    FACTION_HOSTILE             = 2068
+    QUEST_DEATH_CHALLENGE = 12733,
+    FACTION_HOSTILE = 2068
 };
 
 int32 m_auiRandomSay[] =
@@ -559,14 +559,14 @@ struct npc_death_knight_initiateAI : public ScriptedAI
         m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNK_15);
         m_duelerGuid.Clear();
 
-        m_uiDuelStartStage      = 0;
-        m_uiDuelTimer           = 0;
-        m_bIsDuelComplete       = false;
+        m_uiDuelStartStage = 0;
+        m_uiDuelTimer = 0;
+        m_bIsDuelComplete = false;
 
-        m_uiBloodStrikeTimer    = 4000;
-        m_uiDeathCoilTimer      = 6000;
-        m_uiIcyTouchTimer       = 2000;
-        m_uiPlagueStrikeTimer   = 5000;
+        m_uiBloodStrikeTimer = 4000;
+        m_uiDeathCoilTimer = 6000;
+        m_uiIcyTouchTimer = 2000;
+        m_uiPlagueStrikeTimer = 5000;
     }
 
     void JustReachedHome() override
@@ -632,27 +632,27 @@ struct npc_death_knight_initiateAI : public ScriptedAI
 
                 switch (m_uiDuelStartStage)
                 {
-                    case 0:
-                        DoScriptText(EMOTE_DUEL_BEGIN, m_creature, pPlayer);
-                        m_uiDuelTimer = 1000;
-                        break;
-                    case 1:
-                        DoScriptText(EMOTE_DUEL_BEGIN_3, m_creature, pPlayer);
-                        m_uiDuelTimer = 1000;
-                        break;
-                    case 2:
-                        DoScriptText(EMOTE_DUEL_BEGIN_2, m_creature, pPlayer);
-                        m_uiDuelTimer = 1000;
-                        break;
-                    case 3:
-                        DoScriptText(EMOTE_DUEL_BEGIN_1, m_creature, pPlayer);
-                        m_uiDuelTimer = 1000;
-                        break;
-                    case 4:
-                        m_creature->SetFactionTemporary(FACTION_HOSTILE, TEMPFACTION_RESTORE_COMBAT_STOP | TEMPFACTION_RESTORE_RESPAWN);
-                        AttackStart(pPlayer);
-                        m_uiDuelTimer = 0;
-                        break;
+                case 0:
+                    DoScriptText(EMOTE_DUEL_BEGIN, m_creature, pPlayer);
+                    m_uiDuelTimer = 1000;
+                    break;
+                case 1:
+                    DoScriptText(EMOTE_DUEL_BEGIN_3, m_creature, pPlayer);
+                    m_uiDuelTimer = 1000;
+                    break;
+                case 2:
+                    DoScriptText(EMOTE_DUEL_BEGIN_2, m_creature, pPlayer);
+                    m_uiDuelTimer = 1000;
+                    break;
+                case 3:
+                    DoScriptText(EMOTE_DUEL_BEGIN_1, m_creature, pPlayer);
+                    m_uiDuelTimer = 1000;
+                    break;
+                case 4:
+                    m_creature->SetFactionTemporary(FACTION_HOSTILE, TEMPFACTION_RESTORE_COMBAT_STOP | TEMPFACTION_RESTORE_RESPAWN);
+                    AttackStart(pPlayer);
+                    m_uiDuelTimer = 0;
+                    break;
                 }
                 ++m_uiDuelStartStage;
             }
@@ -1194,19 +1194,24 @@ bool GOUse_go_acherus_soul_prison(Player* pPlayer, GameObject* pGo)
 
 enum
 {
-    SPELL_EYE_CONTROL       = 51852,                        // player control aura
-    SPELL_EYE_VISUAL        = 51892,
-    SPELL_EYE_FLIGHT        = 51890,                        // player flight control
-    SPELL_EYE_FLIGHT_BOOST  = 51923,                        // flight boost to reach new avalon
+    SPELL_EYE_CONTROL = 51852,                        // player control aura
+    SPELL_EYE_VISUAL = 51892,
+    SPELL_EYE_FLIGHT = 51890,                        // player flight control
+    SPELL_EYE_FLIGHT_BOOST = 51923,                        // flight boost to reach new avalon
 
-    EMOTE_DESTIANTION       = -1609089,
-    EMOTE_CONTROL           = -1609090,
+    DISPLAYID_EYE_HUGE = 26320,
+    DISPLAYID_EYE_SMALL = 25499,
 
-    POINT_EYE_DESTINATION   = 0
+    SPELL_EYE_PHASEMASK = 70889,
+
+    EMOTE_DESTIANTION = -1609089,
+    EMOTE_CONTROL = -1609090,
+
+    POINT_EYE_DESTINATION = 0
 };
 
 // movement destination coords
-static const float aEyeDestination[3] = {1750.8276f, -5873.788f, 147.2266f};
+static const float aEyeDestination[3] = { 1750.8276f, -5873.788f, 147.2266f };
 
 struct npc_eye_of_acherusAI : public ScriptedAI
 {
@@ -1219,7 +1224,10 @@ struct npc_eye_of_acherusAI : public ScriptedAI
 
     bool m_bIsInitialized;
 
-    void Reset() override {}
+    void Reset() override
+    {
+        m_creature->SetDisplayId(DISPLAYID_EYE_HUGE);
+    }
 
     void JustDied(Unit* /*pKiller*/) override
     {
@@ -1234,6 +1242,7 @@ struct npc_eye_of_acherusAI : public ScriptedAI
         if (Player* pPlayer = m_creature->GetCharmerOrOwnerPlayerOrPlayerItself())
             DoScriptText(EMOTE_CONTROL, m_creature, pPlayer);
 
+        m_creature->SetDisplayId(DISPLAYID_EYE_SMALL);
         DoCastSpellIfCan(m_creature, SPELL_EYE_FLIGHT, CAST_TRIGGERED);
     }
 
@@ -1256,7 +1265,7 @@ struct npc_eye_of_acherusAI : public ScriptedAI
             m_creature->UpdateSpeed(MOVE_FLIGHT, true, pPlayer->GetSpeed(MOVE_FLIGHT));
 
             //m_creature->RemoveSplineFlag(SPLINEFLAG_WALKMODE);
-            m_creature->GetMotionMaster()->MovePoint(POINT_EYE_DESTINATION, aEyeDestination[0], aEyeDestination[1], aEyeDestination[2]);
+            m_creature->GetMotionMaster()->MovePoint(POINT_EYE_DESTINATION, aEyeDestination[0], aEyeDestination[1], aEyeDestination[2], false, false);
 
             m_bIsInitialized = true;
         }
