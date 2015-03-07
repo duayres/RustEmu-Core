@@ -18,7 +18,6 @@
 
 #include "MapManager.h"
 #include "Log.h"
-#include "GridStates.h"
 #include "CellImpl.h"
 #include "Map.h"
 #include "DBCEnums.h"

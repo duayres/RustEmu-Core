@@ -3143,6 +3143,20 @@ enum TrackedAuraType
     MAX_TRACKED_AURA_TYPES
 };
 
+enum ConditionSource                                        // From where was the condition called?
+{
+    CONDITION_FROM_LOOT             = 0,                    // Used to check a *_loot_template entry
+    CONDITION_FROM_REFERING_LOOT    = 1,                    // Used to check a entry refering to a reference_loot_template entry
+    CONDITION_FROM_GOSSIP_MENU      = 2,                    // Used to check a gossip menu menu-text
+    CONDITION_FROM_GOSSIP_OPTION    = 3,                    // Used to check a gossip menu option-item
+    CONDITION_FROM_EVENTAI          = 4,                    // Used to check EventAI Event "On Receive Emote"
+    CONDITION_FROM_HARDCODED        = 5,                    // Used to check a hardcoded event - not actually a condition
+    CONDITION_FROM_VENDOR           = 6,                    // Used to check a condition from a vendor
+    CONDITION_FROM_SPELL_AREA       = 7,                    // Used to check a condition from spell_area table
+    CONDITION_FROM_SPELLCLICK       = 8,                    // Used to check a condition from npc_spellclick_spells table
+    CONDITION_FROM_DBSCRIPTS        = 9,                    // Used to check a condition from DB Scripts Engine
+};
+
 enum AIEventType
 {
     // Usable with Event AI
