@@ -51,11 +51,11 @@ struct AchievementEntry
     // uint32 desc_flags;                                   // 37 string flags
     uint32    categoryId;                                   // 38       m_category
     uint32    points;                                       // 39       m_points
-    // uint32 OrderInCategory;                              // 40       m_ui_order
+    //uint32 OrderInCategory;                               // 40       m_ui_order
     uint32    flags;                                        // 41       m_flags
-    // uint32    icon;                                      // 42       m_iconID
-    // char *titleReward[16];                               // 43-58    m_reward_lang
-    // uint32 titleReward_flags;                            // 59 string flags
+    //uint32    icon;                                       // 42       m_iconID
+    //char *titleReward[16];                                // 43-58    m_reward_lang
+    //uint32 titleReward_flags;                             // 59 string flags
     uint32 count;                                           // 60       m_minimum_criteria - need this count of completed criterias (own or referenced achievement criterias)
     uint32 refAchievement;                                  // 61       m_shares_criteria - referenced achievement (counting of all completed criterias)
 };
@@ -64,9 +64,9 @@ struct AchievementCategoryEntry
 {
     uint32    ID;                                           // 0        m_ID
     uint32    parentCategory;                               // 1        m_parent -1 for main category
-    // char *name[16];                                      // 2-17     m_name_lang
-    // uint32 name_flags;                                   // 18 string flags
-    // uint32    sortOrder;                                 // 19       m_ui_order
+    //char *name[16];                                       // 2-17     m_name_lang
+    //uint32 name_flags;                                    // 18 string flags
+    //uint32    sortOrder;                                  // 19       m_ui_order
 };
 
 struct AchievementCriteriaEntry
@@ -209,6 +209,13 @@ struct AchievementCriteriaEntry
             uint32  castCount;                              // 4
         } cast_spell;
 
+        // ACHIEVEMENT_CRITERIA_TYPE_BG_OBJECTIVE_CAPTURE = 30
+        struct
+        {
+            uint32 captureID;                               // 3
+            uint32 captureCount;                            // 4
+        } objective_capture;
+
         // ACHIEVEMENT_CRITERIA_TYPE_HONORABLE_KILL_AT_AREA = 31
         struct
         {
@@ -220,6 +227,7 @@ struct AchievementCriteriaEntry
         struct
         {
             uint32  mapID;                                  // 3 Reference to Map.dbc
+            uint32  count;                                  // 4
         } win_arena;
 
         // ACHIEVEMENT_CRITERIA_TYPE_PLAY_ARENA             = 33
@@ -233,6 +241,16 @@ struct AchievementCriteriaEntry
         {
             uint32  spellID;                                // 3 Reference to Map.dbc
         } learn_spell;
+
+        // ACHIEVEMENT_CRITERIA_TYPE_HONORABLE_KILL         = 35
+        struct
+        {
+            uint32  unused;                                 // 3
+            uint32  killCount;                              // 4
+            uint32  unk5;                                   // 5
+            uint32  unkn1;                                  // 6
+            uint32  unkn2;                                  // 7
+        } honorable_kill_scripted;
 
         // ACHIEVEMENT_CRITERIA_TYPE_OWN_ITEM               = 36
         struct
@@ -392,6 +410,7 @@ struct AchievementCriteriaEntry
             uint32  goldInCopper;                           // 4
         } quest_reward_money;
 
+
         // ACHIEVEMENT_CRITERIA_TYPE_LOOT_MONEY             = 67
         struct
         {
@@ -412,6 +431,8 @@ struct AchievementCriteriaEntry
         {
             uint32  unused;                                 // 3
             uint32  killCount;                              // 4
+            uint32  flag;                                   // 5
+            uint32  mapid;                                  // 6
         } special_pvp_kill;
 
         // ACHIEVEMENT_CRITERIA_TYPE_FISH_IN_GAMEOBJECT     = 72
@@ -498,9 +519,9 @@ struct AchievementCriteriaEntry
         } raw;
     };
     char*  name[16];                                        // 9-24     m_description_lang
-    // uint32 name_flags;                                   // 25
+    //uint32 name_flags;                                    // 25
     uint32  completionFlag;                                 // 26       m_flags
-    // uint32  timedCriteriaStartType;                      // 27       m_timer_start_event Only appears with timed achievements, seems to be the type of starting a timed Achievement, only type 1 and some of type 6 need manual starting: 1: ByEventId(?) (serverside IDs), 2: ByQuestId, 5: ByCastSpellId(?), 6: BySpellIdTarget(some of these are unknown spells, some not, some maybe spells), 7: ByKillNpcId,  9: ByUseItemId
+    //uint32  timedCriteriaStartType;                       // 27       m_timer_start_event Only appears with timed achievements, seems to be the type of starting a timed Achievement, only type 1 and some of type 6 need manual starting: 1: ByEventId(?) (serverside IDs), 2: ByQuestId, 5: ByCastSpellId(?), 6: BySpellIdTarget(some of these are unknown spells, some not, some maybe spells), 7: ByKillNpcId,  9: ByUseItemId
     uint32  timedCriteriaMiscId;                            // 28       m_timer_asset_id Alway appears with timed events, used internally to start the achievement, store
     uint32  timeLimit;                                      // 29       m_timer_time
     uint32  showOrder;                                      // 30       m_ui_order also used in achievement shift-links as index in state bitmask

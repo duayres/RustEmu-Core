@@ -34,9 +34,9 @@ struct AchievementCriteriaEntry;
 typedef std::list<AchievementCriteriaEntry const*> AchievementCriteriaEntryList;
 typedef std::list<AchievementEntry const*>         AchievementEntryList;
 
-typedef std::map<uint32, AchievementCriteriaEntryList> AchievementCriteriaListByAchievement;
-typedef std::map<uint32, AchievementEntryList>         AchievementListByReferencedId;
-typedef std::map<uint32, time_t>                       AchievementCriteriaFailTimeMap;
+typedef UNORDERED_MAP<uint32, AchievementCriteriaEntryList> AchievementCriteriaListByAchievement;
+typedef UNORDERED_MAP<uint32, AchievementEntryList>         AchievementListByReferencedId;
+typedef UNORDERED_MAP<uint32, time_t>                       AchievementCriteriaFailTimeMap;
 
 struct CriteriaProgress
 {
@@ -47,8 +47,7 @@ struct CriteriaProgress
 };
 
 enum AchievementCriteriaRequirementType
-{
-    // value1         value2        comment
+{                                                           // value1         value2        comment
     ACHIEVEMENT_CRITERIA_REQUIRE_NONE                = 0,   // 0              0
     ACHIEVEMENT_CRITERIA_REQUIRE_T_CREATURE          = 1,   // creature_id    0
     ACHIEVEMENT_CRITERIA_REQUIRE_T_PLAYER_CLASS_RACE = 2,   // class_id       race_id
@@ -71,6 +70,7 @@ enum AchievementCriteriaRequirementType
     ACHIEVEMENT_CRITERIA_REQUIRE_S_EQUIPPED_ITEM_LVL = 19,  // item_level     item_quality  fir equipped item in slot `misc1` to item level and quality
     ACHIEVEMENT_CRITERIA_REQUIRE_NTH_BIRTHDAY        = 20,  // N                            login on day of N-th Birthday
     ACHIEVEMENT_CRITERIA_REQUIRE_KNOWN_TITLE         = 21,  // title_id                     known (pvp) title, values from dbc
+    ACHIEVEMENT_CRITERIA_REQUIRE_T_BE_SPELL_TARGET   = 22,  // spell_id
 };
 
 class Player;
@@ -179,6 +179,11 @@ struct AchievementCriteriaRequirement
         {
             uint32 title_id;
         } known_title;
+        // ACHIEVEMENT_CRITERIA_REQUIRE_T_BE_SPELL_TARGET = 22,
+        struct
+        {
+            uint32 spell_id;
+        } spell;
         // ...
         struct
         {
@@ -216,7 +221,7 @@ struct AchievementCriteriaRequirementSet
         Storage storage;
 };
 
-typedef std::map<uint32, AchievementCriteriaRequirementSet> AchievementCriteriaRequirementMap;
+typedef UNORDERED_MAP<uint32, AchievementCriteriaRequirementSet> AchievementCriteriaRequirementMap;
 
 struct AchievementReward
 {
@@ -261,7 +266,7 @@ class AchievementMgr
         ~AchievementMgr();
 
         void Reset();
-        static void DeleteFromDB(ObjectGuid guid);
+        static void DeleteFromDB(ObjectGuid const& guid);
         void LoadFromDB(QueryResult* achievementResult, QueryResult* criteriaResult);
         void SaveToDB();
         void ResetAchievementCriteria(AchievementCriteriaTypes type, uint32 miscvalue1 = 0, uint32 miscvalue2 = 0);
@@ -290,21 +295,24 @@ class AchievementMgr
         // Use PROGRESS_SET only for reset/downgrade criteria progress
         enum ProgressType { PROGRESS_SET, PROGRESS_ACCUMULATE, PROGRESS_HIGHEST };
         void SetCriteriaProgress(AchievementCriteriaEntry const* criteria, AchievementEntry const* achievement, uint32 changeValue, ProgressType ptype);
+        void CompletedAchievement(AchievementEntry const* entry);
+        bool IsCompletedAchievement(AchievementEntry const* entry);
 
     private:
         void SendAchievementEarned(AchievementEntry const* achievement);
         void SendCriteriaUpdate(uint32 id, CriteriaProgress const* progress);
         void CompletedCriteriaFor(AchievementEntry const* achievement);
-        void CompletedAchievement(AchievementEntry const* entry);
         void IncompletedAchievement(AchievementEntry const* entry);
-        bool IsCompletedAchievement(AchievementEntry const* entry);
         void CompleteAchievementsWithRefs(AchievementEntry const* entry);
         void BuildAllDataPacket(WorldPacket* data);
 
+
+        uint32 GetAchievementPoints() const { return m_achievementPoints; }
         Player* m_player;
         CriteriaProgressMap m_criteriaProgress;
         CompletedAchievementMap m_completedAchievements;
         AchievementCriteriaFailTimeMap m_criteriaFailTimes;
+        uint32 m_achievementPoints;
 };
 
 class AchievementGlobalMgr
@@ -337,7 +345,7 @@ class AchievementGlobalMgr
         // store achievements by referenced achievement id to speed up lookup
         AchievementListByReferencedId m_AchievementListByReferencedId;
 
-        typedef std::set<uint32> AllCompletedAchievements;
+        typedef UNORDERED_MAP<uint32, time_t> AllCompletedAchievements;
         AllCompletedAchievements m_allCompletedAchievements;
 
         AchievementRewardsMap       m_achievementRewards;
