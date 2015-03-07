@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -111,11 +111,11 @@ void BattleGroundAB::Update(uint32 diff)
                 m_lastTick[team] -= BG_AB_TickIntervals[points];
                 m_TeamScores[team] += BG_AB_TickPoints[points];
                 m_honorScoreTicks[team] += BG_AB_TickPoints[points];
-                m_ReputationScoreTics[team] += BG_AB_TickPoints[points];
-                if (m_ReputationScoreTics[team] >= m_ReputationTics)
+                m_ReputationScoreTicks[team] += BG_AB_TickPoints[points];
+                if (m_ReputationScoreTicks[team] >= m_ReputationTicks)
                 {
                     (team == TEAM_INDEX_ALLIANCE) ? RewardReputationToTeam(509, 10, ALLIANCE) : RewardReputationToTeam(510, 10, HORDE);
-                    m_ReputationScoreTics[team] -= m_ReputationTics;
+                    m_ReputationScoreTicks[team] -= m_ReputationTicks;
                 }
                 if (m_honorScoreTicks[team] >= m_honorTicks)
                 {
@@ -156,6 +156,10 @@ void BattleGroundAB::Update(uint32 diff)
     }
 }
 
+void BattleGroundAB::StartingEventCloseDoors()
+{
+}
+
 void BattleGroundAB::StartingEventOpenDoors()
 {
     OpenDoorEvent(BG_EVENT_DOOR);
@@ -175,6 +179,7 @@ void BattleGroundAB::AddPlayer(Player* plr)
 
 void BattleGroundAB::RemovePlayer(Player* /*plr*/, ObjectGuid /*guid*/)
 {
+
 }
 
 void BattleGroundAB::HandleAreaTrigger(Player* source, uint32 trigger)
@@ -240,22 +245,23 @@ int32 BattleGroundAB::_GetNodeNameId(uint8 node)
         case BG_AB_NODE_GOLD_MINE:  return LANG_BG_AB_NODE_GOLD_MINE;
         default:
             MANGOS_ASSERT(0);
+            break;
     }
     return 0;
 }
 
-void BattleGroundAB::FillInitialWorldStates(WorldPacket& data, uint32& count)
+void BattleGroundAB::FillInitialWorldStates()
 {
     const uint8 plusArray[] = {0, 2, 3, 0, 1};
 
     // Node icons
     for (uint8 node = 0; node < BG_AB_NODES_MAX; ++node)
-        FillInitialWorldState(data, count, BG_AB_OP_NODEICONS[node], m_Nodes[node] == 0);
+        FillInitialWorldState(BG_AB_OP_NODEICONS[node], m_Nodes[node] == 0);
 
     // Node occupied states
     for (uint8 node = 0; node < BG_AB_NODES_MAX; ++node)
         for (uint8 i = 1; i < BG_AB_NODES_MAX; ++i)
-            FillInitialWorldState(data, count, BG_AB_OP_NODESTATES[node] + plusArray[i], m_Nodes[node] == i);
+            FillInitialWorldState(BG_AB_OP_NODESTATES[node] + plusArray[i], m_Nodes[node] == i);
 
     // How many bases each team owns
     uint8 ally = 0, horde = 0;
@@ -265,17 +271,17 @@ void BattleGroundAB::FillInitialWorldStates(WorldPacket& data, uint32& count)
         else if (m_Nodes[node] == BG_AB_NODE_STATUS_HORDE_OCCUPIED)
             ++horde;
 
-    FillInitialWorldState(data, count, BG_AB_OP_OCCUPIED_BASES_ALLY, ally);
-    FillInitialWorldState(data, count, BG_AB_OP_OCCUPIED_BASES_HORDE, horde);
+    FillInitialWorldState(BG_AB_OP_OCCUPIED_BASES_ALLY, ally);
+    FillInitialWorldState(BG_AB_OP_OCCUPIED_BASES_HORDE, horde);
 
     // Team scores
-    FillInitialWorldState(data, count, BG_AB_OP_RESOURCES_MAX,      BG_AB_MAX_TEAM_SCORE);
-    FillInitialWorldState(data, count, BG_AB_OP_RESOURCES_WARNING,  BG_AB_WARNING_NEAR_VICTORY_SCORE);
-    FillInitialWorldState(data, count, BG_AB_OP_RESOURCES_ALLY,     m_TeamScores[TEAM_INDEX_ALLIANCE]);
-    FillInitialWorldState(data, count, BG_AB_OP_RESOURCES_HORDE,    m_TeamScores[TEAM_INDEX_HORDE]);
+    FillInitialWorldState(BG_AB_OP_RESOURCES_MAX,      BG_AB_MAX_TEAM_SCORE);
+    FillInitialWorldState(BG_AB_OP_RESOURCES_WARNING,  BG_AB_WARNING_NEAR_VICTORY_SCORE);
+    FillInitialWorldState(BG_AB_OP_RESOURCES_ALLY,     m_TeamScores[TEAM_INDEX_ALLIANCE]);
+    FillInitialWorldState(BG_AB_OP_RESOURCES_HORDE,    m_TeamScores[TEAM_INDEX_HORDE]);
 
     // other unknown
-    FillInitialWorldState(data, count, 0x745, 0x2);         // 37 1861 unk
+    FillInitialWorldState(0x745, 0x2);         // 37 1861 unk
 }
 
 void BattleGroundAB::_SendNodeUpdate(uint8 node)
@@ -307,7 +313,7 @@ void BattleGroundAB::_NodeOccupied(uint8 node, Team team)
     uint8 capturedNodes = 0;
     for (uint8 i = 0; i < BG_AB_NODES_MAX; ++i)
     {
-        if (m_Nodes[node] == GetTeamIndexByTeamId(team) + BG_AB_NODE_TYPE_OCCUPIED && !m_NodeTimers[i])
+        if (m_Nodes[node] == GetTeamIndex(team) + BG_AB_NODE_TYPE_OCCUPIED && !m_NodeTimers[i])
             ++capturedNodes;
     }
     if (capturedNodes >= 5)
@@ -327,7 +333,7 @@ void BattleGroundAB::EventPlayerClickedOnFlag(Player* source, GameObject* target
         return;
     BG_AB_Nodes node = BG_AB_Nodes(event);
 
-    PvpTeamIndex teamIndex = GetTeamIndexByTeamId(source->GetTeam());
+    PvpTeamIndex teamIndex = GetTeamIndex(source->GetTeam());
 
     // Check if player really could use this banner, not cheated
     if (!(m_Nodes[node] == 0 || teamIndex == m_Nodes[node] % 2))
@@ -342,6 +348,8 @@ void BattleGroundAB::EventPlayerClickedOnFlag(Player* source, GameObject* target
     if (m_Nodes[node] == BG_AB_NODE_TYPE_NEUTRAL)
     {
         UpdatePlayerScore(source, SCORE_BASES_ASSAULTED, 1);
+        source->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_BG_OBJECTIVE_CAPTURE, 1, 122);
+
         m_prevNodes[node] = m_Nodes[node];
         m_Nodes[node] = teamIndex + 1;
         // create new contested banner
@@ -379,6 +387,8 @@ void BattleGroundAB::EventPlayerClickedOnFlag(Player* source, GameObject* target
         else
         {
             UpdatePlayerScore(source, SCORE_BASES_DEFENDED, 1);
+            source->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_BG_OBJECTIVE_CAPTURE, 1, 123);
+
             m_prevNodes[node] = m_Nodes[node];
             m_Nodes[node] = teamIndex + BG_AB_NODE_TYPE_OCCUPIED;
             // create new occupied banner
@@ -398,6 +408,8 @@ void BattleGroundAB::EventPlayerClickedOnFlag(Player* source, GameObject* target
     else
     {
         UpdatePlayerScore(source, SCORE_BASES_ASSAULTED, 1);
+        source->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_BG_OBJECTIVE_CAPTURE, 1, 122);
+
         m_prevNodes[node] = m_Nodes[node];
         m_Nodes[node] = teamIndex + BG_AB_NODE_TYPE_CONTESTED;
         // create new contested banner
@@ -424,6 +436,11 @@ void BattleGroundAB::EventPlayerClickedOnFlag(Player* source, GameObject* target
     PlaySoundToAll(sound);
 }
 
+bool BattleGroundAB::SetupBattleGround()
+{
+    return true;
+}
+
 void BattleGroundAB::Reset()
 {
     // call parent's class reset
@@ -434,14 +451,14 @@ void BattleGroundAB::Reset()
         m_TeamScores[i] = 0;
         m_lastTick[i] = 0;
         m_honorScoreTicks[i] = 0;
-        m_ReputationScoreTics[i] = 0;
+        m_ReputationScoreTicks[i] = 0;
         m_TeamScores500Disadvantage[i] = false;
     }
 
     m_IsInformedNearVictory = false;
     bool isBGWeekend = BattleGroundMgr::IsBGWeekend(GetTypeID());
     m_honorTicks = isBGWeekend ? AB_WEEKEND_HONOR_INTERVAL : AB_NORMAL_HONOR_INTERVAL;
-    m_ReputationTics = isBGWeekend ? AB_WEEKEND_REPUTATION_INTERVAL : AB_NORMAL_REPUTATION_INTERVAL;
+    m_ReputationTicks = isBGWeekend ? AB_WEEKEND_REPUTATION_INTERVAL : AB_NORMAL_REPUTATION_INTERVAL;
 
     for (uint8 i = 0; i < BG_AB_NODES_MAX; ++i)
     {
@@ -453,6 +470,7 @@ void BattleGroundAB::Reset()
         // all nodes owned by neutral team at beginning
         m_ActiveEvents[i] = BG_AB_NODE_TYPE_NEUTRAL;
     }
+
 }
 
 void BattleGroundAB::EndBattleGround(Team winner)
@@ -471,7 +489,7 @@ void BattleGroundAB::EndBattleGround(Team winner)
 
 WorldSafeLocsEntry const* BattleGroundAB::GetClosestGraveYard(Player* player)
 {
-    PvpTeamIndex teamIndex = GetTeamIndexByTeamId(player->GetTeam());
+    PvpTeamIndex teamIndex = GetTeamIndex(player->GetTeam());
 
     // Is there any occupied node for this team?
     std::vector<uint8> nodes;
@@ -514,18 +532,24 @@ void BattleGroundAB::UpdatePlayerScore(Player* source, uint32 type, uint32 value
     if (itr == m_PlayerScores.end())                        // player not found...
         return;
 
+    uint32 achCriId;
+
     switch (type)
     {
         case SCORE_BASES_ASSAULTED:
             ((BattleGroundABScore*)itr->second)->BasesAssaulted += value;
+            achCriId = AB_OBJECTIVE_ASSAULT_BASE;
             break;
         case SCORE_BASES_DEFENDED:
             ((BattleGroundABScore*)itr->second)->BasesDefended += value;
+            achCriId = AB_OBJECTIVE_DEFEND_BASE;
             break;
         default:
             BattleGround::UpdatePlayerScore(source, type, value);
-            break;
+            return;
     }
+
+    source->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_BG_OBJECTIVE_CAPTURE, 1, achCriId);
 }
 
 bool BattleGroundAB::IsAllNodesControlledByTeam(Team team) const

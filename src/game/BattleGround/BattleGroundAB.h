@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -90,6 +90,7 @@ enum BG_AB_Nodes
 };
 
 #define BG_AB_NODES_MAX   5
+#define BG_AB_EVENT_START_BATTLE 9158
 
 enum BG_AB_NodeStatus
 {
@@ -110,6 +111,12 @@ enum BG_AB_Sounds
     BG_AB_SOUND_NODE_ASSAULTED_ALLIANCE = 8212,
     BG_AB_SOUND_NODE_ASSAULTED_HORDE    = 8174,
     BG_AB_SOUND_NEAR_VICTORY            = 8456
+};
+
+enum BG_AB_Objectives
+{
+    AB_OBJECTIVE_ASSAULT_BASE = 122,
+    AB_OBJECTIVE_DEFEND_BASE  = 123
 };
 
 #define AB_NORMAL_HONOR_INTERVAL        260
@@ -163,26 +170,29 @@ class BattleGroundAB : public BattleGround
         BattleGroundAB();
         ~BattleGroundAB();
 
-        void Update(uint32 diff) override;
-        void AddPlayer(Player* plr) override;
-        virtual void StartingEventOpenDoors() override;
-        void RemovePlayer(Player* plr, ObjectGuid guid) override;
-        void HandleAreaTrigger(Player* source, uint32 trigger) override;
-        virtual void Reset() override;
-        void EndBattleGround(Team winner) override;
-        virtual WorldSafeLocsEntry const* GetClosestGraveYard(Player* player) override;
+        void Update(uint32 diff);
+        void AddPlayer(Player* plr);
+        virtual void StartingEventCloseDoors();
+        virtual void StartingEventOpenDoors();
+        void RemovePlayer(Player* plr, ObjectGuid guid);
+        void HandleAreaTrigger(Player* source, uint32 trigger);
+        virtual bool SetupBattleGround();
+        virtual void Reset();
+        void EndBattleGround(Team winner);
+        virtual WorldSafeLocsEntry const* GetClosestGraveYard(Player* player);
 
         /* Scorekeeping */
-        virtual void UpdatePlayerScore(Player* source, uint32 type, uint32 value) override;
+        virtual void UpdatePlayerScore(Player* source, uint32 type, uint32 value);
 
-        virtual void FillInitialWorldStates(WorldPacket& data, uint32& count) override;
+        virtual void FillInitialWorldStates();
 
         /* Nodes occupying */
-        virtual void EventPlayerClickedOnFlag(Player* source, GameObject* target_obj) override;
+        virtual void EventPlayerClickedOnFlag(Player* source, GameObject* target_obj);
 
         /* achievement req. */
         bool IsAllNodesControlledByTeam(Team team) const override;
-        bool IsTeamScores500Disadvantage(Team team) const { return m_TeamScores500Disadvantage[GetTeamIndexByTeamId(team)]; }
+        bool IsTeamScores500Disadvantage(Team team) const { return m_TeamScores500Disadvantage[GetTeamIndex(team)]; }
+
     private:
         /* Gameobject spawning/despawning */
         void _CreateBanner(uint8 node, uint8 type, uint8 teamIndex, bool delay);
@@ -207,10 +217,10 @@ class BattleGroundAB : public BattleGround
         uint32              m_NodeTimers[BG_AB_NODES_MAX];
         uint32              m_lastTick[PVP_TEAM_COUNT];
         uint32              m_honorScoreTicks[PVP_TEAM_COUNT];
-        uint32              m_ReputationScoreTics[PVP_TEAM_COUNT];
+        uint32              m_ReputationScoreTicks[PVP_TEAM_COUNT];
         bool                m_IsInformedNearVictory;
         uint32              m_honorTicks;
-        uint32              m_ReputationTics;
+        uint32              m_ReputationTicks;
         // need for achievements
         bool                m_TeamScores500Disadvantage[PVP_TEAM_COUNT];
 };

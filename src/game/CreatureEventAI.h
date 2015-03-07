@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -144,6 +144,23 @@ enum Target
     // Hostile players
     TARGET_T_HOSTILE_RANDOM_PLAYER          = 8,            // Just any random player on our threat list
     TARGET_T_HOSTILE_RANDOM_NOT_TOP_PLAYER  = 9,            // Any random player from threat list except top threat
+
+    TARGET_T_END,
+
+    // Vehicle-based targets (NULL if owner/target vehicle)
+    TARGET_T_VEHICLE_PASSENGER = 50,                        // First current passenger (NULL if not vehicle or not passenger)
+    TARGET_T_VEHICLE_PASSENGER_0,                           // Passenger on seat 0 (NULL if not vehicle or not passenger)
+    TARGET_T_VEHICLE_PASSENGER_1,                           // Passenger on seat 1 (NULL if not vehicle or not passenger)
+    TARGET_T_VEHICLE_PASSENGER_2,                           // Passenger on seat 2 (NULL if not vehicle or not passenger)
+    TARGET_T_VEHICLE_PASSENGER_3,                           // Passenger on seat 3 (NULL if not vehicle or not passenger)
+    TARGET_T_VEHICLE_PASSENGER_4,                           // Passenger on seat 4 (NULL if not vehicle or not passenger)
+    TARGET_T_VEHICLE_PASSENGER_5,                           // Passenger on seat 5 (NULL if not vehicle or not passenger)
+    TARGET_T_VEHICLE_PASSENGER_6,                           // Passenger on seat 6 (NULL if not vehicle or not passenger)
+    TARGET_T_VEHICLE_PASSENGER_7,                           // Passenger on seat 7 (NULL if not vehicle or not passenger)
+
+    TARGET_T_CURRENT_VEHICLE,                               // Current owned vehicle (NULL if m_creature not seat on vehicle)
+
+    TARGET_T_VEHICLE_END
 };
 
 enum EventFlags

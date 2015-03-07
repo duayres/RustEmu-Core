@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,12 +17,12 @@
  */
 
 #include "OutdoorPvP.h"
-#include "Language.h"
-#include "World.h"
-#include "ObjectMgr.h"
-#include "Object.h"
-#include "GameObject.h"
-#include "Player.h"
+#include "../Language.h"
+#include "../World.h"
+#include "../ObjectMgr.h"
+#include "../Object.h"
+#include "../GameObject.h"
+#include "../Player.h"
 
 /**
    Function that adds a player to the players of the affected outdoor pvp zones
@@ -46,8 +46,8 @@ void OutdoorPvP::HandlePlayerLeaveZone(Player* player, bool isMainZone)
     if (m_zonePlayers.erase(player->GetObjectGuid()))
     {
         // remove the world state information from the player
-        if (isMainZone && !player->GetSession()->PlayerLogout())
-            SendRemoveWorldStates(player);
+        // if (isMainZone && !player->GetSession()->PlayerLogout())
+        //    SendRemoveWorldStates(player);
 
         sLog.outDebug("Player %s left an Outdoor PvP zone", player->GetName());
     }
@@ -61,38 +61,25 @@ void OutdoorPvP::HandlePlayerLeaveZone(Player* player, bool isMainZone)
  */
 void OutdoorPvP::SendUpdateWorldState(uint32 field, uint32 value)
 {
-    for (GuidZoneMap::const_iterator itr = m_zonePlayers.begin(); itr != m_zonePlayers.end(); ++itr)
+    uint32 zoneId = sOutdoorPvPMgr.GetZoneOfAffectedScript(this);
+    sWorldStateMgr.SetWorldStateValueFor(zoneId, field, value);
+}
+
+/**
+   Function that updates world state for all the players in an outdoor pvp map
+
+   @param world state it to update
+   @param value which should update the world state
+ */
+void OutdoorPvP::SendUpdateWorldStateForMap(uint32 uiField, uint32 uiValue, Map* map)
+{
+    Map::PlayerList const& pList = map->GetPlayers();
+    for (Map::PlayerList::const_iterator itr = pList.begin(); itr != pList.end(); ++itr)
     {
-        // only send world state update to main zone
-        if (!itr->second)
+        if (!itr->getSource() || !itr->getSource()->IsInWorld())
             continue;
 
-        if (Player* player = sObjectMgr.GetPlayer(itr->first))
-            player->SendUpdateWorldState(field, value);
-    }
-}
-
-void OutdoorPvP::HandleGameObjectCreate(GameObject* go)
-{
-    // set initial data and activate capture points
-    if (go->GetGOInfo()->type == GAMEOBJECT_TYPE_CAPTURE_POINT)
-    {
-        CapturePointSliderMap const* capturePoints = sOutdoorPvPMgr.GetCapturePointSliderMap();
-        CapturePointSliderMap::const_iterator itr = capturePoints->find(go->GetEntry());
-        if (itr != capturePoints->end())
-            go->SetCapturePointSlider(itr->second.Value, itr->second.IsLocked);
-        else
-            go->SetCapturePointSlider(CAPTURE_SLIDER_MIDDLE, false);
-    }
-}
-
-void OutdoorPvP::HandleGameObjectRemove(GameObject* go)
-{
-    // save capture point slider value (negative value if locked)
-    if (go->GetGOInfo()->type == GAMEOBJECT_TYPE_CAPTURE_POINT)
-    {
-        CapturePointSlider value(go->GetCapturePointSliderValue(), go->getLootState() != GO_ACTIVATED);
-        sOutdoorPvPMgr.SetCapturePointSlider(go->GetEntry(), value);
+        itr->getSource()->SendUpdateWorldState(uiField, uiValue);
     }
 }
 
@@ -132,17 +119,23 @@ void OutdoorPvP::HandlePlayerKill(Player* killer, Player* victim)
 }
 
 // apply a team buff for the main and affected zones
-void OutdoorPvP::BuffTeam(Team team, uint32 spellId, bool remove /*= false*/)
+void OutdoorPvP::BuffTeam(Team team, uint32 spellId, bool remove /*= false*/, bool onlyMembers /*= true*/, uint32 area /*= 0*/)
 {
-    for (GuidZoneMap::const_iterator itr = m_zonePlayers.begin(); itr != m_zonePlayers.end(); ++itr)
+    for (GuidZoneMap::iterator itr = m_zonePlayers.begin(); itr != m_zonePlayers.end(); ++itr)
     {
         Player* player = sObjectMgr.GetPlayer(itr->first);
-        if (player && player->GetTeam() == team)
+        if (!player)
+            continue;
+
+        if (player && (team == TEAM_NONE || player->GetTeam() == team) && (!onlyMembers || IsMember(player->GetObjectGuid())))
         {
-            if (remove)
-                player->RemoveAurasDueToSpell(spellId);
-            else
-                player->CastSpell(player, spellId, true);
+            if (!area || area == player->GetAreaId())
+            {
+                if (remove)
+                    player->RemoveAurasDueToSpell(spellId);
+                else
+                    player->CastSpell(player, spellId, true);
+            }
         }
     }
 }
@@ -185,3 +178,9 @@ void OutdoorPvP::RespawnGO(const WorldObject* objRef, ObjectGuid goGuid, bool re
             go->SetLootState(GO_JUST_DEACTIVATED);
     }
 }
+
+void OutdoorPvP::FillInitialWorldState(uint32 zoneId, uint32 stateId, uint32 value)
+{
+    sWorldStateMgr.SetWorldStateValueFor(zoneId, stateId, value);
+}
+

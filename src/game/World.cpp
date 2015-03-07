@@ -400,6 +400,7 @@ void World::LoadConfigSettings(bool reload)
     SetPlayerLimit(sConfig.GetIntDefault("PlayerLimit", DEFAULT_PLAYER_LIMIT), true);
     SetMotd(sConfig.GetStringDefault("Motd", "Welcome to the Massive Network Game Object Server."));
 
+    setConfig(CONFIG_UINT32_VMSS_MAPFREEMETHOD, "VMSS.MapFreeMethod", 1);
     ///- Read all rates from the config file
     setConfigPos(CONFIG_FLOAT_RATE_HEALTH, "Rate.Health", 1.0f);
     setConfigPos(CONFIG_FLOAT_RATE_POWER_MANA, "Rate.Mana", 1.0f);
@@ -442,6 +443,7 @@ void World::LoadConfigSettings(bool reload)
     setConfigPos(CONFIG_FLOAT_RATE_CREATURE_ELITE_WORLDBOSS_SPELLDAMAGE, "Rate.Creature.Elite.WORLDBOSS.SpellDamage", 1.0f);
     setConfigPos(CONFIG_FLOAT_RATE_CREATURE_ELITE_RARE_SPELLDAMAGE,      "Rate.Creature.Elite.RARE.SpellDamage", 1.0f);
     setConfigPos(CONFIG_FLOAT_RATE_CREATURE_AGGRO, "Rate.Creature.Aggro", 1.0f);
+    setConfigPos(CONFIG_FLOAT_RATE_CREATURE_AGGRO_IN_INSTANCE, "Rate.Creature.Aggro.Instance", 1.0f);
     setConfig(CONFIG_FLOAT_RATE_REST_INGAME,                    "Rate.Rest.InGame", 1.0f);
     setConfig(CONFIG_FLOAT_RATE_REST_OFFLINE_IN_TAVERN_OR_CITY, "Rate.Rest.Offline.InTavernOrCity", 1.0f);
     setConfig(CONFIG_FLOAT_RATE_REST_OFFLINE_IN_WILDERNESS,     "Rate.Rest.Offline.InWilderness", 1.0f);
@@ -497,8 +499,6 @@ void World::LoadConfigSettings(bool reload)
     setConfig(CONFIG_BOOL_STATS_SAVE_ONLY_ON_LOGOUT, "PlayerSave.Stats.SaveOnlyOnLogout", true);
 
     setConfigMin(CONFIG_UINT32_INTERVAL_GRIDCLEAN, "GridCleanUpDelay", 5 * MINUTE * IN_MILLISECONDS, MIN_GRID_DELAY);
-    if (reload)
-        sMapMgr.SetGridCleanUpDelay(getConfig(CONFIG_UINT32_INTERVAL_GRIDCLEAN));
 
     setConfigMin(CONFIG_UINT32_INTERVAL_MAPUPDATE, "MapUpdateInterval", 100, MIN_MAP_UPDATE_DELAY);
     if (reload)
@@ -508,6 +508,8 @@ void World::LoadConfigSettings(bool reload)
     setConfigMinMax(CONFIG_UINT32_MAPUPDATE_MAXVISITS, "MapUpdate.MaxVisitsInUpdate", 20, 10, 100);
 
     setConfigMinMax(CONFIG_UINT32_POSITION_UPDATE_DELAY, "MapUpdate.PositionUpdateDelay", 400, 100, 2000);
+
+    setConfigMinMax(CONFIG_UINT32_OBJECTLOADINGSPLITTER_ALLOWEDTIME, "ObjectLoadingSplitter.MaxAllowedTime", 10, 5, 1000);
 
     setConfig(CONFIG_UINT32_INTERVAL_CHANGEWEATHER, "ChangeWeatherInterval", 10 * MINUTE * IN_MILLISECONDS);
 
@@ -570,6 +572,8 @@ void World::LoadConfigSettings(bool reload)
     
     setConfigMinMax(CONFIG_UINT32_START_PLAYER_MONEY, "StartPlayerMoney", 0, 0, MAX_MONEY_AMOUNT);
 
+    setConfig(CONFIG_BOOL_ALLOW_CUSTOM_MAPS, "AllowTransferToCustomMap", false);
+
     setConfigMinMax(CONFIG_UINT32_GEAR_CALC_BASE, "Player.GSCalculationBase", 190, 1, 384);
 
     setConfigMinMax(CONFIG_FLOAT_CROWDCONTROL_HP_BASE, "CrowdControlHPBase", 0.1f, 0.0f, 1.0f);
@@ -604,6 +608,8 @@ void World::LoadConfigSettings(bool reload)
 
     setConfig(CONFIG_UINT32_INSTANCE_RESET_TIME_HOUR, "Instance.ResetTimeHour", 4);
     setConfig(CONFIG_UINT32_INSTANCE_UNLOAD_DELAY,    "Instance.UnloadDelay", 30 * MINUTE * IN_MILLISECONDS);
+
+    setConfig(CONFIG_UINT32_WORLD_STATE_EXPIRETIME, "WorldState.ExpireTime", WEEK);
 
     setConfigMinMax(CONFIG_UINT32_MAX_PRIMARY_TRADE_SKILL, "MaxPrimaryTradeSkill", 2, 0, 10);
 
@@ -746,11 +752,15 @@ void World::LoadConfigSettings(bool reload)
     setConfig(CONFIG_UINT32_ARENA_AUTO_DISTRIBUTE_INTERVAL_DAYS,       "Arena.AutoDistributeInterval", 7);
     setConfig(CONFIG_BOOL_ARENA_QUEUE_ANNOUNCER_JOIN,                  "Arena.QueueAnnouncer.Join", false);
     setConfig(CONFIG_BOOL_ARENA_QUEUE_ANNOUNCER_EXIT,                  "Arena.QueueAnnouncer.Exit", false);
+    setConfig(CONFIG_BOOL_ARENA_QUEUE_ANNOUNCER_START,                 "Arena.QueueAnnouncer.Start", false);
     setConfig(CONFIG_UINT32_ARENA_SEASON_ID,                           "Arena.ArenaSeason.ID", 1);
     setConfig(CONFIG_UINT32_ARENA_SEASON_PREVIOUS_ID,                  "Arena.ArenaSeasonPrevious.ID", 0);
     setConfigMin(CONFIG_INT32_ARENA_STARTRATING,                       "Arena.StartRating", -1, -1);
     setConfigMin(CONFIG_INT32_ARENA_STARTPERSONALRATING,               "Arena.StartPersonalRating", -1, -1);
     setConfigMinMax(CONFIG_UINT32_ARENA_AURAS_DURATION,                "Arena.RemoveAurasWithDurationLess", 30, 0, 60);
+    setConfig(CONFIG_UINT32_LOSERNOCHANGE,                             "Arena.LoserNoChange", 0);
+    setConfig(CONFIG_UINT32_LOSERHALFCHANGE,                           "Arena.LoserHalfChange", 0);
+
     setConfig(CONFIG_BOOL_OUTDOORPVP_SI_ENABLED,                       "OutdoorPvp.SIEnabled", true);
     setConfig(CONFIG_BOOL_OUTDOORPVP_EP_ENABLED,                       "OutdoorPvp.EPEnabled", true);
     setConfig(CONFIG_BOOL_OUTDOORPVP_HP_ENABLED,                       "OutdoorPvp.HPEnabled", true);
@@ -1326,6 +1336,9 @@ void World::SetInitialWorldSettings()
     sLog.outString("Loading GM tickets...");
     sTicketMgr.LoadGMTickets();
 
+    sLog.outString("Loading WorldState templates and data...");
+    sWorldStateMgr.Initialize();
+
     ///- Load and initialize DBScripts Engine
     sLog.outString("Loading DB-Scripts Engine...");
     sScriptMgr.LoadQuestStartScripts();                     // must be after load Creature/Gameobject(Template/Data) and QuestTemplate
@@ -1399,6 +1412,9 @@ void World::SetInitialWorldSettings()
     m_timers[WUPDATE_GROUPS].SetInterval(sConfig.GetIntDefault("Groups.Timer", 1000));
     m_timers[WUPDATE_GROUPS].Reset();
 
+    m_timers[WUPDATE_WORLDSTATE].SetInterval(sConfig.GetIntDefault("WorldState.Timer", 60000));
+    m_timers[WUPDATE_WORLDSTATE].Reset();
+
     // to set mailtimer to return mails every day between 4 and 5 am
     // mailtimer is increased when updating auctions
     // one second is 1000 -(tested on win system)
@@ -1451,10 +1467,6 @@ void World::SetInitialWorldSettings()
     sLog.outString("Starting Game Event system...");
     uint32 nextGameEvent = sGameEventMgr.Initialize();
     m_timers[WUPDATE_EVENTS].SetInterval(nextGameEvent);    // depend on next event
-    sLog.outString();
-
-    sLog.outString("Loading grids for active creatures or transports...");
-    sObjectMgr.LoadActiveEntities(NULL);
     sLog.outString();
 
     // Delete all characters which have been deleted X days before
@@ -1616,6 +1628,13 @@ void World::Update(uint32 diff)
     {
         m_timers[WUPDATE_DELETECHARS].Reset();
         Player::DeleteOldCharacters();
+    }
+
+    // Update WorldStates (cleanup and save)
+    if (m_timers[WUPDATE_WORLDSTATE].Passed())
+    {
+        m_timers[WUPDATE_WORLDSTATE].Reset();
+        sWorldStateMgr.Update();
     }
 
     // Check if any group can be created by dungeon finder
@@ -2277,10 +2296,10 @@ void World::ResetRandomBG()
     CharacterDatabase.Execute("DELETE FROM character_battleground_random");
     for (SessionMap::const_iterator itr = m_sessions.begin(); itr != m_sessions.end(); ++itr)
         if (itr->second->GetPlayer())
-            itr->second->GetPlayer()->SetRandomWinner(false);
-    
+            itr->second->GetPlayer()->SetRandomBGWinner(false);
+
     m_NextRandomBGReset = time_t(m_NextRandomBGReset + DAY);
-    CharacterDatabase.PExecute("UPDATE saved_variables SET NextRandomBGResetTime = '"UI64FMTD"'", uint64(m_NextRandomBGReset));
+    CharacterDatabase.PExecute("UPDATE saved_variables SET NextRandomBGResetTime = '" UI64FMTD "'", uint64(m_NextRandomBGReset));
 }
 
 void World::SetPlayerLimit(int32 limit, bool needUpdate)
@@ -2489,6 +2508,14 @@ void World::InvalidatePlayerDataToAllClient(ObjectGuid guid)
     WorldPacket data(SMSG_INVALIDATE_PLAYER, 8);
     data << guid;
     SendGlobalMessage(&data);
+}
+
+float World::GetCreatureAggroRate(Unit const* unit) const
+{
+    if (unit && unit->GetMap() && unit->GetMap()->IsDungeon())
+        return getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO_IN_INSTANCE);
+    else
+        return getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
 }
 
 // Dungeonfinder

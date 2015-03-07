@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,6 +35,24 @@ BattleGroundRL::BattleGroundRL()
     m_StartMessageIds[BG_STARTING_EVENT_SECOND] = LANG_ARENA_THIRTY_SECONDS;
     m_StartMessageIds[BG_STARTING_EVENT_THIRD]  = LANG_ARENA_FIFTEEN_SECONDS;
     m_StartMessageIds[BG_STARTING_EVENT_FOURTH] = LANG_ARENA_HAS_BEGUN;
+}
+
+BattleGroundRL::~BattleGroundRL()
+{
+}
+
+void BattleGroundRL::Update(uint32 diff)
+{
+    BattleGround::Update(diff);
+
+    /*if (GetStatus() == STATUS_IN_PROGRESS)
+    {
+        // update something
+    }*/
+}
+
+void BattleGroundRL::StartingEventCloseDoors()
+{
 }
 
 void BattleGroundRL::StartingEventOpenDoors()
@@ -113,11 +131,22 @@ void BattleGroundRL::HandleAreaTrigger(Player* source, uint32 trigger)
     //    HandleTriggerBuff(buff_guid, source);
 }
 
-void BattleGroundRL::FillInitialWorldStates(WorldPacket& data, uint32& count)
+void BattleGroundRL::FillInitialWorldStates()
 {
-    FillInitialWorldState(data, count, 0xbb8, GetAlivePlayersCountByTeam(ALLIANCE));
-    FillInitialWorldState(data, count, 0xbb9, GetAlivePlayersCountByTeam(HORDE));
-    FillInitialWorldState(data, count, 0xbba, 1);
+    FillInitialWorldState(0xbb8, GetAlivePlayersCountByTeam(ALLIANCE));
+    FillInitialWorldState(0xbb9, GetAlivePlayersCountByTeam(HORDE));
+    FillInitialWorldState(0xbba, 1);
+}
+
+void BattleGroundRL::Reset()
+{
+    // call parent's reset
+    BattleGround::Reset();
+}
+
+bool BattleGroundRL::SetupBattleGround()
+{
+    return true;
 }
 
 /*

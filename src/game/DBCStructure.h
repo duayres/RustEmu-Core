@@ -2577,23 +2577,24 @@ struct WMOAreaTableEntry
     int32 rootId;                                           // 1        m_WMOID used in root WMO
     int32 adtId;                                            // 2        m_NameSetID used in adt file
     int32 groupId;                                          // 3        m_WMOGroupID used in group WMO
-    // uint32 field4;                                       // 4        m_SoundProviderPref
-    // uint32 field5;                                       // 5        m_SoundProviderPrefUnderwater
-    // uint32 field6;                                       // 6        m_AmbienceID
-    // uint32 field7;                                       // 7        m_ZoneMusic
-    // uint32 field8;                                       // 8        m_IntroSound
+    //uint32 field4;                                        // 4        m_SoundProviderPref
+    //uint32 field5;                                        // 5        m_SoundProviderPrefUnderwater
+    //uint32 field6;                                        // 6        m_AmbienceID
+    //uint32 field7;                                        // 7        m_ZoneMusic
+    //uint32 field8;                                        // 8        m_IntroSound
     uint32 Flags;                                           // 9        m_flags (used for indoor/outdoor determination)
     uint32 areaId;                                          // 10       m_AreaTableID (AreaTable.dbc)
-    // char *Name[16];                                      //          m_AreaName_lang
-    // uint32 nameFlags;
+    //char *Name[16];                                       //          m_AreaName_lang
+    //uint32 nameFlags;
+
 };
 
 struct WorldMapAreaEntry
 {
-    // uint32  ID;                                          // 0        m_ID
+    uint32  ID;                                             // 0        m_ID
     uint32  map_id;                                         // 1        m_mapID
-    uint32  area_id;                                        // 2        m_areaID index (continent 0 areas ignored)
-    // char* internal_name                                  // 3        m_areaName
+    uint32  zone_id;                                        // 2        m_areaID index (0 areas contains oveall continent definition)
+    //char* internal_name                                   // 3        m_areaName
     float   y1;                                             // 4        m_locLeft
     float   y2;                                             // 5        m_locRight
     float   x1;                                             // 6        m_locTop
@@ -2608,11 +2609,11 @@ struct WorldMapAreaEntry
 struct WorldMapOverlayEntry
 {
     uint32    ID;                                           // 0        m_ID
-    // uint32    worldMapAreaId;                            // 1        m_mapAreaID (WorldMapArea.dbc)
+    //uint32    worldMapAreaId;                             // 1        m_mapAreaID (WorldMapArea.dbc)
     uint32    areatableID[MAX_WORLD_MAP_OVERLAY_AREA_IDX];  // 2-5      m_areaID
     // 6        m_mapPointX
     // 7        m_mapPointY
-    // char* internal_name                                  // 8        m_textureName
+    //char* internal_name                                   // 8        m_textureName
     // 9        m_textureWidth
     // 10       m_textureHeight
     // 11       m_offsetX
@@ -2630,8 +2631,30 @@ struct WorldSafeLocsEntry
     float     x;                                            // 2        m_locX
     float     y;                                            // 3        m_locY
     float     z;                                            // 4        m_locZ
-    // char*   name[16]                                     // 5-20     m_AreaName_lang
+    //char*   name[16]                                      // 5-20     m_AreaName_lang
     // 21 string flags
+};
+
+struct WorldStateEntry
+{
+    uint32    ID;                                           // 0        m_ID
+    uint32    map_id;                                       // 1        WorldState bind map
+    uint32    m_zone;                                       // 2        WorldState bind zone (0 - on battlegrounds)
+    uint32    m_flags;                                      // 3
+    //    char*     m_uiIcon;                                   // 4
+    char*     m_uiMessage1[16];                             // 5-20
+    //    uint32    m_flags1;                                   // 21       string flags
+    //    char*     m_uiMessage2[16]                            // 22-37
+    //    uint32    m_flags2;                                   // 38       string flags
+    uint32    m_state;                                      // 39       WorldState ID (not unique!) 0 - for battleground states.
+    //    char*     m_uiIcon1;                                  // 40
+    //    char*     m_uiIcon2;                                  // 41
+    //    char*     m_uiMessage3[16]                            // 42-57
+    //    uint32    m_flags3;                                   // 58       string flags
+    char*     m_uiType;                                     // 59       only CAPTUREPOINT type, or NULL
+    uint32    m_linked1;                                    // 60
+    uint32    m_linked2;                                    // 61
+    //    uint32    m_unk62;                                    // 62       only 0
 };
 
 // GCC have alternative #pragma pack() syntax and old gcc version not support pack(pop), also any gcc version not support it at some platform

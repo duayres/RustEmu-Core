@@ -369,6 +369,7 @@ bool VehicleKit::AddPassenger(Unit* passenger, SeatId seatId)
     if (m_dstSet && (seatInfo->m_flagsB & VEHICLE_SEAT_FLAG_B_EJECTABLE_FORCED))
     {
         uint32 delay = seatInfo->m_exitMaxDuration * IN_MILLISECONDS;
+        GetBase()->AddEvent(new PassengerEjectEvent(seatId, *GetBase()), delay);
         DEBUG_LOG("Vehicle::AddPassenger eject event for %s added, delay %u", passenger->GetGuidStr().c_str(), delay);
     }
 

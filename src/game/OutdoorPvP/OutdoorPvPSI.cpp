@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,26 +18,28 @@
 
 #include "OutdoorPvPSI.h"
 #include "WorldPacket.h"
-#include "World.h"
-#include "ObjectMgr.h"
-#include "Object.h"
-#include "Creature.h"
-#include "GameObject.h"
-#include "Player.h"
+#include "../World.h"
+#include "../ObjectMgr.h"
+#include "../Object.h"
+#include "../Creature.h"
+#include "../GameObject.h"
+#include "../Player.h"
 
-OutdoorPvPSI::OutdoorPvPSI() : OutdoorPvP(),
+OutdoorPvPSI::OutdoorPvPSI(uint32 id) : OutdoorPvP(id),
     m_resourcesAlliance(0),
     m_resourcesHorde(0),
     m_zoneOwner(TEAM_NONE)
 {
+    uint32 zoneId = sOutdoorPvPMgr.GetZoneOfAffectedScript(this);
+    FillInitialWorldStates(zoneId);
 }
 
 // Send initial world states
-void OutdoorPvPSI::FillInitialWorldStates(WorldPacket& data, uint32& count)
+void OutdoorPvPSI::FillInitialWorldStates(uint32 zoneId)
 {
-    FillInitialWorldState(data, count, WORLD_STATE_SI_GATHERED_A, m_resourcesAlliance);
-    FillInitialWorldState(data, count, WORLD_STATE_SI_GATHERED_H, m_resourcesHorde);
-    FillInitialWorldState(data, count, WORLD_STATE_SI_SILITHYST_MAX, MAX_SILITHYST);
+    FillInitialWorldState(zoneId, WORLD_STATE_SI_GATHERED_A, m_resourcesAlliance);
+    FillInitialWorldState(zoneId, WORLD_STATE_SI_GATHERED_H, m_resourcesHorde);
+    // FillInitialWorldState(zoneId, WORLD_STATE_SI_SILITHYST_MAX, MAX_SILITHYST); -- check in DB
 }
 
 // Handle buffs when player enters the zone
@@ -154,8 +156,8 @@ struct SilithusSpawnLocation
 // Area trigger location - workaround to check the flag drop handling
 static SilithusSpawnLocation silithusFlagDropLocations[2] =
 {
-    { -7142.04f, 1397.92f, 4.327f},     // alliance
-    { -7588.48f, 756.806f, -16.425f}    // horde
+    {-7142.04f, 1397.92f, 4.327f},      // alliance
+    {-7588.48f, 756.806f, -16.425f}     // horde
 };
 
 bool OutdoorPvPSI::HandleDropFlag(Player* player, uint32 spellId)

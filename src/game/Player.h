@@ -1020,6 +1020,11 @@ class MANGOS_DLL_SPEC Player : public Unit
         void AddToWorld() override;
         void RemoveFromWorld(bool remove) override;
 
+        virtual void SetMap(Map* map) override;
+        virtual void ResetMap() override;
+        // Used for lock map from unloading. Use with caution!
+        Map* GetMapPtr() { return m_mapPtr; };
+
         bool TeleportTo(uint32 mapid, float x, float y, float z, float orientation, uint32 options = 0)
         {
             return TeleportTo(WorldLocation(mapid, x, y, z, orientation, GetPhaseMask()), options);
@@ -1461,12 +1466,6 @@ class MANGOS_DLL_SPEC Player : public Unit
         //! Return collision height sent to client
         float GetCollisionHeight(bool mounted) const;
 
-        // Parent objects (items currently) update system
-        Object* GetDependentObject(ObjectGuid const& guid) override;
-        virtual GuidSet const* GetObjectsUpdateQueue() override { return &i_objectsToClientUpdate; };
-        void AddUpdateObject(ObjectGuid const& guid) override;
-        void RemoveUpdateObject(ObjectGuid const& guid) override;
-
         /*********************************************************/
         /***                   LOAD SYSTEM                     ***/
         /*********************************************************/
@@ -1754,11 +1753,13 @@ class MANGOS_DLL_SPEC Player : public Unit
         uint32 GetArenaTeamIdInvited() { return m_ArenaTeamIdInvited; }
         static void LeaveAllArenaTeams(ObjectGuid guid);
 
-        Difficulty GetDifficulty(bool isRaid) const { return isRaid ? m_raidDifficulty : m_dungeonDifficulty; }
-        Difficulty GetDungeonDifficulty() const { return m_dungeonDifficulty; }
-        Difficulty GetRaidDifficulty() const { return m_raidDifficulty; }
-        void SetDungeonDifficulty(Difficulty dungeon_difficulty) { m_dungeonDifficulty = dungeon_difficulty; }
-        void SetRaidDifficulty(Difficulty raid_difficulty) { m_raidDifficulty = raid_difficulty; }
+        Difficulty GetDifficulty(bool isRaid) const { return isRaid ? GetRaidDifficulty() : GetDungeonDifficulty(); }
+        uint32 GetDifficulty() const { return m_Difficulty; }
+        Difficulty GetDungeonDifficulty() const { return Difficulty(m_Difficulty & 0x00FF); }
+        Difficulty GetRaidDifficulty() const { return Difficulty((m_Difficulty & 0xFF00) >> 8); }
+
+        void SetDungeonDifficulty(Difficulty difficulty) { m_Difficulty = (m_Difficulty & 0xFF00) | uint32(difficulty); }
+        void SetRaidDifficulty(Difficulty difficulty) { m_Difficulty = (m_Difficulty & 0x00FF) | (uint32(difficulty) << 8); }
 
         bool UpdateSkill(uint32 skill_id, uint32 step);
         bool UpdateSkillPro(uint16 SkillId, int32 Chance, uint32 step);
@@ -1919,8 +1920,10 @@ class MANGOS_DLL_SPEC Player : public Unit
         bool IsBeingTeleported() const { return mSemaphoreTeleport_Near || mSemaphoreTeleport_Far; }
         bool IsBeingTeleportedNear() const { return mSemaphoreTeleport_Near; }
         bool IsBeingTeleportedFar() const { return mSemaphoreTeleport_Far; }
+        bool IsBeingTeleportedDelayEvent() const { return mSemaphoreTeleport_DelayEvent; }
         void SetSemaphoreTeleportNear(bool semphsetting) { mSemaphoreTeleport_Near = semphsetting; }
         void SetSemaphoreTeleportFar(bool semphsetting) { mSemaphoreTeleport_Far = semphsetting; }
+        void SetSemaphoreTeleportDelayEvent(bool semphsetting) { mSemaphoreTeleport_DelayEvent = semphsetting; }
         void ProcessDelayedOperations();
 
         void CheckAreaExploreAndOutdoor();
@@ -2027,8 +2030,13 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         void SendInitWorldStates(uint32 zone, uint32 area);
         void SendUpdateWorldState(uint32 Field, uint32 Value);
+        void _SendUpdateWorldState(uint32 Field, uint32 Value);
+        void UpdateWorldState(uint32 state, uint32 value);
+        void SendUpdatedWorldStates(bool force = false);
+        time_t const& GetLastWorldStateUpdateTime() { return m_lastWSUpdateTime; };
+        void SetLastWorldStateUpdateTime(time_t _time)   { m_lastWSUpdateTime = _time; };
+
         void SendDirectMessage(WorldPacket* data) const;
-        void FillBGWeekendWorldStates(WorldPacket& data, uint32& count);
 
         void SendAurasForTarget(Unit* target);
 
@@ -2145,11 +2153,17 @@ class MANGOS_DLL_SPEC Player : public Unit
         bool CanUseBattleGroundObject();
         bool isTotalImmune();
 
+        void SetRandomBGWinner(bool winner);
+        bool IsRandomBGWinner() { return m_isRandomBGWinner; }
+
+        /*********************************************************/
+        /***                 OUTDOOR PVP SYSTEM                ***/
+        /*********************************************************/
+
         // returns true if the player is in active state for capture point capturing
         bool CanUseCapturePoint();
-
-        bool GetRandomWinner() { return m_IsBGRandomWinner; }
-        void SetRandomWinner(bool isWinner);
+        bool IsOutdoorPvPActive();
+        virtual void HandleObjectiveComplete(Player* /*pPlayer*/) {};
 
         /*********************************************************/
         /***                    REST SYSTEM                    ***/
@@ -2268,7 +2282,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         /***                 INSTANCE SYSTEM                   ***/
         /*********************************************************/
 
-        typedef UNORDERED_MAP < uint32 /*mapId*/, InstancePlayerBind > BoundInstancesMap;
+        typedef UNORDERED_MAP< uint32 /*mapId*/, InstancePlayerBind > BoundInstancesMap;
 
         void UpdateHomebindTime(uint32 time);
 
@@ -2298,8 +2312,8 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         bool NeedEjectFromThisMap();
 
-        typedef std::vector<uint32/*item level*/> GearScoreMap;
         uint8 GetTalentsCount(uint8 tab);
+        void ResetTalentsCount() { m_cachedTC[0] = 0; m_cachedTC[1] = 0; m_cachedTC[2] = 0; }
 
         /*********************************************************/
         /***                   GROUP SYSTEM                    ***/
@@ -2380,6 +2394,13 @@ class MANGOS_DLL_SPEC Player : public Unit
         void SetTitle(CharTitlesEntry const* title, bool lost = false);
 
         bool canSeeSpellClickOn(Creature const* creature) const;
+
+        // Parent objects (items currently) update system
+        virtual Object* GetDependentObject(ObjectGuid const& guid) override;
+        virtual GuidSet const* GetObjectsUpdateQueue() override { return &i_objectsToClientUpdate; };
+        virtual void AddUpdateObject(ObjectGuid const& guid) override;
+        virtual void RemoveUpdateObject(ObjectGuid const& guid) override;
+
     protected:
 
         uint32 m_contestedPvPTimer;
@@ -2399,7 +2420,8 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         BgBattleGroundQueueID_Rec m_bgBattleGroundQueueID[PLAYER_MAX_BATTLEGROUND_QUEUES];
         BGData                    m_bgData;
-        bool m_IsBGRandomWinner;
+
+        bool m_isRandomBGWinner;
 
         /*********************************************************/
         /***                    QUEST SYSTEM                   ***/
@@ -2458,7 +2480,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         void _SaveSkills();
         void _SaveSpells();
         void _SaveEquipmentSets();
-        void _SaveBGData();
+        void _SaveBGData(bool forceClean = false);
         void _SaveGlyphs();
         void _SaveTalents();
         void _SaveStats();
@@ -2484,8 +2506,8 @@ class MANGOS_DLL_SPEC Player : public Unit
         uint32 m_nextSave;
         time_t m_speakTime;
         uint32 m_speakCount;
-        Difficulty m_dungeonDifficulty;
-        Difficulty m_raidDifficulty;
+
+        uint32 m_Difficulty;                             // contains both dungeon (first byte) and raid (second byte) difficultyes of player. bytes 2,3 not used.
 
         uint32 m_atLoginFlags;
 
@@ -2561,6 +2583,8 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         uint32 m_deathTimer;
         time_t m_deathExpireTime;
+
+        time_t m_lastWSUpdateTime;
 
         uint32 m_restTime;
 
@@ -2657,6 +2681,8 @@ class MANGOS_DLL_SPEC Player : public Unit
         GridReference<Player> m_gridRef;
         MapReference m_mapRef;
 
+        Map* m_mapPtr;
+
         // Homebind coordinates
         WorldLocation m_homebind;
 
@@ -2679,6 +2705,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         uint32 m_teleport_options;
         bool mSemaphoreTeleport_Near;
         bool mSemaphoreTeleport_Far;
+        bool mSemaphoreTeleport_DelayEvent;
 
         uint32 m_DelayedOperations;
         bool m_bCanDelayTeleport;
@@ -2705,6 +2732,8 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         DungeonPersistentState* _pendingBind;
         uint32 _pendingBindTimer;
+
+        uint8  m_cachedTC[3];
 };
 
 void AddItemsSetItem(Player* player, Item* item);

@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,11 +23,6 @@
 #include "Policies/Singleton.h"
 #include "Timer.h"
 
-enum
-{
-    TIMER_OPVP_MGR_UPDATE           = MINUTE * IN_MILLISECONDS // 1 minute is enough for us but this might change with wintergrasp support
-};
-
 enum OutdoorPvPTypes
 {
     OPVP_ID_SI = 0,
@@ -37,8 +32,15 @@ enum OutdoorPvPTypes
     OPVP_ID_TF,
     OPVP_ID_NA,
     OPVP_ID_GH,
+    OPVP_ID_WG,
 
     MAX_OPVP_ID
+};
+
+enum BattlefieldTypes
+{
+    BATTLEFIELD_WG = 1,
+    BATTLEFIELD_TB = 21,
 };
 
 enum OutdoorPvPZones
@@ -73,27 +75,21 @@ enum OutdoorPvPZones
 
     ZONE_ID_NAGRAND                 = 3518,
 
-    ZONE_ID_GRIZZLY_HILLS           = 394
+    ZONE_ID_GRIZZLY_HILLS           = 394,
+
+    ZONE_ID_WINTERGRASP             = 4197,
+
+    ZONE_ID_ERROR                   = 0,
 };
 
-struct CapturePointSlider
-{
-    CapturePointSlider() : Value(0.0f), IsLocked(false) {}
-    CapturePointSlider(float value, bool isLocked) : Value(value), IsLocked(isLocked) {}
-
-    float Value;
-    bool IsLocked;
-};
-
-// forward declaration
+class BattleField;
 class Player;
 class GameObject;
 class Creature;
 class OutdoorPvP;
+class ObjectGuid;
 
-typedef std::map<uint32 /*capture point entry*/, CapturePointSlider /*slider value and lock state*/> CapturePointSliderMap;
-
-class OutdoorPvPMgr
+class MANGOS_DLL_SPEC OutdoorPvPMgr
 {
     public:
         OutdoorPvPMgr();
@@ -113,9 +109,15 @@ class OutdoorPvPMgr
 
         void Update(uint32 diff);
 
-        // Save and load capture point slider
-        CapturePointSliderMap const* GetCapturePointSliderMap() const { return &m_capturePointSlider; }
-        void SetCapturePointSlider(uint32 entry, CapturePointSlider value) { m_capturePointSlider[entry] = value; }
+        // Handle capture point stuff
+        // fully wrong and not needed, see Get/SetLinkedWorldState() FIXME - rewrite need
+        int8 GetCapturePointSliderValue(uint32 entry);
+        void SetCapturePointSlider(uint32 entry, int8 value) { m_capturePointSlider[entry] = value; }
+
+        uint32 GetZoneOfAffectedScript(OutdoorPvP const* script) const;
+
+        BattleField* GetBattlefieldByGuid(ObjectGuid guid);
+        BattleField* GetBattlefieldById(uint32 id);
 
     private:
         // return assigned outdoor pvp script
@@ -124,7 +126,7 @@ class OutdoorPvPMgr
         // contains all outdoor pvp scripts
         OutdoorPvP* m_scripts[MAX_OPVP_ID];
 
-        CapturePointSliderMap m_capturePointSlider;
+        std::map<uint32 /*capture point entry*/, int8 /*slider value*/> m_capturePointSlider;
 
         // update interval
         ShortIntervalTimer m_updateTimer;

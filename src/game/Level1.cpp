@@ -1607,7 +1607,7 @@ bool ChatHandler::HandleTeleCommand(char* args)
         return false;
     }
 
-    return HandleGoHelper(_player, tele->mapId, tele->position_x, tele->position_y, &tele->position_z, &tele->orientation);
+    return HandleGoHelper(_player, tele->loc.GetMapId(), tele->loc.x, tele->loc.y, &tele->loc.z, &tele->loc.orientation);
 }
 
 bool ChatHandler::HandleLookupAreaCommand(char* args)
@@ -1825,7 +1825,7 @@ bool ChatHandler::HandleTeleNameCommand(char* args)
         if (needReportToTarget(target))
             ChatHandler(target).PSendSysMessage(LANG_TELEPORTED_TO_BY, GetNameLink().c_str());
 
-        return HandleGoHelper(target, tele->mapId, tele->position_x, tele->position_y, &tele->position_z, &tele->orientation);
+        return HandleGoHelper(target, tele->loc.GetMapId(), tele->loc.x, tele->loc.y, &tele->loc.z, &tele->loc.orientation);
     }
     else
     {
@@ -1836,9 +1836,8 @@ bool ChatHandler::HandleTeleNameCommand(char* args)
         std::string nameLink = playerLink(target_name);
 
         PSendSysMessage(LANG_TELEPORTING_TO, nameLink.c_str(), GetMangosString(LANG_OFFLINE), tele->name.c_str());
-        Player::SavePositionInDB(target_guid, tele->mapId,
-                                 tele->position_x, tele->position_y, tele->position_z, tele->orientation,
-                                 sTerrainMgr.GetZoneId(tele->mapId, tele->position_x, tele->position_y, tele->position_z));
+        Player::SavePositionInDB(target_guid, tele->loc.GetMapId(),
+            tele->loc.x, tele->loc.y, tele->loc.z, tele->loc.orientation, tele->loc.GetZoneId());
     }
 
     return true;
@@ -1904,10 +1903,9 @@ bool ChatHandler::HandleTeleGroupCommand(char* args)
         if (needReportToTarget(pl))
             ChatHandler(pl).PSendSysMessage(LANG_TELEPORTED_TO_BY, nameLink.c_str());
 
-        // stop flight if need
         pl->InterruptTaxiFlying();
 
-        pl->TeleportTo(tele->mapId, tele->position_x, tele->position_y, tele->position_z, tele->orientation);
+        pl->TeleportTo(tele->loc.GetMapId(), tele->loc.x, tele->loc.y, tele->loc.z, tele->loc.orientation);
     }
 
     return true;

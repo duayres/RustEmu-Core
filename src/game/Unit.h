@@ -36,7 +36,6 @@
 #include "HostileRefManager.h"
 #include "FollowerReference.h"
 #include "FollowerRefManager.h"
-#include "Utilities/EventProcessor.h"
 #include "MotionMaster.h"
 #include "MapManager.h"
 #include "DBCStructure.h"
@@ -1343,6 +1342,10 @@ enum PowerDefaults
     POWER_RUNIC_POWER_DEFAULT       = 1000,
 };
 
+// delay time for evading
+#define EVADE_TIME_DELAY     500
+#define EVADE_TIME_DELAY_MIN 50
+
 struct SpellProcEventEntry;                                 // used only privately
 class  VehicleKit;
 
@@ -2050,9 +2053,6 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         float m_modSpellSpeedPctNeg;
         float m_modSpellSpeedPctPos;
 
-        // Event handler
-        EventProcessor m_Events;
-
         // stat system
         bool HandleStatModifier(UnitMods unitMod, UnitModifierType modifierType, float amount, bool apply);
         void SetModifierValue(UnitMods unitMod, UnitModifierType modifierType, float value) { m_auraModifiersGroup[unitMod][modifierType] = value; }
@@ -2105,7 +2105,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         float ApplyTotalThreatModifier(float threat, SpellSchoolMask schoolMask = SPELL_SCHOOL_MASK_NORMAL);
         void DeleteThreatList();
         bool IsSecondChoiceTarget(Unit* pTarget, bool checkThreatArea) const;
-        bool SelectHostileTarget();
+        bool SelectHostileTarget(bool withEvade = true);
         bool TauntApply(Unit* pVictim, bool isSingleEffect = false);
         void TauntFadeOut(Unit* taunter);
 
@@ -2115,9 +2115,10 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
 
         ThreatManager& getThreatManager() { return m_ThreatManager; }
         ThreatManager const& getThreatManager() const { return m_ThreatManager; }
-        void addHatedBy(HostileReference* pHostileReference) { m_HostileRefManager.insertFirst(pHostileReference); };
+        void addHatedBy(HostileReference* pHostileReference) { m_HostileRefManager->insertFirst(pHostileReference); };
         void removeHatedBy(HostileReference* /*pHostileReference*/) { /* nothing to do yet */ }
-        HostileRefManager& getHostileRefManager() { return m_HostileRefManager; }
+        HostileRefManager& getHostileRefManager() { return *m_HostileRefManager; }
+        void RemoveUnitFromHostileRefManager(Unit* pUnit);
 
         SpellAuraHolder* GetVisibleAura(uint8 slot) const;
         void SetVisibleAura(uint8 slot, SpellAuraHolder* holder);
@@ -2506,7 +2507,7 @@ class MANGOS_DLL_SPEC Unit : public WorldObject
         // Manage all Units threatening us
         ThreatManager m_ThreatManager;
         // Manage all Units that are threatened by us
-        HostileRefManager m_HostileRefManager;
+        HostileRefManager* m_HostileRefManager;
 
         FollowerRefManager m_FollowingRefManager;
 

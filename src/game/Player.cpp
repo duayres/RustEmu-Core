@@ -483,6 +483,8 @@ Player::Player(WorldSession* session) : Unit(), m_mover(this), m_camera(NULL), m
     m_deathTimer = 0;
     m_deathExpireTime = 0;
 
+    m_lastWSUpdateTime = 0; // == 0 in initialise, for review all updates
+
     m_swingErrorMsg = 0;
 
     m_DetectInvTimer = 1 * IN_MILLISECONDS;
@@ -529,8 +531,10 @@ Player::Player(WorldSession* session) : Unit(), m_mover(this), m_camera(NULL), m
 
     m_HomebindTimer = 0;
     m_InstanceValid = true;
-    m_dungeonDifficulty = DUNGEON_DIFFICULTY_NORMAL;
-    m_raidDifficulty = RAID_DIFFICULTY_10MAN_NORMAL;
+
+    m_Difficulty = 0;
+    SetDungeonDifficulty(DUNGEON_DIFFICULTY_NORMAL);
+    SetRaidDifficulty(RAID_DIFFICULTY_10MAN_NORMAL);
 
     m_lastPotionId = 0;
 
@@ -555,7 +559,7 @@ Player::Player(WorldSession* session) : Unit(), m_mover(this), m_camera(NULL), m
     // Honor System
     m_lastHonorUpdateTime = time(NULL);
 
-    m_IsBGRandomWinner = false;
+    m_isRandomBGWinner = false;
 
     // Player summoning
     m_summon_expire = 0;
@@ -611,13 +615,9 @@ Player::~Player()
     if (Transport* transport = GetTransport())
         transport->RemovePassenger(this);
 
-    for (size_t x = 0; x < ItemSetEff.size(); ++x)
-        delete ItemSetEff[x];
-
-    // clean up player-instance binds, may unload some instance saves
-    for (uint8 i = 0; i < MAX_DIFFICULTY; ++i)
-        for (BoundInstancesMap::iterator itr = m_boundInstances[i].begin(); itr != m_boundInstances[i].end(); ++itr)
-            itr->second.state->RemovePlayer(this);
+    for (size_t x = 0; x < ItemSetEff.size(); x++)
+        if (ItemSetEff[x])
+            delete ItemSetEff[x];
 
     delete m_declinedname;
     delete m_runes;
@@ -2009,7 +2009,7 @@ void Player::ProcessDelayedOperations()
         }
     }
 
-    // we have executed ALL delayed ops, so clear the flag
+    //we have executed ALL delayed ops, so clear the flag
     m_DelayedOperations = 0;
 }
 
@@ -2047,6 +2047,20 @@ void Player::RemoveFromWorld(bool remove)
         GetCamera()->ResetView();
 
     Unit::RemoveFromWorld(remove);
+}
+
+void Player::SetMap(Map* map)
+{
+    WorldObject::SetMap(map);
+    // Lock map from unload while player on his
+    m_mapPtr = sMapMgr.GetMapPtr(map->GetId(), map->GetInstanceId());
+}
+
+void Player::ResetMap()
+{
+    WorldObject::ResetMap();
+    // Unlock map
+    m_mapPtr = NULL;
 }
 
 void Player::RewardRage(uint32 damage, uint32 weaponSpeedHitFactor, bool attacker)
@@ -6410,42 +6424,30 @@ void Player::RewardReputation(Unit* pVictim, float rate)
 
     // used current difficulty creature entry instead normal version (GetEntry())
     ReputationOnKillEntry const* Rep = sObjectMgr.GetReputationOnKillEntry(((Creature*)pVictim)->GetCreatureInfo()->Entry);
-
     if (!Rep)
         return;
 
-    uint32 repFaction1 = Rep->repfaction1;
-    uint32 repFaction2 = Rep->repfaction2;
+    uint32 Repfaction1 = Rep->repfaction1;
+    uint32 Repfaction2 = Rep->repfaction2;
 
     // Championning tabard reputation system
-    // Aura 57818 is a hidden aura common to tabards allowing championning.
-    if (pVictim->GetMap()->IsNonRaidDungeon() && HasAura(57818))
+    if (HasAura(Rep->championingAura))
     {
-        MapEntry const* storedMap = sMapStore.LookupEntry(GetMapId());
-        InstanceTemplate const* instance = ObjectMgr::GetInstanceTemplate(GetMapId());
-        Item const* pItem = GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_TABARD);
-        if (storedMap && instance && pItem)
+        if (Item* pItem = GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_TABARD))
         {
-            ItemPrototype const* pProto = pItem->GetProto();// Checked on load
-            // The required MinLevel for the tabard to work is related to the item level of the tabard
-            if ((instance->levelMin + 1 >= pProto->ItemLevel || !GetMap()->IsRegularDifficulty())
-                    // For ItemLevel == 75 (or 85) need to check expansion
-                    && (pProto->ItemLevel == 75 && storedMap->Expansion() == EXPANSION_WOTLK))
+            if (uint32 tabardFactionID = pItem->GetProto()->RequiredReputationFaction)
             {
-                if (uint32 tabardFactionID = pItem->GetProto()->RequiredReputationFaction)
-                {
-                    repFaction1 = tabardFactionID;
-                    repFaction2 = tabardFactionID;
-                }
+                Repfaction1 = tabardFactionID;
+                Repfaction2 = tabardFactionID;
             }
         }
     }
 
-    if (repFaction1 && (!Rep->team_dependent || GetTeam() == ALLIANCE))
+    if (Repfaction1 && (!Rep->team_dependent || GetTeam() == ALLIANCE))
     {
-        int32 donerep1 = CalculateReputationGain(REPUTATION_SOURCE_KILL, Rep->repvalue1, repFaction1, pVictim->getLevel());
+        int32 donerep1 = CalculateReputationGain(REPUTATION_SOURCE_KILL, Rep->repvalue1, Repfaction1, pVictim->getLevel());
         donerep1 = int32(donerep1 * rate);
-        FactionEntry const* factionEntry1 = sFactionStore.LookupEntry(repFaction1);
+        FactionEntry const* factionEntry1 = sFactionStore.LookupEntry(Repfaction1);
         uint32 current_reputation_rank1 = GetReputationMgr().GetRank(factionEntry1);
         if (factionEntry1 && current_reputation_rank1 <= Rep->reputation_max_cap1)
             GetReputationMgr().ModifyReputation(factionEntry1, donerep1);
@@ -6459,11 +6461,11 @@ void Player::RewardReputation(Unit* pVictim, float rate)
         }
     }
 
-    if (repFaction2 && (!Rep->team_dependent || GetTeam() == HORDE))
+    if (Repfaction2 && (!Rep->team_dependent || GetTeam() == HORDE))
     {
-        int32 donerep2 = CalculateReputationGain(REPUTATION_SOURCE_KILL, Rep->repvalue2, repFaction2, pVictim->getLevel());
+        int32 donerep2 = CalculateReputationGain(REPUTATION_SOURCE_KILL, Rep->repvalue2, Repfaction2, pVictim->getLevel());
         donerep2 = int32(donerep2 * rate);
-        FactionEntry const* factionEntry2 = sFactionStore.LookupEntry(repFaction2);
+        FactionEntry const* factionEntry2 = sFactionStore.LookupEntry(Repfaction2);
         uint32 current_reputation_rank2 = GetReputationMgr().GetRank(factionEntry2);
         if (factionEntry2 && current_reputation_rank2 <= Rep->reputation_max_cap2)
             GetReputationMgr().ModifyReputation(factionEntry2, donerep2);
@@ -6871,11 +6873,21 @@ void Player::UpdateZone(uint32 newZone, uint32 newArea)
 
     if (m_zoneUpdateId != newZone)
     {
+        sWorldStateMgr.CreateZoneAreaStateIfNeed(this, newZone, newArea);
+
+        // Called when a player leave zone
+        if (InstanceData* mapInstance = GetInstanceData())
+            mapInstance->OnPlayerLeaveZone(this, m_zoneUpdateId);
+
         // handle outdoor pvp zones
         sOutdoorPvPMgr.HandlePlayerLeaveZone(this, m_zoneUpdateId);
         sOutdoorPvPMgr.HandlePlayerEnterZone(this, newZone);
 
         SendInitWorldStates(newZone, newArea);              // only if really enters to new zone, not just area change, works strange...
+
+        // call this method in order to handle some scripted zones
+        if (InstanceData* mapInstance = GetInstanceData())
+            mapInstance->OnPlayerEnterZone(this, newZone, newArea);
 
         if (sWorld.getConfig(CONFIG_BOOL_WEATHER))
         {
@@ -6884,7 +6896,7 @@ void Player::UpdateZone(uint32 newZone, uint32 newArea)
         }
     }
 
-    m_zoneUpdateId    = newZone;
+    m_zoneUpdateId = newZone;
     m_zoneUpdateTimer = ZONE_UPDATE_INTERVAL;
 
     // zone changed, so area changed as well, update it
@@ -6894,19 +6906,19 @@ void Player::UpdateZone(uint32 newZone, uint32 newArea)
     // in PvE, only opposition team capital
     switch (zone->team)
     {
-        case AREATEAM_ALLY:
-            pvpInfo.inHostileArea = GetTeam() != ALLIANCE && (sWorld.IsPvPRealm() || zone->flags & AREA_FLAG_CAPITAL);
-            break;
-        case AREATEAM_HORDE:
-            pvpInfo.inHostileArea = GetTeam() != HORDE && (sWorld.IsPvPRealm() || zone->flags & AREA_FLAG_CAPITAL);
-            break;
-        case AREATEAM_NONE:
-            // overwrite for battlegrounds, maybe batter some zone flags but current known not 100% fit to this
-            pvpInfo.inHostileArea = sWorld.IsPvPRealm() || InBattleGround();
-            break;
-        default:                                            // 6 in fact
-            pvpInfo.inHostileArea = false;
-            break;
+    case AREATEAM_ALLY:
+        pvpInfo.inHostileArea = GetTeam() != ALLIANCE && (sWorld.IsPvPRealm() || (zone->flags & AREA_FLAG_CAPITAL));
+        break;
+    case AREATEAM_HORDE:
+        pvpInfo.inHostileArea = GetTeam() != HORDE && (sWorld.IsPvPRealm() || (zone->flags & AREA_FLAG_CAPITAL));
+        break;
+    case AREATEAM_NONE:
+        // overwrite for battlegrounds, maybe batter some zone flags but current known not 100% fit to this
+        pvpInfo.inHostileArea = sWorld.IsPvPRealm() || InBattleGround();
+        break;
+    default:                                            // 6 in fact
+        pvpInfo.inHostileArea = false;
+        break;
     }
 
     if (pvpInfo.inHostileArea)                              // in hostile area
@@ -6920,7 +6932,7 @@ void Player::UpdateZone(uint32 newZone, uint32 newArea)
             pvpInfo.endTimer = time(0);                     // start toggle-off
     }
 
-    if (zone->flags & AREA_FLAG_SANCTUARY)                  // in sanctuary
+    if (zone->flags & AREA_FLAG_SANCTUARY)                   // in sanctuary
     {
         SetByteFlag(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_SANCTUARY);
         if (sWorld.IsFFAPvPRealm())
@@ -8520,99 +8532,79 @@ void Player::SendNotifyLootItemRemoved(uint8 lootSlot)
 
 void Player::SendUpdateWorldState(uint32 Field, uint32 Value)
 {
+    // _SendUpdateWorldState(uint32 Field, uint32 Value)
+    UpdateWorldState(Field, Value);
+}
+
+void Player::_SendUpdateWorldState(uint32 Field, uint32 Value)
+{
+    if (!IsInWorld() || !GetSession())
+        return;
+
     WorldPacket data(SMSG_UPDATE_WORLD_STATE, 8);
-    data << Field;
-    data << Value;
+    data << uint32(Field);
+    data << uint32(Value);
     GetSession()->SendPacket(&data);
+}
+
+void Player::UpdateWorldState(uint32 state, uint32 value)
+{
+    sWorldStateMgr.SetWorldStateValueFor(this, state, value);
+}
+
+void Player::SendUpdatedWorldStates(bool force)
+{
+    // don't need update client, if not have session or player not in world
+    if (!IsInWorld() || !GetSession())
+        return;
+
+    // don't need update states more then one time per second
+    if (IsBeingTeleported() || GetLastWorldStateUpdateTime() == time(NULL))
+        return;
+
+    if (WorldStateSet* wsSet = sWorldStateMgr.GetUpdatedWorldStatesFor(this, force ? 0 : GetLastWorldStateUpdateTime()))
+    {
+        for (uint32 i = 0; i < wsSet->count(); ++i)
+        {
+            //DEBUG_LOG("Player::SendUpdatedWorldStates send state %u instance %u value %u to %s",(*itr)->GetId(), (*itr)->GetInstance(),(*itr)->GetValue(),GetObjectGuid().GetString().c_str());
+            WorldState* ws = (*wsSet)[i];
+            _SendUpdateWorldState(ws->GetId(), ws->GetValue());
+        }
+        delete wsSet;
+    }
+
+    SetLastWorldStateUpdateTime(time(NULL));
 }
 
 void Player::SendInitWorldStates(uint32 zoneid, uint32 areaid)
 {
     // data depends on zoneid/mapid...
-    BattleGround* bg = GetBattleGround();
-    uint32 mapid = GetMapId();
+    // Get worldstates (initial set)
+    WorldStateSet* wsSet = sWorldStateMgr.GetInitWorldStates(GetMapId(), GetInstanceId(), zoneid, areaid);
+    if (!wsSet)
+    {
+        sLog.outError("Player::SendInitWorldStates initial states list for player %s are empty!", GetGuidStr().c_str());
+        return;
+    }
 
-    DEBUG_LOG("Sending SMSG_INIT_WORLD_STATES to Map:%u, Zone: %u", mapid, zoneid);
+    DEBUG_LOG("Player::SendInitWorldStates sending SMSG_INIT_WORLD_STATES to Map:%u (instance %u), zone: %u, area %u, WorldStates count %u", GetMapId(), GetInstanceId(), zoneid, areaid, wsSet->count());
 
-    uint32 count = 0;                                       // count of world states in packet
+    WorldPacket data(SMSG_INIT_WORLD_STATES, (4 + 4 + 4 + 2 + wsSet->count() * 8));
 
-    WorldPacket data(SMSG_INIT_WORLD_STATES, (4 + 4 + 4 + 2 + 8 * 8)); // guess
-    data << uint32(mapid);                                  // mapid
+    data << uint32(GetMapId());                             // mapid
     data << uint32(zoneid);                                 // zone id
     data << uint32(areaid);                                 // area id, new 2.1.0
-    size_t count_pos = data.wpos();
-    data << uint16(0);                                      // count of uint64 blocks, placeholder
+    data << uint16(wsSet->count());
 
-    // Current arena season
-    FillInitialWorldState(data, count, 0xC77, sWorld.getConfig(CONFIG_UINT32_ARENA_SEASON_ID));
-    // Previous arena season
-    FillInitialWorldState(data, count, 0xF3D, sWorld.getConfig(CONFIG_UINT32_ARENA_SEASON_PREVIOUS_ID));
-    // 0 - Battle for Wintergrasp in progress, 1 - otherwise
-    FillInitialWorldState(data, count, 0xED9, 1);
-    // Time when next Battle for Wintergrasp starts
-    FillInitialWorldState(data, count, 0x1102, uint32(time(NULL) + 9000));
-
-    switch (zoneid)
+    for (uint32 i = 0; i < wsSet->count(); ++i)
     {
-        case 139:                                           // Eastern Plaguelands
-        case 1377:                                          // Silithus
-        case 3483:                                          // Hellfire Peninsula
-        case 3518:                                          // Nagrand
-        case 3519:                                          // Terokkar Forest
-        case 3521:                                          // Zangarmarsh
-            if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(zoneid))
-                outdoorPvP->FillInitialWorldStates(data, count);
-            break;
-        case 2597:                                          // AV
-            if (bg && bg->GetTypeID(true) == BATTLEGROUND_AV)
-                bg->FillInitialWorldStates(data, count);
-            break;
-        case 3277:                                          // WS
-            if (bg && bg->GetTypeID(true) == BATTLEGROUND_WS)
-                bg->FillInitialWorldStates(data, count);
-            break;
-        case 3358:                                          // AB
-            if (bg && bg->GetTypeID(true) == BATTLEGROUND_AB)
-                bg->FillInitialWorldStates(data, count);
-            break;
-        case 3820:                                          // EY
-            if (bg && bg->GetTypeID(true) == BATTLEGROUND_EY)
-                bg->FillInitialWorldStates(data, count);
-            break;
-        case 3698:                                          // Nagrand Arena
-            if (bg && bg->GetTypeID(true) == BATTLEGROUND_NA)
-                bg->FillInitialWorldStates(data, count);
-            break;
-        case 3702:                                          // Blade's Edge Arena
-            if (bg && bg->GetTypeID(true) == BATTLEGROUND_BE)
-                bg->FillInitialWorldStates(data, count);
-            break;
-        case 3968:                                          // Ruins of Lordaeron
-            if (bg && bg->GetTypeID(true) == BATTLEGROUND_RL)
-                bg->FillInitialWorldStates(data, count);
-            break;
+        WorldState* ws = (*wsSet)[i];
+        data << uint32(ws->GetId());
+        data << uint32(ws->GetValue());
     }
-
-    FillBGWeekendWorldStates(data, count);
-
-    data.put<uint16>(count_pos, count);                     // set actual world state amount
+    delete wsSet;
 
     GetSession()->SendPacket(&data);
-}
-
-void Player::FillBGWeekendWorldStates(WorldPacket& data, uint32& count)
-{
-    for (uint32 i = 1; i < sBattlemasterListStore.GetNumRows(); ++i)
-    {
-        BattlemasterListEntry const* bl = sBattlemasterListStore.LookupEntry(i);
-        if (bl && bl->HolidayWorldStateId)
-        {
-            if (BattleGroundMgr::IsBGWeekend(BattleGroundTypeId(bl->id)))
-                FillInitialWorldState(data, count, bl->HolidayWorldStateId, 1);
-            else
-                FillInitialWorldState(data, count, bl->HolidayWorldStateId, 0);
-        }
-    }
 }
 
 uint32 Player::GetXPRestBonus(uint32 xp)
@@ -15416,15 +15408,15 @@ void Player::_LoadIntoDataField(const char* data, uint32 startOffset, uint32 cou
 bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
 {
     //       0     1        2     3     4      5       6      7   8      9            10            11
-    // SELECT guid, account, name, race, class, gender, level, xp, money, playerBytes, playerBytes2, playerFlags,"
+    //SELECT guid, account, name, race, class, gender, level, xp, money, playerBytes, playerBytes2, playerFlags,"
     // 12          13          14          15   16           17        18         19         20         21          22           23                 24
     //"position_x, position_y, position_z, map, orientation, taximask, cinematic, totaltime, leveltime, rest_bonus, logout_time, is_logout_resting, resettalents_cost,"
     // 25                 26       27       28       29       30         31           32            33        34    35      36                 37         38
     //"resettalents_time, trans_x, trans_y, trans_z, trans_o, transguid, extra_flags, stable_slots, at_login, zone, online, death_expire_time, taxi_path, dungeon_difficulty,"
     // 39           40                41                42                    43          44          45              46           47               48              49
     //"arenaPoints, totalHonorPoints, todayHonorPoints, yesterdayHonorPoints, totalKills, todayKills, yesterdayKills, chosenTitle, knownCurrencies, watchedFaction, drunk,"
-    // 50      51      52      53      54      55      56      57      58         59          60             61              62      63           64
-    //"health, power1, power2, power3, power4, power5, power6, power7, specCount, activeSpec, exploredZones, equipmentCache, ammoId, knownTitles, actionBars  FROM characters WHERE guid = '%u'", GUID_LOPART(m_guid));
+    // 50      51      52      53      54      55      56      57      58         59          60             61              62      63           64          65
+    //"health, power1, power2, power3, power4, power5, power6, power7, specCount, activeSpec, exploredZones, equipmentCache, ammoId, knownTitles, actionBars, grantableLevels  FROM characters WHERE guid = '%u'", GUID_LOPART(m_guid));
     QueryResult* result = holder->GetResult(PLAYER_LOGIN_QUERY_LOADFROM);
 
     if (!result)
@@ -15442,22 +15434,31 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
     if (dbAccountId != GetSession()->GetAccountId())
     {
         sLog.outError("%s loading from wrong account (is: %u, should be: %u)",
-                      guid.GetString().c_str(), GetSession()->GetAccountId(), dbAccountId);
+            guid.GetString().c_str(), GetSession()->GetAccountId(), dbAccountId);
         delete result;
         return false;
     }
 
-    Object::_Create(guid.GetCounter(), 0, HIGHGUID_PLAYER);
+    Object::_Create(guid);
 
     m_name = fields[2].GetCppString();
 
     // check name limitations
     if (ObjectMgr::CheckPlayerName(m_name) != CHAR_NAME_SUCCESS ||
-            (GetSession()->GetSecurity() == SEC_PLAYER && sObjectMgr.IsReservedName(m_name)))
+        (GetSession()->GetSecurity() == SEC_PLAYER && sObjectMgr.IsReservedName(m_name)))
     {
         delete result;
-        CharacterDatabase.PExecute("UPDATE characters SET at_login = at_login | '%u' WHERE guid ='%u'",
-                                   uint32(AT_LOGIN_RENAME), guid.GetCounter());
+        CharacterDatabase.PExecute("UPDATE characters SET at_login = at_login | %u WHERE guid = %u",
+            uint32(AT_LOGIN_RENAME), guid.GetCounter());
+        return false;
+    }
+
+    m_atLoginFlags = fields[33].GetUInt32();
+
+    if (HasAtLoginFlag(AT_LOGIN_RENAME))
+    {
+        delete result;
+        sLog.outError("Player::LoadFromDB: %s tried to login while forced to rename, can't load.", GetGuidStr().c_str());
         return false;
     }
 
@@ -15465,11 +15466,11 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
     SetGuidValue(OBJECT_FIELD_GUID, guid);
 
     // overwrite some data fields
-    SetByteValue(UNIT_FIELD_BYTES_0, 0, fields[3].GetUInt8()); // race
-    SetByteValue(UNIT_FIELD_BYTES_0, 1, fields[4].GetUInt8()); // class
+    SetByteValue(UNIT_FIELD_BYTES_0, 0, fields[3].GetUInt8());// race
+    SetByteValue(UNIT_FIELD_BYTES_0, 1, fields[4].GetUInt8());// class
 
-    uint8 gender = fields[5].GetUInt8() & 0x01;
-    SetByteValue(UNIT_FIELD_BYTES_0, 2, gender);            // gender
+    uint8 gender = fields[5].GetUInt8() & 0x01;             // allowed only 1 bit values male/female cases (for fit drunk gender part)
+    SetByteValue(UNIT_FIELD_BYTES_0, 2, gender);              // gender
 
     SetUInt32Value(UNIT_FIELD_LEVEL, fields[6].GetUInt8());
     SetUInt32Value(PLAYER_XP, fields[7].GetUInt32());
@@ -15512,8 +15513,11 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
         SetGuidValue(PLAYER_FIELD_INV_SLOT_HEAD + (slot * 2), ObjectGuid());
         SetVisibleItemSlot(slot, NULL);
 
-        delete m_items[slot];
-        m_items[slot] = NULL;
+        if (m_items[slot])
+        {
+            delete m_items[slot];
+            m_items[slot] = NULL;
+        }
     }
 
     DEBUG_FILTER_LOG(LOG_FILTER_PLAYER_STATS, "Load Basic value of player %s is: ", m_name.c_str());
@@ -15535,13 +15539,18 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
 
     // init saved position, and fix it later if problematic
     uint32 transGUID = fields[30].GetUInt32();
-    Relocate(fields[12].GetFloat(), fields[13].GetFloat(), fields[14].GetFloat(), fields[16].GetFloat());
-    SetLocationMapId(fields[15].GetUInt32());
+    // Relocate(fields[12].GetFloat(),fields[13].GetFloat(),fields[14].GetFloat(),fields[16].GetFloat());
+    // SetLocationMapId(fields[15].GetUInt32());
 
-    uint32 difficulty = fields[38].GetUInt32();
-    if (difficulty >= MAX_DUNGEON_DIFFICULTY || getLevel() < LEVELREQUIREMENT_HEROIC)
-        difficulty = DUNGEON_DIFFICULTY_NORMAL;
-    SetDungeonDifficulty(Difficulty(difficulty));           // may be changed in _LoadGroup
+    WorldLocation savedLocation = WorldLocation(fields[15].GetUInt32(), fields[12].GetFloat(), fields[13].GetFloat(), fields[14].GetFloat(), fields[16].GetFloat());
+
+    m_Difficulty = fields[38].GetUInt32();                  // may be changed in _LoadGroup
+
+    if (GetDungeonDifficulty() >= MAX_DUNGEON_DIFFICULTY)
+        SetDungeonDifficulty(DUNGEON_DIFFICULTY_NORMAL);
+
+    if (GetRaidDifficulty() >= MAX_RAID_DIFFICULTY)
+        SetRaidDifficulty(RAID_DIFFICULTY_10MAN_NORMAL);
 
     _LoadGroup(holder->GetResult(PLAYER_LOGIN_QUERY_LOADGROUP));
 
@@ -15556,7 +15565,7 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
         if (!arena_team_id)
             continue;
 
-        if (ArenaTeam* at = sObjectMgr.GetArenaTeamById(arena_team_id))
+        if (ArenaTeam * at = sObjectMgr.GetArenaTeamById(arena_team_id))
             if (at->HaveMember(GetObjectGuid()))
                 continue;
 
@@ -15575,11 +15584,22 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
 
     _LoadBoundInstances(holder->GetResult(PLAYER_LOGIN_QUERY_LOADBOUNDINSTANCES));
 
-    if (!IsPositionValid())
+    MapEntry const* mapEntry = sMapStore.LookupEntry(savedLocation.GetMapId());
+
+    if (!mapEntry || !MapManager::IsValidMapCoord(savedLocation) ||
+        // client without expansion support
+        GetSession()->Expansion() < mapEntry->Expansion())
     {
-        sLog.outError("%s have invalid coordinates (X: %f Y: %f Z: %f O: %f). Teleport to default race/class locations.",
-                      guid.GetString().c_str(), GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation());
+        sLog.outError("Player::LoadFromDB: %s have invalid coordinates (map: %u X: %f Y: %f Z: %f O: %f). Teleport to default race/class locations.",
+            guid.GetString().c_str(),
+            savedLocation.GetMapId(),
+            savedLocation.x,
+            savedLocation.y,
+            savedLocation.z,
+            savedLocation.orientation);
         RelocateToHomebind();
+
+        savedLocation = GetPosition();                          // reset saved position to homebind
 
         transGUID = 0;
 
@@ -15589,11 +15609,17 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
 
     _LoadBGData(holder->GetResult(PLAYER_LOGIN_QUERY_LOADBGDATA));
 
-    if (m_bgData.bgInstanceID)                              // saved in BattleGround
+    bool player_at_bg = false;
+
+    // player bounded instance saves loaded in _LoadBoundInstances, group versions at group loading
+    DungeonPersistentState* state = GetBoundInstanceSaveForSelfOrGroup(savedLocation.GetMapId());
+    //    Map* targetMap = sMapMgr.FindMap(savedLocation.GetMapId(), state ? state->GetInstanceId() : 0);
+
+    if (m_bgData.bgInstanceID)                              //saved in BattleGround
     {
         BattleGround* currentBg = sBattleGroundMgr.GetBattleGround(m_bgData.bgInstanceID, BATTLEGROUND_TYPE_NONE);
 
-        bool player_at_bg = currentBg && currentBg->IsPlayerInBattleGround(GetObjectGuid());
+        player_at_bg = currentBg && currentBg->IsPlayerInBattleGround(GetObjectGuid());
 
         if (player_at_bg && currentBg->GetStatus() != STATUS_WAIT_LEAVE)
         {
@@ -15607,12 +15633,17 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
             currentBg->AddOrSetPlayerToCorrectBgGroup(this, GetObjectGuid(), m_bgData.bgTeam);
 
             SetInviteForBattleGroundQueueType(bgQueueTypeId, currentBg->GetInstanceID());
+
+            SetLocationMapId(savedLocation.GetMapId());
+            Relocate(savedLocation);
         }
         else
         {
-            // leave bg
-            if (player_at_bg)
+            if (player_at_bg) // if player at bg and bg status is STATUS_WAIT_LEAVE
+            {
                 currentBg->RemovePlayerAtLeave(GetObjectGuid(), false, true);
+                player_at_bg = false;
+            }
 
             // move to bg enter point
             const WorldLocation& _loc = GetBattleGroundEntryPoint();
@@ -15622,12 +15653,12 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
             // We are not in BG anymore
             SetBattleGroundId(0, BATTLEGROUND_TYPE_NONE);
             // remove outdated DB data in DB
-            _SaveBGData();
+            _SaveBGData(true);
         }
     }
     else
     {
-        MapEntry const* mapEntry = sMapStore.LookupEntry(GetMapId());
+        mapEntry = sMapStore.LookupEntry(savedLocation.GetMapId());
         // if server restart after player save in BG or area
         // player can have current coordinates in to BG/Arena map, fix this
         if (mapEntry->IsBattleGroundOrArena())
@@ -15648,7 +15679,40 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
             // We are not in BG anymore
             SetBattleGroundId(0, BATTLEGROUND_TYPE_NONE);
             // remove outdated DB data in DB
-            _SaveBGData();
+            _SaveBGData(true);
+        }
+        // Cleanup LFG BG data, if char not in dungeon.
+        else if (!mapEntry->IsDungeon())
+        {
+            _SaveBGData(true);
+            // Saved location checked before
+            SetLocationMapId(savedLocation.GetMapId());
+            Relocate(savedLocation);
+        }
+        else if (mapEntry->IsDungeon())
+        {
+            AreaTrigger const* at = sObjectMgr.GetMapEntranceTrigger(savedLocation.GetMapId());
+
+            if (at)
+            {
+                if (state && time(NULL) - time_t(fields[22].GetUInt64()) < 30)
+                {
+                    SetLocationMapId(savedLocation.GetMapId());
+                    Relocate(savedLocation);
+                }
+                else
+                {
+                    SetLocationMapId(at->loc.GetMapId());
+                    Relocate(at->loc);
+                }
+            }
+            else
+            {
+                sLog.outError("Player::LoadFromDB %s logged in to a reset instance (map: %u, difficulty %u) and there is no area-trigger leading to this map. Thus he can't be ported back to the entrance. This _might_ be an exploit attempt.", GetObjectGuid().GetString().c_str(), savedLocation.GetMapId(), GetDifficulty());
+                transGUID = 0;
+                m_movementInfo.ClearTransportData();
+                RelocateToHomebind();
+            }
         }
     }
 
@@ -15700,20 +15764,13 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
         }
     }
 
-    // player bounded instance saves loaded in _LoadBoundInstances, group versions at group loading
-    DungeonPersistentState* state = GetBoundInstanceSaveForSelfOrGroup(GetMapId());
-
     // load the player's map here if it's not already loaded
-    SetMap(sMapMgr.CreateMap(GetMapId(), this));
-
-    // if the player is in an instance and it has been reset in the meantime teleport him to the entrance
-    if (GetInstanceId() && !state)
+    if (!GetMap())
     {
-        AreaTrigger const* at = sObjectMgr.GetMapEntranceTrigger(GetMapId());
-        if (at)
-            Relocate(at->target_X, at->target_Y, at->target_Z, at->target_Orientation);
+        if (Map* map = sMapMgr.CreateMap(GetMapId(), this))
+            SetMap(map);
         else
-            sLog.outError("Player %s(GUID: %u) logged in to a reset instance (map: %u) and there is no area-trigger leading to this map. Thus he can't be ported back to the entrance. This _might_ be an exploit attempt.", GetName(), GetGUIDLow(), GetMapId());
+            RelocateToHomebind();
     }
 
     SaveRecallPosition();
@@ -15745,7 +15802,7 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
     if (HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GM))
         SetUInt32Value(PLAYER_FLAGS, 0 | old_safe_flags);
 
-    m_taxi.LoadTaxiMask(fields[17].GetString());            // must be before InitTaxiNodesForLevel
+    m_taxi.LoadTaxiMask(fields[17].GetString());          // must be before InitTaxiNodesForLevel
 
     uint32 extraflags = fields[31].GetUInt32();
 
@@ -15756,16 +15813,14 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
         m_stableSlots = MAX_PET_STABLES;
     }
 
-    m_atLoginFlags = fields[33].GetUInt32();
-
     // Honor system
     // Update Honor kills data
     m_lastHonorUpdateTime = logoutTime;
     UpdateHonorFields();
 
     m_deathExpireTime = (time_t)fields[36].GetUInt64();
-    if (m_deathExpireTime > now + MAX_DEATH_COUNT * DEATH_EXPIRE_STEP)
-        m_deathExpireTime = now + MAX_DEATH_COUNT * DEATH_EXPIRE_STEP - 1;
+    if (m_deathExpireTime > now + MAX_DEATH_COUNT*DEATH_EXPIRE_STEP)
+        m_deathExpireTime = now + MAX_DEATH_COUNT*DEATH_EXPIRE_STEP - 1;
 
     std::string taxi_nodes = fields[37].GetCppString();
 
@@ -15807,7 +15862,17 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
     m_rest_bonus = fields[21].GetFloat();
 
     if (time_diff > 0)
-        SetRestBonus(GetRestBonus() + ComputeRest(time_diff, true, (fields[23].GetInt32() > 0)));
+    {
+        //speed collect rest bonus in offline, in logout, far from tavern, city (section/in hour)
+        float bubble0 = 0.031f;
+        //speed collect rest bonus in offline, in logout, in tavern, city (section/in hour)
+        float bubble1 = 0.125f;
+        float bubble = fields[23].GetUInt32() > 0
+            ? bubble1*sWorld.getConfig(CONFIG_FLOAT_RATE_REST_OFFLINE_IN_TAVERN_OR_CITY)
+            : bubble0*sWorld.getConfig(CONFIG_FLOAT_RATE_REST_OFFLINE_IN_WILDERNESS);
+
+        SetRestBonus(GetRestBonus() + time_diff*((float)GetUInt32Value(PLAYER_NEXT_LEVEL_XP) / 72000)*bubble);
+    }
 
     // load skills after InitStatsForLevel because it triggering aura apply also
     _LoadSkills(holder->GetResult(PLAYER_LOGIN_QUERY_LOADSKILLS));
@@ -15820,7 +15885,7 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
     UpdateNextMailTimeAndUnreads();
 
     m_specsCount = fields[58].GetUInt8();
-    m_activeSpec = fields[59].GetUInt8();
+    m_activeSpec = fields[59].GetUInt8();    
 
     _LoadGlyphs(holder->GetResult(PLAYER_LOGIN_QUERY_LOADGLYPHS));
 
@@ -15838,6 +15903,7 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
     _LoadDailyQuestStatus(holder->GetResult(PLAYER_LOGIN_QUERY_LOADDAILYQUESTSTATUS));
     _LoadWeeklyQuestStatus(holder->GetResult(PLAYER_LOGIN_QUERY_LOADWEEKLYQUESTSTATUS));
     _LoadMonthlyQuestStatus(holder->GetResult(PLAYER_LOGIN_QUERY_LOADMONTHLYQUESTSTATUS));
+
     _LoadRandomBGStatus(holder->GetResult(PLAYER_LOGIN_QUERY_LOADRANDOMBG));
 
     _LoadTalents(holder->GetResult(PLAYER_LOGIN_QUERY_LOADTALENTS));
@@ -15871,8 +15937,11 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
     if (m_bgData.HasTaxiPath())
     {
         m_taxi.ClearTaxiDestinations();
-        for (int i = 0; i < 2; ++i)
-            m_taxi.AddTaxiDestination(m_bgData.taxiPath[i]);
+        if (!player_at_bg)
+        {
+            for (int i = 0; i < 2; ++i)
+                m_taxi.AddTaxiDestination(m_bgData.taxiPath[i]);
+        }
     }
     else if (!m_taxi.LoadTaxiDestinationsFromString(taxi_nodes, GetTeam()))
     {
@@ -15889,13 +15958,16 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
         else                                                // have start node, to it
         {
             sLog.outError("Character %u have too short taxi destination list, teleport to original node.", GetGUIDLow());
-            SetLocationMapId(nodeEntry->map_id);
-            Relocate(nodeEntry->x, nodeEntry->y, nodeEntry->z, 0.0f);
+            Relocate(WorldLocation(nodeEntry->map_id, nodeEntry->x, nodeEntry->y, nodeEntry->z, 0.0f, GetPhaseMask()));
         }
 
-        // we can be relocated from taxi and still have an outdated Map pointer!
-        // so we need to get a new Map pointer!
-        SetMap(sMapMgr.CreateMap(GetMapId(), this));
+        //we can be relocated from taxi and still have an outdated Map pointer!
+        //so we need to get a new Map pointer!
+        if (Map* map = sMapMgr.CreateMap(GetMapId(), this))
+            SetMap(map);
+        else
+            RelocateToHomebind();
+
         SaveRecallPosition();                           // save as recall also to prevent recall and fall from sky
 
         m_taxi.ClearTaxiDestinations();
@@ -15907,7 +15979,6 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
         TaxiNodesEntry const* nodeEntry = sTaxiNodesStore.LookupEntry(node_id);
         MANGOS_ASSERT(nodeEntry);                           // checked in m_taxi.LoadTaxiDestinationsFromString
         m_recall = WorldLocation(nodeEntry->map_id, nodeEntry->x, nodeEntry->y, nodeEntry->z);
-
         // flight will started later
     }
 
@@ -15921,7 +15992,7 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
     if (!isAlive())
         RemoveAllAurasOnDeath();
 
-    // apply all stat bonuses from items and auras
+    //apply all stat bonuses from items and auras
     SetCanModifyStats(true);
     UpdateAllStats();
 
@@ -15945,57 +16016,57 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
     {
         switch (sWorld.getConfig(CONFIG_UINT32_GM_LOGIN_STATE))
         {
-            default:
-            case 0:                      break;             // disable
-            case 1: SetGameMaster(true); break;             // enable
-            case 2:                                         // save state
-                if (extraflags & PLAYER_EXTRA_GM_ON)
-                    SetGameMaster(true);
-                break;
+        default:
+        case 0:                      break;             // disable
+        case 1: SetGameMaster(true); break;             // enable
+        case 2:                                         // save state
+            if (extraflags & PLAYER_EXTRA_GM_ON)
+                SetGameMaster(true);
+            break;
         }
 
         switch (sWorld.getConfig(CONFIG_UINT32_GM_VISIBLE_STATE))
         {
-            default:
-            case 0: SetGMVisible(false); break;             // invisible
-            case 1:                      break;             // visible
-            case 2:                                         // save state
-                if (extraflags & PLAYER_EXTRA_GM_INVISIBLE)
-                    SetGMVisible(false);
-                break;
+        default:
+        case 0: SetGMVisible(false); break;             // invisible
+        case 1:                      break;             // visible
+        case 2:                                         // save state
+            if (extraflags & PLAYER_EXTRA_GM_INVISIBLE)
+                SetGMVisible(false);
+            break;
         }
 
         switch (sWorld.getConfig(CONFIG_UINT32_GM_ACCEPT_TICKETS))
         {
-            default:
-            case 0:                        break;           // disable
-            case 1: SetAcceptTicket(true); break;           // enable
-            case 2:                                         // save state
-                if (extraflags & PLAYER_EXTRA_GM_ACCEPT_TICKETS)
-                    SetAcceptTicket(true);
-                break;
+        default:
+        case 0:                        break;           // disable
+        case 1: SetAcceptTicket(true); break;           // enable
+        case 2:                                         // save state
+            if (extraflags & PLAYER_EXTRA_GM_ACCEPT_TICKETS)
+                SetAcceptTicket(true);
+            break;
         }
 
         switch (sWorld.getConfig(CONFIG_UINT32_GM_CHAT))
         {
-            default:
-            case 0:                  break;                 // disable
-            case 1: SetGMChat(true); break;                 // enable
-            case 2:                                         // save state
-                if (extraflags & PLAYER_EXTRA_GM_CHAT)
-                    SetGMChat(true);
-                break;
+        default:
+        case 0:                  break;                 // disable
+        case 1: SetGMChat(true); break;                 // enable
+        case 2:                                         // save state
+            if (extraflags & PLAYER_EXTRA_GM_CHAT)
+                SetGMChat(true);
+            break;
         }
 
         switch (sWorld.getConfig(CONFIG_UINT32_GM_WISPERING_TO))
         {
-            default:
-            case 0:                          break;         // disable
-            case 1: SetAcceptWhispers(true); break;         // enable
-            case 2:                                         // save state
-                if (extraflags & PLAYER_EXTRA_ACCEPT_WHISPERS)
-                    SetAcceptWhispers(true);
-                break;
+        default:
+        case 0:                          break;         // disable
+        case 1: SetAcceptWhispers(true); break;         // enable
+        case 2:                                         // save state
+            if (extraflags & PLAYER_EXTRA_ACCEPT_WHISPERS)
+                SetAcceptWhispers(true);
+            break;
         }
     }
 
@@ -16906,59 +16977,70 @@ void Player::_LoadBoundInstances(QueryResult* result)
 
     Group* group = GetGroup();
 
-    // QueryResult *result = CharacterDatabase.PQuery("SELECT id, permanent, map, difficulty, resettime FROM character_instance LEFT JOIN instance ON instance = id WHERE guid = '%u'", GUID_LOPART(m_guid));
+    //QueryResult *result = CharacterDatabase.PQuery("SELECT id, permanent, map, difficulty, extend, resettime FROM character_instance LEFT JOIN instance ON instance = id WHERE guid = '%u'", GUID_LOPART(m_guid));
     if (result)
     {
         do
         {
             Field* fields = result->Fetch();
+            uint32 instanceId = fields[0].GetUInt32();
             bool perm = fields[1].GetBool();
             uint32 mapId = fields[2].GetUInt32();
-            uint32 instanceId = fields[0].GetUInt32();
             uint8 difficulty = fields[3].GetUInt8();
-
-            time_t resetTime = (time_t)fields[4].GetUInt64();
+            bool extend = fields[4].GetBool();
+            time_t resetTime = (time_t)fields[5].GetUInt64();
             // the resettime for normal instances is only saved when the InstanceSave is unloaded
             // so the value read from the DB may be wrong here but only if the InstanceSave is loaded
             // and in that case it is not used
 
+            bool checkFailed = false;
+
             MapEntry const* mapEntry = sMapStore.LookupEntry(mapId);
             if (!mapEntry || !mapEntry->IsDungeon())
             {
-                sLog.outError("_LoadBoundInstances: player %s(%d) has bind to nonexistent or not dungeon map %d", GetName(), GetGUIDLow(), mapId);
-                CharacterDatabase.PExecute("DELETE FROM character_instance WHERE guid = '%u' AND instance = '%u'", GetGUIDLow(), instanceId);
-                continue;
+                sLog.outError("Player::_LoadBoundInstances: %s has bind to nonexistent or not dungeon map %d", GetGuidStr().c_str(), mapId);
+                checkFailed = true;
             }
 
-            if (difficulty >= MAX_DIFFICULTY)
+            if (!checkFailed && difficulty >= MAX_DIFFICULTY)
             {
-                sLog.outError("_LoadBoundInstances: player %s(%d) has bind to nonexistent difficulty %d instance for map %u", GetName(), GetGUIDLow(), difficulty, mapId);
-                CharacterDatabase.PExecute("DELETE FROM character_instance WHERE guid = '%u' AND instance = '%u'", GetGUIDLow(), instanceId);
-                continue;
+                sLog.outError("Player::_LoadBoundInstances: %s has bind to nonexistent difficulty %d instance for map %u", GetGuidStr().c_str(), difficulty, mapId);
+                checkFailed = true;
             }
 
-            MapDifficultyEntry const* mapDiff = GetMapDifficultyData(mapId, Difficulty(difficulty));
-            if (!mapDiff)
+            if (!checkFailed)
             {
-                sLog.outError("_LoadBoundInstances: player %s(%d) has bind to nonexistent difficulty %d instance for map %u", GetName(), GetGUIDLow(), difficulty, mapId);
-                CharacterDatabase.PExecute("DELETE FROM character_instance WHERE guid = '%u' AND instance = '%u'", GetGUIDLow(), instanceId);
-                continue;
+                MapDifficultyEntry const* mapDiff = GetMapDifficultyData(mapId, Difficulty(difficulty));
+                if (!mapDiff)
+                {
+                    sLog.outError("Player::_LoadBoundInstances: %s has bind to nonexistent difficulty %d instance for map %u", GetGuidStr().c_str(), difficulty, mapId);
+                    checkFailed = true;
+                }
             }
 
-            if (!perm && group)
+            if (!checkFailed && !perm && group)
             {
-                sLog.outError("_LoadBoundInstances: %s is in group (Id: %d) but has a non-permanent character bind to map %d,%d,%d",
-                              GetGuidStr().c_str(), group->GetId(), mapId, instanceId, difficulty);
-                CharacterDatabase.PExecute("DELETE FROM character_instance WHERE guid = '%u' AND instance = '%u'",
-                                           GetGUIDLow(), instanceId);
+                if (GetSession()->GetRemoteAddress() != "bot")
+                {
+                    sLog.outError("Player::_LoadBoundInstances: %s is in group (Id: %d) but has a non-permanent character bind to map %d, %d, %d",
+                        GetGuidStr().c_str(), group->GetId(), mapId, instanceId, difficulty);
+                }
+                checkFailed = true;
+            }
+
+            if (checkFailed)
+            {
+                static SqlStatementID delFromInst;
+                CharacterDatabase.CreateStatement(delFromInst, "DELETE FROM character_instance WHERE guid = ? AND instance = ?")
+                    .PExecute(GetGUIDLow(), instanceId);
                 continue;
             }
 
             // since non permanent binds are always solo bind, they can always be reset
-            DungeonPersistentState* state = (DungeonPersistentState*)sMapPersistentStateMgr.AddPersistentState(mapEntry, instanceId, Difficulty(difficulty), resetTime, !perm, true);
-            if (state) BindToInstance(state, perm, true);
-        }
-        while (result->NextRow());
+            DungeonPersistentState *state = (DungeonPersistentState*)sMapPersistentStateMgr.AddPersistentState(mapEntry, instanceId, Difficulty(difficulty), resetTime, !perm, true);
+            if (state)
+                BindToInstance(state, perm, true, extend);
+        } while (result->NextRow());
         delete result;
     }
 }
@@ -16983,43 +17065,61 @@ void Player::UnbindInstance(uint32 mapid, Difficulty difficulty, bool unload)
     UnbindInstance(itr, difficulty, unload);
 }
 
-void Player::UnbindInstance(BoundInstancesMap::iterator &itr, Difficulty difficulty, bool unload)
+void Player::UnbindInstance(BoundInstancesMap::iterator& itr, Difficulty difficulty, bool unload)
 {
     if (itr != m_boundInstances[difficulty].end())
     {
         if (!unload)
-            CharacterDatabase.PExecute("DELETE FROM character_instance WHERE guid = '%u' AND instance = '%u' AND extend = 0",
-            GetGUIDLow(), itr->second.state->GetInstanceId());
-        itr->second.state->RemovePlayer(this);              // state can become invalid
+        {
+            static SqlStatementID delFromInst;
+            CharacterDatabase.CreateStatement(delFromInst, "DELETE FROM character_instance WHERE guid = ? AND instance = ? AND extend = 0")
+                .PExecute(GetGUIDLow(), itr->second.state->GetInstanceId());
+        }
+
+        sCalendarMgr.SendCalendarRaidLockoutRemove(GetObjectGuid(), itr->second.state);
+
+        itr->second.state->RemoveFromBindList(GetObjectGuid());  // state can become invalid
         m_boundInstances[difficulty].erase(itr++);
     }
 }
 
-InstancePlayerBind* Player::BindToInstance(DungeonPersistentState *state, bool permanent, bool load, bool extend)
+InstancePlayerBind* Player::BindToInstance(DungeonPersistentState* state, bool permanent, bool load, bool extend)
 {
     if (state)
     {
         InstancePlayerBind& bind = m_boundInstances[state->GetDifficulty()][state->GetMapId()];
-        if (bind.state)
+
+        if (!load)
         {
-            // update the state when the group kills a boss
-            if (permanent != bind.perm || state != bind.state || extend != bind.extend)
-                if (!load)
-                    CharacterDatabase.PExecute("UPDATE character_instance SET instance = '%u', permanent = '%u', extend ='%u' WHERE guid = '%u' AND instance = '%u'",
-                    state->GetInstanceId(), permanent, extend, GetGUIDLow(), bind.state->GetInstanceId());
-        }
-        else
-        {
-            if (!load)
-                CharacterDatabase.PExecute("INSERT INTO character_instance (guid, instance, permanent, extend) VALUES ('%u', '%u', '%u', '%u')",
-                GetGUIDLow(), state->GetInstanceId(), permanent, extend);
+            if (bind.state)
+            {
+                // update the state when the group kills a boss
+                if (permanent != bind.perm || state != bind.state || extend != bind.extend)
+                {
+                    static SqlStatementID updInst;
+                    SqlStatement stmt = CharacterDatabase.CreateStatement(updInst, "UPDATE character_instance SET instance = ?, permanent = ?, extend = ? WHERE guid = ? AND instance = ?");
+                    stmt.addUInt32(state->GetInstanceId());
+                    stmt.addBool(permanent);
+                    stmt.addBool(extend);
+                    stmt.addUInt32(GetGUIDLow());
+                    stmt.addUInt32(bind.state->GetInstanceId());
+                    stmt.Execute();
+                }
+            }
+            else
+            {
+                static SqlStatementID insInst;
+                CharacterDatabase.CreateStatement(insInst, "INSERT INTO character_instance (guid, instance, permanent, extend) VALUES (?, ?, ?, ?)")
+                    .PExecute(GetGUIDLow(), state->GetInstanceId(), permanent, extend);
+            }
         }
 
         if (bind.state != state)
         {
             if (bind.state)
-                bind.state->RemovePlayer(this);
-            state->AddPlayer(this);
+                bind.state->RemoveFromBindList(GetObjectGuid());
+
+            state->AddToBindList(GetObjectGuid());
         }
 
         if (permanent)
@@ -17030,8 +17130,8 @@ InstancePlayerBind* Player::BindToInstance(DungeonPersistentState *state, bool p
         bind.extend = extend;
 
         if (!load)
-            DEBUG_LOG("Player::BindToInstance: %s(%d) is now bound to map %d, instance %d, difficulty %d",
-            GetName(), GetGUIDLow(), state->GetMapId(), state->GetInstanceId(), state->GetDifficulty());
+            DEBUG_LOG("Player::BindToInstance: %s is now bound to map %d, instance %d, difficulty %d", GetGuidStr().c_str(), state->GetMapId(), state->GetInstanceId(), state->GetDifficulty());
+
         return &bind;
     }
     else
@@ -17051,10 +17151,9 @@ DungeonPersistentState* Player::GetBoundInstanceSaveForSelfOrGroup(uint32 mapid)
     // then the player's group bind and finally the solo bind.
     if (!pBind || !pBind->perm)
     {
-        InstanceGroupBind *groupBind = NULL;
         // use the player's difficulty setting (it may not be the same as the group's)
         if (Group *group = GetGroup())
-            if (groupBind = group->GetBoundInstance(mapid, this))
+            if (InstanceGroupBind* groupBind = group->GetBoundInstance(mapid, this))
                 state = groupBind->state;
     }
 
@@ -17067,6 +17166,7 @@ void Player::BindToInstance()
     data << uint32(0);
     GetSession()->SendPacket(&data);
     BindToInstance(_pendingBind, true);
+    sCalendarMgr.SendCalendarRaidLockoutAdd(GetObjectGuid(), _pendingBind);
 }
 
 void Player::SendRaidInfo()
@@ -17089,11 +17189,11 @@ void Player::SendRaidInfo()
                 DungeonPersistentState* state = itr->second.state;
                 data << uint32(state->GetMapId());              // map id
                 data << uint32(state->GetDifficulty());         // difficulty
-                data << ObjectGuid(state->GetInstanceGuid());   // instance guid
-                data << uint8((state->GetResetTime() > now) ? 1 : 0);   // expired = 0
+                data << state->GetInstanceGuid();               // instance guid
+                data << uint8((state->GetRealResetTime() > now) ? 1 : 0);   // expired = 0
                 data << uint8(itr->second.extend ? 1 : 0);      // extended = 1
-                data << uint32(state->GetResetTime() > now ? state->GetResetTime() - now
-                    : DungeonResetScheduler::CalculateNextResetTime(GetMapDifficultyData(state->GetMapId(), state->GetDifficulty()), now));    // reset time
+                data << uint32(state->GetRealResetTime() > now ? state->GetRealResetTime() - now
+                    : DungeonResetScheduler::CalculateNextResetTime(GetMapDifficultyData(state->GetMapId(), state->GetDifficulty())));    // reset time
                 ++counter;
             }
         }
@@ -17108,13 +17208,11 @@ void Player::SendRaidInfo()
 void Player::SendSavedInstances()
 {
     bool hasBeenSaved = false;
-    WorldPacket data;
-
     for (uint8 i = 0; i < MAX_DIFFICULTY; ++i)
     {
         for (BoundInstancesMap::const_iterator itr = m_boundInstances[i].begin(); itr != m_boundInstances[i].end(); ++itr)
         {
-            if (itr->second.perm)                           // only permanent binds are sent
+            if (itr->second.perm)                                // only permanent binds are sent
             {
                 hasBeenSaved = true;
                 break;
@@ -17123,7 +17221,7 @@ void Player::SendSavedInstances()
     }
 
     // Send opcode 811. true or false means, whether you have current raid/heroic instances
-    data.Initialize(SMSG_UPDATE_INSTANCE_OWNERSHIP);
+    WorldPacket data(SMSG_UPDATE_INSTANCE_OWNERSHIP, 4);
     data << uint32(hasBeenSaved);
     GetSession()->SendPacket(&data);
 
@@ -17136,7 +17234,7 @@ void Player::SendSavedInstances()
         {
             if (itr->second.perm)
             {
-                data.Initialize(SMSG_UPDATE_LAST_INSTANCE);
+                data.Initialize(SMSG_UPDATE_LAST_INSTANCE, 4);
                 data << uint32(itr->second.state->GetMapId());
                 GetSession()->SendPacket(&data);
             }
@@ -17190,11 +17288,19 @@ void Player::ConvertInstancesToGroup(Player* player, Group* group, ObjectGuid pl
 
     // if the player's not online we don't know what binds it has
     if (!player || !group || has_binds)
-        CharacterDatabase.PExecute("INSERT INTO group_instance SELECT guid, instance, permanent FROM character_instance WHERE guid = '%u'", player_lowguid);
+    {
+        static SqlStatementID repData;
+        CharacterDatabase.CreateStatement(repData, "REPLACE INTO group_instance SELECT guid, instance, permanent FROM character_instance WHERE guid = ?")
+            .PExecute(player_lowguid);
+    }
 
     // the following should not get executed when changing leaders
     if (!player || has_solo)
-        CharacterDatabase.PExecute("DELETE FROM character_instance WHERE guid = '%u' AND permanent = 0", player_lowguid);
+    {
+        static SqlStatementID delData;
+        CharacterDatabase.CreateStatement(delData, "DELETE FROM character_instance WHERE guid = ? AND permanent = 0 AND extend = 0")
+            .PExecute(player_lowguid);
+    }
 }
 
 bool Player::_LoadHomeBind(QueryResult* result)
@@ -18275,8 +18381,8 @@ void Player::ResetInstances(InstanceResetMethod method, bool isRaid)
 
     for (BoundInstancesMap::iterator itr = m_boundInstances[diff].begin(); itr != m_boundInstances[diff].end();)
     {
-        DungeonPersistentState* state = itr->second.state;
-        const MapEntry* entry = sMapStore.LookupEntry(itr->first);
+        DungeonPersistentState *state = itr->second.state;
+        const MapEntry *entry = sMapStore.LookupEntry(itr->first);
         if (!entry || entry->IsRaid() != isRaid || !state->CanReset())
         {
             ++itr;
@@ -18306,7 +18412,7 @@ void Player::ResetInstances(InstanceResetMethod method, bool isRaid)
         m_boundInstances[diff].erase(itr++);
 
         // the following should remove the instance save from the manager and delete it as well
-        state->RemovePlayer(this);
+        state->RemoveFromBindList(GetObjectGuid());
     }
 }
 
@@ -22996,22 +23102,23 @@ void Player::_SaveEquipmentSets()
     }
 }
 
-void Player::_SaveBGData()
+void Player::_SaveBGData(bool forceClean)
 {
+    if (forceClean)
+        m_bgData = BGData();
     // nothing save
-    if (!m_bgData.m_needSave)
+    else if (!m_bgData.m_needSave)
         return;
 
-    static SqlStatementID delBGData ;
-    static SqlStatementID insBGData ;
-
-    SqlStatement stmt =  CharacterDatabase.CreateStatement(delBGData, "DELETE FROM character_battleground_data WHERE guid = ?");
-
-    stmt.PExecute(GetGUIDLow());
+    static SqlStatementID delBGData;
+    CharacterDatabase.CreateStatement(delBGData, "DELETE FROM character_battleground_data WHERE guid = ?")
+        .PExecute(GetGUIDLow());
 
     if (m_bgData.bgInstanceID || m_bgData.forLFG)
     {
-        stmt = CharacterDatabase.CreateStatement(insBGData, "INSERT INTO character_battleground_data VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        static SqlStatementID insBGData;
+        SqlStatement stmt = CharacterDatabase.CreateStatement(insBGData, "INSERT INTO character_battleground_data VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
         /* guid, bgInstanceID, bgTeam, x, y, z, o, map, taxi[0], taxi[1], mountSpell */
         stmt.addUInt32(GetGUIDLow());
         stmt.addUInt32(m_bgData.bgInstanceID);
@@ -23381,6 +23488,28 @@ void Player::SetRestType(RestType n_r_type, uint32 areaTriggerId /*= 0*/)
     }
 }
 
+void Player::SetRandomBGWinner(bool winner)
+{
+    m_isRandomBGWinner = winner;
+
+    if (m_isRandomBGWinner)
+    {
+        static SqlStatementID insGuid;
+        CharacterDatabase.CreateStatement(insGuid, "INSERT INTO character_battleground_random (guid) VALUES (?)")
+            .PExecute(GetGUIDLow());
+    }
+}
+
+void Player::_LoadRandomBGStatus(QueryResult* result)
+{
+    // QueryResult* result = CharacterDatabase.PQuery("SELECT guid FROM character_battleground_random WHERE guid = '%u'", GetGUIDLow());
+    if (result)
+    {
+        m_isRandomBGWinner = true;
+        delete result;
+    }
+}
+
 uint32 Player::GetEquipGearScore(bool withBags, bool withBank)
 {
     if (withBags && withBank && m_cachedGS > 0)
@@ -23571,11 +23700,11 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, Difficult
     if (!at)
         return AREA_LOCKSTATUS_UNKNOWN_ERROR;
 
-    MapEntry const* mapEntry = sMapStore.LookupEntry(at->target_mapId);
+    MapEntry const* mapEntry = sMapStore.LookupEntry(at->loc.GetMapId());
     if (!mapEntry)
         return AREA_LOCKSTATUS_UNKNOWN_ERROR;
 
-    MapDifficultyEntry const* mapDiff = GetMapDifficultyData(at->target_mapId, difficulty);
+    MapDifficultyEntry const* mapDiff = GetMapDifficultyData(at->loc.GetMapId(), difficulty);
     if (mapEntry->IsDungeon() && !mapDiff)
         return AREA_LOCKSTATUS_MISSING_DIFFICULTY;
 
@@ -23608,8 +23737,8 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, Difficult
         return AREA_LOCKSTATUS_QUEST_NOT_COMPLETED;
 
     // If the map is not created, assume it is possible to enter it.
-    DungeonPersistentState* state = GetBoundInstanceSaveForSelfOrGroup(at->target_mapId);
-    Map* map = sMapMgr.FindMap(at->target_mapId, state ? state->GetInstanceId() : 0);
+    DungeonPersistentState* state = GetBoundInstanceSaveForSelfOrGroup(at->loc.GetMapId());
+    Map* map = sMapMgr.FindMap(at->loc.GetMapId(), state ? state->GetInstanceId() : 0);
 
     if (map && at->combatMode == 1)
     {
@@ -23625,7 +23754,7 @@ AreaLockStatus Player::GetAreaTriggerLockStatus(AreaTrigger const* at, Difficult
         if (((DungeonMap*)map)->isFull())
             return AREA_LOCKSTATUS_INSTANCE_IS_FULL;
 
-        InstancePlayerBind* pBind = GetBoundInstance(at->target_mapId, GetDifficulty(mapEntry->IsRaid()));
+        InstancePlayerBind* pBind = GetBoundInstance(at->loc.GetMapId(), GetDifficulty(mapEntry->IsRaid()));
         if (pBind && pBind->perm && pBind->state != state)
             return AREA_LOCKSTATUS_HAS_BIND;
 
@@ -23687,10 +23816,10 @@ bool Player::CheckTransferPossibility(AreaTrigger const*& at, bool b_onlyMainReq
     if (!at)
         return false;
 
-    if (at->target_mapId == GetMapId())
+    if (at->loc.GetMapId() == GetMapId())
         return true;
 
-    MapEntry const* targetMapEntry = sMapStore.LookupEntry(at->target_mapId);
+    MapEntry const* targetMapEntry = sMapStore.LookupEntry(at->loc.GetMapId());
 
     if (!targetMapEntry)
         return false;
@@ -23725,11 +23854,11 @@ bool Player::CheckTransferPossibility(AreaTrigger const*& at, bool b_onlyMainReq
             }
 
             // need find areatrigger to inner dungeon for landing point
-            if (at->target_mapId != corpseMapId)
+            if (at->loc.GetMapId() != corpseMapId)
             {
                 if (AreaTrigger const* corpseAt = sObjectMgr.GetMapEntranceTrigger(corpseMapId))
                 {
-                    targetMapEntry = sMapStore.LookupEntry(corpseAt->target_mapId);
+                    targetMapEntry = sMapStore.LookupEntry(corpseAt->loc.GetMapId());
                     at = corpseAt;
                 }
             }
@@ -23742,7 +23871,7 @@ bool Player::CheckTransferPossibility(AreaTrigger const*& at, bool b_onlyMainReq
 
     AreaLockStatus status = GetAreaTriggerLockStatus(at, GetDifficulty(targetMapEntry->IsRaid()));
 
-    DEBUG_LOG("Player::CheckTransferPossibility %s check lock status of map %u (difficulty %u), result is %u", GetGuidStr().c_str(), at->target_mapId, GetDifficulty(targetMapEntry->IsRaid()), status);
+    DEBUG_LOG("Player::CheckTransferPossibility %s check lock status of map %u (difficulty %u), result is %u", GetGuidStr().c_str(), at->loc.GetMapId(), GetDifficulty(targetMapEntry->IsRaid()), status);
 
     if (b_onlyMainReq)
     {
@@ -23767,13 +23896,13 @@ bool Player::CheckTransferPossibility(AreaTrigger const*& at, bool b_onlyMainReq
         GetSession()->SendAreaTriggerMessage(GetSession()->GetMangosString(LANG_LEVEL_MINREQUIRED), at->requiredLevel);
         return false;
     case AREA_LOCKSTATUS_ZONE_IN_COMBAT:
-        SendTransferAborted(at->target_mapId, TRANSFER_ABORT_ZONE_IN_COMBAT);
+        SendTransferAborted(at->loc.GetMapId(), TRANSFER_ABORT_ZONE_IN_COMBAT);
         return false;
     case AREA_LOCKSTATUS_INSTANCE_IS_FULL:
-        SendTransferAborted(at->target_mapId, TRANSFER_ABORT_MAX_PLAYERS);
+        SendTransferAborted(at->loc.GetMapId(), TRANSFER_ABORT_MAX_PLAYERS);
         return false;
     case AREA_LOCKSTATUS_QUEST_NOT_COMPLETED:
-        if (at->target_mapId == 269)
+        if (at->loc.GetMapId() == 269)
         {
             GetSession()->SendAreaTriggerMessage(GetSession()->GetMangosString(LANG_TELEREQ_QUEST_BLACK_MORASS));
             return false;
@@ -23793,25 +23922,25 @@ bool Player::CheckTransferPossibility(AreaTrigger const*& at, bool b_onlyMainReq
     case AREA_LOCKSTATUS_MISSING_DIFFICULTY:
     {
         Difficulty difficulty = GetDifficulty(targetMapEntry->IsRaid());
-        SendTransferAborted(at->target_mapId, TRANSFER_ABORT_DIFFICULTY, difficulty > RAID_DIFFICULTY_10MAN_HEROIC ? RAID_DIFFICULTY_10MAN_HEROIC : difficulty);
+        SendTransferAborted(at->loc.GetMapId(), TRANSFER_ABORT_DIFFICULTY, difficulty > RAID_DIFFICULTY_10MAN_HEROIC ? RAID_DIFFICULTY_10MAN_HEROIC : difficulty);
         return false;
     }
     case AREA_LOCKSTATUS_INSUFFICIENT_EXPANSION:
-        SendTransferAborted(at->target_mapId, TRANSFER_ABORT_INSUF_EXPAN_LVL, targetMapEntry->Expansion());
+        SendTransferAborted(at->loc.GetMapId(), TRANSFER_ABORT_INSUF_EXPAN_LVL, targetMapEntry->Expansion());
         return false;
     case AREA_LOCKSTATUS_NOT_ALLOWED:
     case AREA_LOCKSTATUS_HAS_BIND:
-        SendTransferAborted(at->target_mapId, TRANSFER_ABORT_MAP_NOT_ALLOWED);
+        SendTransferAborted(at->loc.GetMapId(), TRANSFER_ABORT_MAP_NOT_ALLOWED);
         return false;
         // TODO: messages for other cases
     case AREA_LOCKSTATUS_RAID_LOCKED:
-        SendTransferAborted(at->target_mapId, TRANSFER_ABORT_NEED_GROUP);
+        SendTransferAborted(at->loc.GetMapId(), TRANSFER_ABORT_NEED_GROUP);
         return false;
         // TODO: messages for other cases
     case AREA_LOCKSTATUS_UNKNOWN_ERROR:
     default:
-        SendTransferAborted(at->target_mapId, TRANSFER_ABORT_ERROR);
-        sLog.outError("Player::CheckTransferPossibility player %s has unhandled AreaLockStatus %u in map %u (difficulty %u), do nothing", GetGuidStr().c_str(), status, at->target_mapId, GetDifficulty(targetMapEntry->IsRaid()));
+        SendTransferAborted(at->loc.GetMapId(), TRANSFER_ABORT_ERROR);
+        sLog.outError("Player::CheckTransferPossibility player %s has unhandled AreaLockStatus %u in map %u (difficulty %u), do nothing", GetGuidStr().c_str(), status, at->loc.GetMapId(), GetDifficulty(targetMapEntry->IsRaid()));
         return false;
     }
 
@@ -23955,22 +24084,6 @@ float Player::GetCollisionHeight(bool mounted) const
         }
 
         return modelData->CollisionHeight;
-    }
-}
-
-void Player::SetRandomWinner(bool isWinner)
-{
-    m_IsBGRandomWinner = isWinner;
-    if (m_IsBGRandomWinner)
-        CharacterDatabase.PExecute("INSERT INTO character_battleground_random (guid) VALUES ('%u')", GetGUIDLow());
-}
-
-void Player::_LoadRandomBGStatus(QueryResult *result)
-{
-    if (result)
-    {
-        m_IsBGRandomWinner = true;
-        delete result;
     }
 }
 

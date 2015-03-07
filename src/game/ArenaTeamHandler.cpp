@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,7 +49,7 @@ void WorldSession::HandleInspectArenaTeamsOpcode(WorldPacket& recv_data)
 
 void WorldSession::HandleArenaTeamQueryOpcode(WorldPacket& recv_data)
 {
-    DEBUG_LOG("WORLD: Received opcode CMSG_ARENA_TEAM_QUERY");
+    DEBUG_LOG("WORLD: Received CMSG_ARENA_TEAM_QUERY");
 
     uint32 ArenaTeamId;
     recv_data >> ArenaTeamId;
@@ -63,7 +63,7 @@ void WorldSession::HandleArenaTeamQueryOpcode(WorldPacket& recv_data)
 
 void WorldSession::HandleArenaTeamRosterOpcode(WorldPacket& recv_data)
 {
-    DEBUG_LOG("WORLD: Received opcode CMSG_ARENA_TEAM_ROSTER");
+    DEBUG_LOG("WORLD: Received CMSG_ARENA_TEAM_ROSTER");
 
     uint32 ArenaTeamId;                                     // arena team id
     recv_data >> ArenaTeamId;
@@ -110,6 +110,12 @@ void WorldSession::HandleArenaTeamInviteOpcode(WorldPacket& recv_data)
         return;
     }
 
+    if (GetPlayer()->GetArenaTeamId(arenateam->GetSlot()) != ArenaTeamId)
+    {
+        SendArenaTeamCommandResult(ERR_ARENA_TEAM_CREATE_S, "", "", ERR_ARENA_TEAM_PERMISSIONS);
+        return;
+    }
+
     // OK result but not send invite
     if (player->GetSocial()->HasIgnore(GetPlayer()->GetObjectGuid()))
         return;
@@ -142,7 +148,7 @@ void WorldSession::HandleArenaTeamInviteOpcode(WorldPacket& recv_data)
 
     player->SetArenaTeamIdInvited(arenateam->GetId());
 
-    WorldPacket data(SMSG_ARENA_TEAM_INVITE, (8 + 10));
+    WorldPacket data(SMSG_ARENA_TEAM_INVITE, 8 + 10);
     data << GetPlayer()->GetName();
     data << arenateam->GetName();
     player->GetSession()->SendPacket(&data);
@@ -216,6 +222,10 @@ void WorldSession::HandleArenaTeamLeaveOpcode(WorldPacket& recv_data)
         delete at;
         return;
     }
+
+    // Player cannot be removed during fights
+    if (at->IsFighting())
+        return;
 
     at->DelMember(_player->GetObjectGuid());
 

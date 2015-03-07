@@ -26,6 +26,7 @@
 #include "ObjectGuid.h"
 #include "Camera.h"
 #include "WorldLocation.h"
+#include "WorldObjectEvents.h"
 
 #include <set>
 #include <string>
@@ -656,10 +657,10 @@ class MANGOS_DLL_SPEC WorldObject : public Object
         // low level function for visibility change code, must be define in all main world object subclasses
         virtual bool isVisibleForInState(Player const* u, WorldObject const* viewPoint, bool inVisibleList) const = 0;
 
-        void SetMap(Map* map);
-        Map * GetMap() const { return m_currMap; }
-        // used to check all object's GetMap() calls when object is not in world!
-        void ResetMap() { m_currMap = NULL; }
+        virtual void SetMap(Map* map);
+        Map* GetMap() const { return m_currMap; }
+        //used to check all object's GetMap() calls when object is not in world!
+        virtual void ResetMap() { m_currMap = NULL; }
 
         // obtain terrain data for map where this object belong...
         TerrainInfo const* GetTerrain() const;
@@ -687,14 +688,24 @@ class MANGOS_DLL_SPEC WorldObject : public Object
         // ASSERT print helper
         bool PrintCoordinatesError(float x, float y, float z, char const* descr) const;
 
+        // WorldState operations
+        void UpdateWorldState(uint32 state, uint32 value);
+        uint32 GetWorldState(uint32 state);
+
+        // Event handler
+        WorldObjectEventProcessor* GetEvents();
+        void UpdateEvents(uint32 update_diff, uint32 time);
+        void KillAllEvents(bool force);
+        void AddEvent(BasicEvent* Event, uint64 e_time, bool set_addtime = true);
+
+        virtual bool IsVehicle() const { return false; }
+
         virtual void StartGroupLoot(Group* /*group*/, uint32 /*timer*/) {}
 
         // helper functions to select units
         Creature* GetClosestCreatureWithEntry(WorldObject* pSource, uint32 uiEntry, float fMaxSearchRange);
         GameObject* GetClosestGameObjectWithEntry(const WorldObject* pSource, uint32 uiEntry, float fMaxSearchRange);
         void GetGameObjectListWithEntryInGrid(std::list<GameObject*>& lList, uint32 uiEntry, float fMaxSearchRange);
-
-        virtual bool IsVehicle() const { return false; }
 
         // Movement
         Movement::MoveSpline* movespline;
@@ -733,6 +744,8 @@ class MANGOS_DLL_SPEC WorldObject : public Object
         GuidSet    m_notifiedClients;
 
         uint32 m_LastUpdateTime;
+
+        WorldObjectEventProcessor m_Events;
 };
 
 #endif

@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@
 #define MANGOS_INSTANCE_DATA_H
 
 #include "Common.h"
+#include "SharedDefines.h"
 #include "ObjectGuid.h"
 
 class Map;
@@ -49,18 +50,6 @@ enum InstanceConditionIDs                                   // Suggested values 
     INSTANCE_CONDITION_ID_ULDUAR            = 33113,
 };
 
-enum EncounterFrameTypes                                    // only raid UI specific
-{
-    ENCOUNTER_FRAME_ENGAGE                  = 0,
-    ENCOUNTER_FRAME_DISENGAGE               = 1,
-    ENCOUNTER_FRAME_UPDATE_PRIORITY         = 2,
-    ENCOUNTER_FRAME_ADD_TIMER               = 3,
-    ENCOUNTER_FRAME_ENABLE_OBJECTIVE        = 4,
-    ENCOUNTER_FRAME_UPDATE_OBJECTIVE        = 5,
-    ENCOUNTER_FRAME_DISABLE_OBJECTIVE       = 6,
-    ENCOUNTER_FRAME_UNK7                    = 7             // sorting encounter units
-};
-
 class MANGOS_DLL_SPEC InstanceData
 {
     public:
@@ -79,11 +68,12 @@ class MANGOS_DLL_SPEC InstanceData
         // When save is needed, this function generates the data
         virtual const char* Save() const { return ""; }
 
-        void SaveToDB() const;
+        void SaveToDB();
 
         // Called every map update
         virtual void Update(uint32 /*diff*/) {}
 
+        // Used by the map's CanEnter function.
         // This is to prevent players from entering during boss encounters.
         virtual bool IsEncounterInProgress() const { return false; };
 
@@ -95,6 +85,18 @@ class MANGOS_DLL_SPEC InstanceData
 
         // Called when a player leaves the instance (before really removed from map (or possibly world))
         virtual void OnPlayerLeave(Player*) {}
+
+        // Called when a player successfully enters the other area
+        virtual void OnPlayerEnterArea(Player*, uint32 /*uiNewAreaId*/,  uint32 /*uiOldAreaId*/) {}
+
+        // Called when a player successfully enters the other zone
+        virtual void OnPlayerEnterZone(Player*, uint32 /*uiNewZoneId*/, uint32 /*uiNewAreaId*/) {}
+
+        // Called when a player leave zone
+        virtual void OnPlayerLeaveZone(Player*, uint32 /*uiOldZoneId*/) {}
+
+        // Called when a player drops a flag in outdoor pvp
+        virtual void OnPlayerDroppedFlag(Player*, uint32 /* uiSpellId*/) {}
 
         // Called when a gameobject is created
         virtual void OnObjectCreate(GameObject*) {}
@@ -132,11 +134,11 @@ class MANGOS_DLL_SPEC InstanceData
 
         // Condition criteria additional requirements check
         // This is used for such things are heroic loot
-        // See ObjectMgr.h enum ConditionSource for possible values of conditionSourceType
-        virtual bool CheckConditionCriteriaMeet(Player const* source, uint32 instance_condition_id, WorldObject const* conditionSource, uint32 conditionSourceType) const;
+        virtual bool CheckConditionCriteriaMeet(Player const* source, uint32 instance_condition_id, WorldObject const* conditionSource, ConditionSource conditionSourceType) const;
 
-        // Special UI unit frame - sent mostly for raid bosses
-        void SendEncounterFrame(uint32 type, ObjectGuid sourceGuid = ObjectGuid(), uint8 param1 = 0, uint8 param2 = 0);
+        // Set and send special encounter frame state (currently - from scripts)
+        virtual void UpdateSpecialEncounterState(EncounterFrameCommand command, ObjectGuid linkedGuid, uint8 data1 = 0, uint8 data2 = 0);
+        virtual void SendSpecialEncounterState(ObjectGuid linkedGuid);
+
 };
-
 #endif

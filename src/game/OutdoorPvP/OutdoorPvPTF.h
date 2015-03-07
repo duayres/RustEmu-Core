@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
 
 #include "Common.h"
 #include "OutdoorPvP.h"
-#include "Language.h"
+#include "../Language.h"
 
 enum
 {
@@ -158,15 +158,15 @@ class OutdoorPvPTF : public OutdoorPvP
     friend class OutdoorPvPMgr;
 
     public:
-        OutdoorPvPTF();
+        OutdoorPvPTF(uint32 id);
 
         void HandlePlayerEnterZone(Player* player, bool isMainZone) override;
         void HandlePlayerLeaveZone(Player* player, bool isMainZone) override;
-        void FillInitialWorldStates(WorldPacket& data, uint32& count) override;
+        void FillInitialWorldStates(uint32 zoneId) override;
         void SendRemoveWorldStates(Player* player) override;
 
         bool HandleEvent(uint32 eventId, GameObject* go) override;
-        void HandleObjectiveComplete(uint32 eventId, const std::list<Player*> &players, Team team) override;
+        void HandleObjectiveComplete(uint32 eventId, std::list<Player*> players, Team team) override;
 
         void HandleGameObjectCreate(GameObject* go) override;
         void Update(uint32 diff) override;
@@ -192,8 +192,8 @@ class OutdoorPvPTF : public OutdoorPvP
         uint32 m_zoneLockTimer;
         //uint32 m_zoneUpdateTimer;
 
-        uint8 m_towersAlliance;
-        uint8 m_towersHorde;
+        uint32 m_towersAlliance;
+        uint32 m_towersHorde;
 
         ObjectGuid m_towerBanners[MAX_TF_TOWERS];
 };

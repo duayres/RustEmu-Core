@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@
 #define BG_AV_MAX_NODE_DISTANCE             25              // distance in which players are still counted in range of a banner (for alliance towers this is calculated from the center of the tower)
 
 #define BG_AV_BOSS_KILL_QUEST_SPELL         23658
+#define BG_AV_EVENT_START_BATTLE            9166
 
 #define BG_AV_CAPTIME                       240000          // 4 minutes
 #define BG_AV_SNOWFALL_FIRSTCAP             300000          // 5 minutes but i also have seen 4:05
@@ -67,8 +68,6 @@
 
 #define BG_AV_REP_OWNED_MINE                24
 #define BG_AV_REP_OWNED_MINE_HOLIDAY        36
-
-#define BG_AV_EVENT_START_BATTLE            9166
 
 enum BG_AV_Sounds
 {
@@ -123,6 +122,7 @@ enum BG_AV_Nodes
 };
 #define BG_AV_NODES_MAX                 15
 
+
 // for nodeevents we will use event1=node
 // event2 is related to BG_AV_States
 // 0 = alliance assaulted
@@ -174,8 +174,7 @@ enum BG_AV_Graveyards
     BG_AV_GRAVE_MAIN_HORDE         = 610
 };
 
-const uint32 BG_AV_GraveyardIds[9] =
-{
+const uint32 BG_AV_GraveyardIds[9]= {
     BG_AV_GRAVE_STORM_AID,
     BG_AV_GRAVE_STORM_GRAVE,
     BG_AV_GRAVE_STONE_GRAVE,
@@ -203,58 +202,44 @@ enum BG_AV_WorldStates
     AV_SNOWFALL_N               = 1966,
 };
 
-// special version with  more wide values range that BattleGroundTeamIndex
-// BattleGroundAVTeamIndex <- BattleGroundTeamIndex cast safe
-// BattleGroundAVTeamIndex -> BattleGroundTeamIndex cast safe and array with BG_TEAMS_COUNT elements must checked != BG_AV_TEAM_NEUTRAL before used
-enum BattleGroundAVTeamIndex
-{
-    BG_AV_TEAM_ALLIANCE        = TEAM_INDEX_ALLIANCE,
-    BG_AV_TEAM_HORDE           = TEAM_INDEX_HORDE,
-    BG_AV_TEAM_NEUTRAL         = TEAM_INDEX_NEUTRAL,                         // this is the neutral owner of snowfall
-};
-
-#define BG_AV_TEAMS_COUNT 3
-
 // alliance_control horde_control neutral_control
-const uint32 BG_AV_MineWorldStates[2][BG_AV_TEAMS_COUNT] =
-{
+const uint32 BG_AV_MineWorldStates[2][3] = {
     {1358, 1359, 1360},
     {1355, 1356, 1357}
 };
 
 // alliance_control alliance_assault h_control h_assault
-const uint32 BG_AV_NodeWorldStates[BG_AV_NODES_MAX][4] =
-{
+const uint32 BG_AV_NodeWorldStates[BG_AV_NODES_MAX][4] = {
     // Stormpike first aid station
-    {1326, 1325, 1328, 1327},
+    {1326,1325,1328,1327},
     // Stormpike Graveyard
-    {1335, 1333, 1336, 1334},
+    {1335,1333,1336,1334},
     // Stoneheart Grave
-    {1304, 1302, 1303, 1301},
+    {1304,1302,1303,1301},
     // Snowfall Grave
-    {1343, 1341, 1344, 1342},
+    {1343,1341,1344,1342},
     // Iceblood grave
-    {1348, 1346, 1349, 1347},
+    {1348,1346,1349,1347},
     // Frostwolf Grave
-    {1339, 1337, 1340, 1338},
+    {1339,1337,1340,1338},
     // Frostwolf Hut
-    {1331, 1329, 1332, 1330},
+    {1331,1329,1332,1330},
     // Dunbaldar South Bunker
-    {1375, 1361, 1378, 1370},
+    {1375,1361,1378,1370},
     // Dunbaldar North Bunker
-    {1374, 1362, 1379, 1371},
+    {1374,1362,1379,1371},
     // Icewing Bunker
-    {1376, 1363, 1380, 1372},
+    {1376,1363,1380,1372},
     // Stoneheart Bunker
-    {1377, 1364, 1381, 1373},
+    {1377,1364,1381,1373},
     // Iceblood Tower
-    {1390, 1368, 1395, 1385},
+    {1390,1368,1395,1385},
     // Tower Point
-    {1389, 1367, 1394, 1384},
+    {1389,1367,1394,1384},
     // Frostwolf East
-    {1388, 1366, 1393, 1383},
+    {1388,1366,1393,1383},
     // Frostwolf West
-    {1387, 1365, 1392, 1382},
+    {1387,1365,1392,1382},
 };
 
 // through the armorscap-quest 4 different gravedefender exist
@@ -287,16 +272,24 @@ enum BG_AV_QuestIds
 
 struct BG_AV_NodeInfo
 {
-    BattleGroundAVTeamIndex TotalOwner;
-    BattleGroundAVTeamIndex Owner;
-    BattleGroundAVTeamIndex PrevOwner;
+    PvpTeamIndex    TotalOwner;
+    PvpTeamIndex    Owner;
+    PvpTeamIndex    PrevOwner;
     BG_AV_States State;
     BG_AV_States PrevState;
     uint32       Timer;
     bool         Tower;
 };
 
-inline BG_AV_Nodes& operator++(BG_AV_Nodes& i)
+enum BG_AV_Objectives
+{
+    AV_OBJECTIVE_ASSAULT_TOWER       = 61,
+    AV_OBJECTIVE_ASSAULT_GRAVEYARD   = 63,
+    AV_OBJECTIVE_DEFEND_TOWER        = 64,
+    AV_OBJECTIVE_DEFEND_GRAVEYARD    = 65
+};
+
+inline BG_AV_Nodes &operator++(BG_AV_Nodes &i)
 {
     return i = BG_AV_Nodes(i + 1);
 }
@@ -322,38 +315,44 @@ class BattleGroundAVScore : public BattleGroundScore
 
 class BattleGroundAV : public BattleGround
 {
-        friend class BattleGroundMgr;
+    friend class BattleGroundMgr;
 
     public:
         BattleGroundAV();
-        void Update(uint32 diff) override;
+        ~BattleGroundAV();
+        void Update(uint32 diff);
 
         /* inherited from BattlegroundClass */
-        virtual void AddPlayer(Player* plr) override;
+        virtual void AddPlayer(Player *plr);
 
-        virtual void StartingEventOpenDoors() override;
+        virtual void StartingEventCloseDoors();
+        virtual void StartingEventOpenDoors();
         // world states
-        virtual void FillInitialWorldStates(WorldPacket& data, uint32& count) override;
+        virtual void FillInitialWorldStates();
 
-        void HandleAreaTrigger(Player* source, uint32 trigger) override;
-        virtual void Reset() override;
+        void RemovePlayer(Player *plr, ObjectGuid guid);
+        void HandleAreaTrigger(Player *Source, uint32 Trigger);
+        virtual void Reset();
 
         /*general stuff*/
         void UpdateScore(PvpTeamIndex teamIdx, int32 points);
-        void UpdatePlayerScore(Player* source, uint32 type, uint32 value) override;
+        void UpdatePlayerScore(Player *Source, uint32 type, uint32 value);
 
         /*handle stuff*/ // these are functions which get called from extern scripts
-        virtual void EventPlayerClickedOnFlag(Player* source, GameObject* target_obj) override;
-        void HandleKillPlayer(Player* player, Player* killer) override;
-        void HandleKillUnit(Creature* creature, Player* killer) override;
-        void HandleQuestComplete(uint32 questid, Player* player);
+        virtual void EventPlayerClickedOnFlag(Player *source, GameObject* target_obj);
+        void HandleKillPlayer(Player* player, Player *killer);
+        void HandleKillUnit(Creature *creature, Player *killer);
+        void HandleQuestComplete(uint32 questid, Player *player);
         bool PlayerCanDoMineQuest(int32 GOId, Team team);
+        bool IsMineOwnedBy(uint8 mine, uint32 team) { return (m_Mine_Owner[mine] == int8(team)) ? true : false; }
 
-        void EndBattleGround(Team winner) override;
+        void EndBattleGround(Team winner);
 
-        virtual WorldSafeLocsEntry const* GetClosestGraveYard(Player* plr) override;
+        virtual WorldSafeLocsEntry const* GetClosestGraveYard(Player *plr);
 
-        static BattleGroundAVTeamIndex GetAVTeamIndexByTeamId(Team team) { return BattleGroundAVTeamIndex(GetTeamIndexByTeamId(team)); }
+        // for achievement Stormpike/Frostwolf Perfection
+        bool hasAllTowers(PvpTeamIndex team);
+
     private:
         /* Nodes occupying */
         void EventPlayerAssaultsPoint(Player* player, BG_AV_Nodes node);
@@ -362,7 +361,7 @@ class BattleGroundAV : public BattleGround
 
         void AssaultNode(BG_AV_Nodes node, PvpTeamIndex teamIdx);
         void DestroyNode(BG_AV_Nodes node);
-        void InitNode(BG_AV_Nodes node, BattleGroundAVTeamIndex teamIdx, bool tower);
+        void InitNode(BG_AV_Nodes node, PvpTeamIndex teamIdx, bool tower);
         void DefendNode(BG_AV_Nodes node, PvpTeamIndex teamIdx);
 
         void PopulateNode(BG_AV_Nodes node);
@@ -372,10 +371,10 @@ class BattleGroundAV : public BattleGround
         bool IsGrave(BG_AV_Nodes node) const { return (node == BG_AV_NODES_ERROR) ? false : !m_Nodes[node].Tower; }
 
         /*mine*/
-        void ChangeMineOwner(uint8 mine, BattleGroundAVTeamIndex teamIdx);
+        void ChangeMineOwner(uint8 mine, PvpTeamIndex teamIdx);
 
         /*worldstates*/
-        uint8 GetWorldStateType(uint8 state, BattleGroundAVTeamIndex teamIdx) const { return teamIdx * BG_AV_MAX_STATES + state; }
+        uint8 GetWorldStateType(uint8 state, PvpTeamIndex teamIdx) const { return teamIdx * BG_AV_MAX_STATES + state; }
         void SendMineWorldStates(uint32 mine);
         void UpdateNodeWorldState(BG_AV_Nodes node);
 
@@ -385,8 +384,8 @@ class BattleGroundAV : public BattleGround
         BG_AV_NodeInfo m_Nodes[BG_AV_NODES_MAX];
 
         // only for worldstates needed
-        BattleGroundAVTeamIndex m_Mine_Owner[BG_AV_MAX_MINES];
-        BattleGroundAVTeamIndex m_Mine_PrevOwner[BG_AV_MAX_MINES];
+        PvpTeamIndex m_Mine_Owner[BG_AV_MAX_MINES];
+        PvpTeamIndex m_Mine_PrevOwner[BG_AV_MAX_MINES];
         int32 m_Mine_Timer[BG_AV_MAX_MINES];
         uint32 m_Mine_Reclaim_Timer[BG_AV_MAX_MINES];
 

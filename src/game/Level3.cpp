@@ -4805,7 +4805,7 @@ bool ChatHandler::HandleTeleAddCommand(char* args)
 
     std::string name = args;
 
-    if (sObjectMgr.GetGameTele(name))
+    if (sObjectMgr.GetGameTeleExactName(name))
     {
         SendSysMessage(LANG_COMMAND_TP_ALREADYEXIST);
         SetSentErrorMessage(true);
@@ -4813,12 +4813,8 @@ bool ChatHandler::HandleTeleAddCommand(char* args)
     }
 
     GameTele tele;
-    tele.position_x  = player->GetPositionX();
-    tele.position_y  = player->GetPositionY();
-    tele.position_z  = player->GetPositionZ();
-    tele.orientation = player->GetOrientation();
-    tele.mapId       = player->GetMapId();
-    tele.name        = name;
+    tele.loc = player->GetPosition();
+    tele.name = name;
 
     if (sObjectMgr.AddGameTele(tele))
     {
@@ -7270,10 +7266,10 @@ bool ChatHandler::HandleMmapTestHeight(char* args)
     return true;
 }
 
-bool ChatHandler::HandleServerResetAllRaidCommand(char* args)
+/*bool ChatHandler::HandleServerResetAllRaidCommand(char* args)
 {
     PSendSysMessage("Global raid instances reset, all players in raid instances will be teleported to homebind!");
     sMapPersistentStateMgr.GetScheduler().ResetAllRaid();
     return true;
-}
+}*/
 

@@ -121,8 +121,9 @@ const char TransportAnimationEntryfmt[] = "diifffi";
 const char VehicleEntryfmt[] = "niffffiiiiiiiifffffffffffffffssssfifiixx";
 const char VehicleSeatEntryfmt[] = "niiffffffffffiiiiiifffffffiiifffiiiiiiiffiiiiixxxxxxxxxxxx";
 const char WMOAreaTableEntryfmt[] = "niiixxxxxiixxxxxxxxxxxxxxxxx";
-const char WorldMapAreaEntryfmt[] = "xinxffffixx";
+const char WorldMapAreaEntryfmt[] = "niixffffixx";
 const char WorldMapOverlayEntryfmt[] = "nxiiiixxxxxxxxxxx";
 const char WorldSafeLocsEntryfmt[] = "nifffxxxxxxxxxxxxxxxxx";
+const char WorldStateEntryfmt[] = "niiixssssssssssssssssxxxxxxxxxxxxxxxxxxixxxxxxxxxxxxxxxxxxxsiix";
 
 #endif

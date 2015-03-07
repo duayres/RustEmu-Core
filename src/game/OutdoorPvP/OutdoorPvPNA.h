@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,12 +21,12 @@
 
 #include "Common.h"
 #include "OutdoorPvP.h"
-#include "Language.h"
+#include "../Language.h"
 
 enum
 {
     MAX_NA_GUARDS                           = 15,
-    MAX_NA_ROOSTS                           = 4,            // roosts for each type and team
+    MAX_NA_ROOSTS                           = 4,                // roosts for each type and team
     MAX_FIRE_BOMBS                          = 10,
 
     // spells
@@ -157,15 +157,15 @@ static const uint32 nagrandRoostStatesHordeNeutral[MAX_NA_ROOSTS]       = {WORLD
 class OutdoorPvPNA : public OutdoorPvP
 {
     public:
-        OutdoorPvPNA();
+        OutdoorPvPNA(uint32 id);
 
         void HandlePlayerEnterZone(Player* player, bool isMainZone) override;
         void HandlePlayerLeaveZone(Player* player, bool isMainZone) override;
-        void FillInitialWorldStates(WorldPacket& data, uint32& count) override;
+        void FillInitialWorldStates(uint32 zoneId) override;
         void SendRemoveWorldStates(Player* player) override;
 
         bool HandleEvent(uint32 eventId, GameObject* go) override;
-        void HandleObjectiveComplete(uint32 eventId, const std::list<Player*> &players, Team team) override;
+        void HandleObjectiveComplete(uint32 eventId, std::list<Player*> players, Team team) override;
 
         void HandleCreatureCreate(Creature* creature) override;
         void HandleGameObjectCreate(GameObject* go) override;
@@ -199,7 +199,7 @@ class OutdoorPvPNA : public OutdoorPvP
         uint32 m_zoneWorldState;
         uint32 m_zoneMapState;
         uint32 m_roostWorldState[MAX_NA_ROOSTS];
-        uint8 m_guardsLeft;
+        uint32 m_guardsLeft;
 
         bool m_isUnderSiege;
 

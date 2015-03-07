@@ -34,6 +34,8 @@
 #include "GuildMgr.h"
 #include "World.h"
 #include "BattleGround/BattleGroundMgr.h"
+#include "OutdoorPvP/OutdoorPvPMgr.h"
+#include "BattleField/BattleField.h"
 #include "MapManager.h"
 #include "SocialMgr.h"
 #include "LFGMgr.h"
@@ -336,6 +338,8 @@ void WorldSession::LogoutPlayer(bool Save)
         if (ObjectGuid lootGuid = GetPlayer()->GetLootGuid())
             DoLootRelease(lootGuid);
 
+        Map* mapPtr = GetPlayer()->GetMapPtr();
+
         ///- If the player just died before logging out, make him appear as a ghost
         //FIXME: logout must be delayed in case lost connection with client in time of combat
         if (GetPlayer()->GetDeathTimer())
@@ -450,6 +454,11 @@ void WorldSession::LogoutPlayer(bool Save)
         ///- Remove pet
         GetPlayer()->RemovePet(PET_SAVE_AS_CURRENT);
 
+        GetPlayer()->InterruptNonMeleeSpells(true);
+
+        if (VehicleKit* vehicle = GetPlayer()->GetVehicle())
+            GetPlayer()->ExitVehicle();
+
         ///- empty buyback items and save the player in the database
         // some save parts only correctly work in case player present in map/player_lists (pets, etc)
         if (Save)
@@ -484,15 +493,20 @@ void WorldSession::LogoutPlayer(bool Save)
         // the player may not be in the world when logging out
         // e.g if he got disconnected during a transfer to another map
         // calls to GetMap in this case may cause crashes
-        if (GetPlayer()->IsInWorld())
+        if (GetPlayer()->IsInWorld() && mapPtr)
         {
-            Map* _map = GetPlayer()->GetMap();
-            _map->Remove(GetPlayer(), true);
+            mapPtr->Remove(GetPlayer(), true);
         }
         else
         {
             GetPlayer()->CleanupsBeforeDelete();
-            Map::DeleteFromWorld(GetPlayer());
+            if (mapPtr)
+                mapPtr->DeleteFromWorld(GetPlayer());
+            else
+            {
+                sObjectAccessor.RemoveObject(GetPlayer());
+                delete GetPlayer();
+            }
         }
 
         SetPlayer(NULL);                                    // deleted in Remove/DeleteFromWorld call
@@ -1006,4 +1020,123 @@ void WorldSession::SendPlaySpellVisual(ObjectGuid guid, uint32 spellArtKit)
     data << guid;
     data << spellArtKit;                                    // index from SpellVisualKit.dbc
     SendPacket(&data);
+}
+
+// This send to player to invite him to teleport to battlefield
+// Param1: battlefield guid
+// Param2: zone id of battlefield (4197 for wg)
+// Param3: time for player to accept in seconds
+void WorldSession::SendBfInvitePlayerToWar(ObjectGuid battlefieldGuid, uint32 uiZoneId, uint32 uiTimeToAccept)
+{
+    WorldPacket data(SMSG_BATTLEFIELD_MANAGER_ENTRY_INVITE, 12);
+    data << uint32(battlefieldGuid);
+    data << uint32(uiZoneId);
+    data << uint32(time(NULL) + uiTimeToAccept);
+    SendPacket(&data);
+}
+
+// This is send to invite player to join the queue when he is in battlefield zone and it is about to start or by battlemaster
+// Param1: battlefield guid
+void WorldSession::SendBfInvitePlayerToQueue(ObjectGuid battlefieldGuid)
+{
+    bool warmup = true;
+
+    WorldPacket data(SMSG_BATTLEFIELD_MANAGER_QUEUE_INVITE, 5);
+    data << uint32(battlefieldGuid);
+    data << uint8(warmup); // warmup ? used ?
+    SendPacket(&data);
+}
+
+// This packet is in response to inform player that he joins queue
+// Param1: battlefield guid
+// Param2: battlefield queue guid
+// Param3: zone id of battlefield (4197 for wg)
+// Param4: if players are able to queue
+// Param5: if battlefield is full
+void WorldSession::SendBfQueueInviteResponse(ObjectGuid battlefieldGuid, ObjectGuid queueGuid, uint32 uiZoneId, bool bCanQueue, bool bFull)
+{
+    WorldPacket data(SMSG_BATTLEFIELD_MANAGER_QUEUE_REQUEST_RESPONSE, 11);
+    data << uint32(battlefieldGuid);
+    data << uint32(uiZoneId);
+    data << uint8(bCanQueue ? 1 : 0); // Accepted // 0 you cannot queue wg // 1 you are queued
+    data << uint8(bFull ? 0 : 1); // Logging In // 0 wg full // 1 queue for upcoming
+    data << uint8(1); // Warmup
+    SendPacket(&data);
+}
+
+// This is called when player accepts invitation to battlefield
+// Param1: battlefield guid
+void WorldSession::SendBfEntered(ObjectGuid battlefieldGuid)
+{
+    WorldPacket data(SMSG_BATTLEFIELD_MANAGER_ENTERING, 7);
+    data << uint32(battlefieldGuid);
+    data << uint8(1); // unk
+    data << uint8(1); // unk
+    data << uint8(_player->isAFK() ? 1 : 0); // Clear AFK
+    SendPacket(&data);
+}
+
+void WorldSession::SendBfLeaveMessage(ObjectGuid battlefieldGuid, BattlefieldLeaveReason reason)
+{
+    WorldPacket data(SMSG_BATTLEFIELD_MANAGER_EJECTED, 7);
+    data << uint32(battlefieldGuid);
+    data << uint8(reason); // byte Reason
+    data << uint8(2); // byte BattleStatus
+    data << uint8(0); // bool Relocated
+    SendPacket(&data);
+}
+
+// Send by client when he click on accept for queue
+void WorldSession::HandleBfQueueInviteResponse(WorldPacket& recv_data)
+{
+    ObjectGuid battlefieldGuid;
+    bool bAccepted;
+
+    recv_data >> battlefieldGuid >> bAccepted;
+
+    DEBUG_LOG("HandleQueueInviteResponse: battlefieldGuid: " UI64FMTD " bAccepted: %u", battlefieldGuid.GetRawValue(), bAccepted);
+
+    if (BattleField* opvp = sOutdoorPvPMgr.GetBattlefieldByGuid(battlefieldGuid))
+        opvp->OnPlayerInviteResponse(_player, bAccepted);
+}
+
+void WorldSession::HandleBfQueueRequest(WorldPacket& recv_data)
+{
+    DEBUG_LOG("WORLD: Received CMSG_BATTLEFIELD_MANAGER_QUEUE_REQUEST");
+
+    ObjectGuid battlefieldGuid;
+    bool bAccepted;
+
+    recv_data >> battlefieldGuid >> bAccepted;
+
+    DEBUG_LOG("HandleBfQueueInviteResponse: battlefieldGuid: " UI64FMTD " bAccepted: %u", battlefieldGuid.GetRawValue(), bAccepted);
+
+    if (BattleField* opvp = sOutdoorPvPMgr.GetBattlefieldByGuid(battlefieldGuid))
+        opvp->OnPlayerInviteResponse(_player, true);
+}
+
+// Send by client when he clicks accept or denies invitation
+void WorldSession::HandleBfEntryInviteResponse(WorldPacket& recv_data)
+{
+    ObjectGuid battlefieldGuid;
+    bool bAccepted;
+
+    recv_data >> battlefieldGuid >> bAccepted;
+
+    DEBUG_LOG("HandleBattlefieldInviteResponse: battlefieldGuid: " UI64FMTD " bAccepted: %u", battlefieldGuid.GetRawValue(), bAccepted);
+
+    if (BattleField* opvp = sOutdoorPvPMgr.GetBattlefieldByGuid(battlefieldGuid))
+        opvp->OnPlayerPortResponse(GetPlayer(), bAccepted);
+}
+
+void WorldSession::HandleBfExitRequest(WorldPacket& recv_data)
+{
+    ObjectGuid battlefieldGuid;
+
+    recv_data >> battlefieldGuid;
+
+    DEBUG_LOG("HandleBfExitRequest: battlefieldGuid: " UI64FMTD " ", battlefieldGuid.GetRawValue());
+
+    if (BattleField* opvp = sOutdoorPvPMgr.GetBattlefieldByGuid(battlefieldGuid))
+        opvp->OnPlayerQueueExitRequest(_player);
 }

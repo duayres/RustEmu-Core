@@ -25,6 +25,7 @@ include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/vmap
   ${CMAKE_CURRENT_SOURCE_DIR}/AuctionHouseBot
   ${CMAKE_CURRENT_SOURCE_DIR}/BattleGround
+  ${CMAKE_CURRENT_SOURCE_DIR}/BattleField
   ${CMAKE_CURRENT_SOURCE_DIR}/OutdoorPvP
   ${CMAKE_SOURCE_DIR}/dep/include/g3dlite
   ${CMAKE_SOURCE_DIR}/dep/recastnavigation/Detour
@@ -75,6 +76,11 @@ set(SRC_GRP_BATTLEGROUND
     BattleGround/BattleGroundSA.h
     BattleGround/BattleGroundWS.cpp
     BattleGround/BattleGroundWS.h
+)
+
+set(SRC_GRP_BATTLEFIELD
+    BattleField/BattleField.cpp
+    BattleField/BattleField.h
 )
 
 set(SRC_GRP_CHAT_COMMANDS
@@ -344,8 +350,6 @@ set(SRC_GRP_WORLD_HANDLERS
     GridNotifiers.cpp
     GridNotifiers.h
     GridNotifiersImpl.h
-    GridStates.cpp
-    GridStates.h
     Group.cpp
     Group.h
     GroupHandler.cpp
@@ -421,6 +425,10 @@ set(SRC_GRP_WORLD_HANDLERS
     Weather.h
     WorldLocation.cpp
     WorldLocation.h
+    WorldStateMgr.cpp
+    WorldStateMgr.h
+    WorldObjectEvents.cpp
+    WorldObjectEvents.h
     World.cpp
     World.h
 )
@@ -428,6 +436,7 @@ set(SRC_GRP_WORLD_HANDLERS
 set(LIBRARY_SRCS
     ${SRC_GRP_AHBOT}
     ${SRC_GRP_BATTLEGROUND}
+    ${SRC_GRP_BATTLEFIELD}
     ${SRC_GRP_CHAT_COMMANDS}
     ${SRC_GRP_MOTION_GEN}
     ${SRC_GRP_MOVEMENT}
@@ -450,6 +459,11 @@ source_group("AhBot"
 source_group("BattleGround"
   FILES
     ${SRC_GRP_BATTLEGROUND}
+)
+
+source_group("BattleField"
+  FILES
+    ${SRC_GRP_BATTLEFIELD}
 )
 
 source_group("Chat Commands"

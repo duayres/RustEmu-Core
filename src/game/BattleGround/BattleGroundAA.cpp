@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@
 
 BattleGroundAA::BattleGroundAA()
 {
+
     m_StartDelayTimes[BG_STARTING_EVENT_FIRST]  = BG_START_DELAY_1M;
     m_StartDelayTimes[BG_STARTING_EVENT_SECOND] = BG_START_DELAY_30S;
     m_StartDelayTimes[BG_STARTING_EVENT_THIRD]  = BG_START_DELAY_15S;
@@ -34,6 +35,24 @@ BattleGroundAA::BattleGroundAA()
     m_StartMessageIds[BG_STARTING_EVENT_FOURTH] = LANG_ARENA_HAS_BEGUN;
 }
 
+BattleGroundAA::~BattleGroundAA()
+{
+
+}
+
+void BattleGroundAA::Update(uint32 diff)
+{
+    BattleGround::Update(diff);
+}
+
+void BattleGroundAA::StartingEventCloseDoors()
+{
+}
+
+void BattleGroundAA::StartingEventOpenDoors()
+{
+}
+
 void BattleGroundAA::AddPlayer(Player* plr)
 {
     BattleGround::AddPlayer(plr);
@@ -41,4 +60,22 @@ void BattleGroundAA::AddPlayer(Player* plr)
     BattleGroundAAScore* sc = new BattleGroundAAScore;
 
     m_PlayerScores[plr->GetObjectGuid()] = sc;
+}
+
+void BattleGroundAA::RemovePlayer(Player* /*plr*/, ObjectGuid /*guid*/)
+{
+}
+
+void BattleGroundAA::HandleKillPlayer(Player* player, Player* killer)
+{
+    BattleGround::HandleKillPlayer(player, killer);
+}
+
+void BattleGroundAA::HandleAreaTrigger(Player* /*Source*/, uint32 /*Trigger*/)
+{
+}
+
+bool BattleGroundAA::SetupBattleGround()
+{
+    return true;
 }

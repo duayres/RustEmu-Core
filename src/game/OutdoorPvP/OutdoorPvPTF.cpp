@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,14 +18,14 @@
 
 #include "OutdoorPvPTF.h"
 #include "WorldPacket.h"
-#include "World.h"
-#include "ObjectMgr.h"
-#include "Object.h"
-#include "Creature.h"
-#include "GameObject.h"
-#include "Player.h"
+#include "../World.h"
+#include "../ObjectMgr.h"
+#include "../Object.h"
+#include "../Creature.h"
+#include "../GameObject.h"
+#include "../Player.h"
 
-OutdoorPvPTF::OutdoorPvPTF() : OutdoorPvP(),
+OutdoorPvPTF::OutdoorPvPTF(uint32 id) : OutdoorPvP(id),
     m_zoneWorldState(WORLD_STATE_TF_TOWERS_CONTROLLED),
     m_zoneOwner(TEAM_NONE),
     //m_zoneUpdateTimer(TIMER_TF_UPDATE_TIME),
@@ -41,18 +41,17 @@ OutdoorPvPTF::OutdoorPvPTF() : OutdoorPvP(),
 
     for (uint8 i = 0; i < MAX_TF_TOWERS; ++i)
         m_towerOwner[i] = TEAM_NONE;
+
+    uint32 zoneId = sOutdoorPvPMgr.GetZoneOfAffectedScript(this);
+    FillInitialWorldStates(zoneId);
 }
 
-void OutdoorPvPTF::FillInitialWorldStates(WorldPacket& data, uint32& count)
+void OutdoorPvPTF::FillInitialWorldStates(uint32 zoneId)
 {
-    FillInitialWorldState(data, count, m_zoneWorldState, WORLD_STATE_ADD);
     if (m_zoneWorldState == WORLD_STATE_TF_TOWERS_CONTROLLED)
     {
-        FillInitialWorldState(data, count, WORLD_STATE_TF_TOWER_COUNT_H, m_towersHorde);
-        FillInitialWorldState(data, count, WORLD_STATE_TF_TOWER_COUNT_A, m_towersAlliance);
-
-        for (uint8 i = 0; i < MAX_TF_TOWERS; ++i)
-            FillInitialWorldState(data, count, m_towerWorldState[i], WORLD_STATE_ADD);
+        FillInitialWorldState(zoneId, WORLD_STATE_TF_TOWER_COUNT_H, m_towersHorde);
+        FillInitialWorldState(zoneId, WORLD_STATE_TF_TOWER_COUNT_A, m_towersAlliance);
     }
     else
         UpdateTimerWorldState();
@@ -60,10 +59,6 @@ void OutdoorPvPTF::FillInitialWorldStates(WorldPacket& data, uint32& count)
 
 void OutdoorPvPTF::SendRemoveWorldStates(Player* player)
 {
-    player->SendUpdateWorldState(m_zoneWorldState, WORLD_STATE_REMOVE);
-
-    for (uint8 i = 0; i < MAX_TF_TOWERS; ++i)
-        player->SendUpdateWorldState(m_towerWorldState[i], WORLD_STATE_REMOVE);
 }
 
 void OutdoorPvPTF::HandlePlayerEnterZone(Player* player, bool isMainZone)
@@ -88,34 +83,37 @@ void OutdoorPvPTF::HandlePlayerLeaveZone(Player* player, bool isMainZone)
 
 void OutdoorPvPTF::HandleGameObjectCreate(GameObject* go)
 {
-    OutdoorPvP::HandleGameObjectCreate(go);
-
     switch (go->GetEntry())
     {
         case GO_TOWER_BANNER_WEST:
             m_towerBanners[0] = go->GetObjectGuid();
+            m_towerOwner[0] = go->GetTeam();
             go->SetGoArtKit(GetBannerArtKit(m_towerOwner[0]));
             break;
         case GO_TOWER_BANNER_NORTH:
             m_towerBanners[1] = go->GetObjectGuid();
+            m_towerOwner[1] = go->GetTeam();
             go->SetGoArtKit(GetBannerArtKit(m_towerOwner[1]));
             break;
         case GO_TOWER_BANNER_EAST:
             m_towerBanners[2] = go->GetObjectGuid();
+            m_towerOwner[2] = go->GetTeam();
             go->SetGoArtKit(GetBannerArtKit(m_towerOwner[2]));
             break;
         case GO_TOWER_BANNER_SOUTH_EAST:
             m_towerBanners[3] = go->GetObjectGuid();
+            m_towerOwner[3] = go->GetTeam();
             go->SetGoArtKit(GetBannerArtKit(m_towerOwner[3]));
             break;
         case GO_TOWER_BANNER_SOUTH:
             m_towerBanners[4] = go->GetObjectGuid();
+            m_towerOwner[4] = go->GetTeam();
             go->SetGoArtKit(GetBannerArtKit(m_towerOwner[4]));
             break;
     }
 }
 
-void OutdoorPvPTF::HandleObjectiveComplete(uint32 eventId, const std::list<Player*> &players, Team team)
+void OutdoorPvPTF::HandleObjectiveComplete(uint32 eventId, std::list<Player*> players, Team team)
 {
     for (uint8 i = 0; i < MAX_TF_TOWERS; ++i)
     {
@@ -123,7 +121,7 @@ void OutdoorPvPTF::HandleObjectiveComplete(uint32 eventId, const std::list<Playe
         {
             if (terokkarTowerEvents[i][j].eventEntry == eventId)
             {
-                for (std::list<Player*>::const_iterator itr = players.begin(); itr != players.end(); ++itr)
+                for (std::list<Player*>::iterator itr = players.begin(); itr != players.end(); ++itr)
                 {
                     if ((*itr) && (*itr)->GetTeam() == team)
                         (*itr)->AreaExploredOrEventHappens(team == ALLIANCE ? QUEST_SPIRITS_OF_AUCHINDOUM_ALLIANCE : QUEST_SPIRITS_OF_AUCHINDOUM_HORDE);
@@ -285,7 +283,7 @@ void OutdoorPvPTF::UnlockZone()
     SendUpdateWorldState(WORLD_STATE_TF_TOWER_COUNT_A, m_towersAlliance);
     SendUpdateWorldState(WORLD_STATE_TF_TOWER_COUNT_H, m_towersHorde);
 
-    for (GuidZoneMap::const_iterator itr = m_zonePlayers.begin(); itr != m_zonePlayers.end(); ++itr)
+    for (GuidZoneMap::iterator itr = m_zonePlayers.begin(); itr != m_zonePlayers.end(); ++itr)
     {
         // Find player who is in main zone (Terokkar Forest) to get correct map reference
         if (!itr->second)
@@ -347,12 +345,8 @@ void OutdoorPvPTF::LockTowers(const WorldObject* objRef)
     {
         if (GameObject* go = objRef->GetMap()->GetGameObject(m_towerBanners[i]))
             go->SetLootState(GO_JUST_DEACTIVATED);
-        else
-        {
-            // if grid is unloaded, changing the saved slider value is enough
-            CapturePointSlider value(m_zoneOwner == ALLIANCE ? CAPTURE_SLIDER_ALLIANCE : CAPTURE_SLIDER_HORDE, true);
-            sOutdoorPvPMgr.SetCapturePointSlider(terokkarTowers[i], value);
-        }
+
+        sOutdoorPvPMgr.SetCapturePointSlider(terokkarTowers[i], m_zoneOwner == ALLIANCE ? CAPTURE_SLIDER_ALLIANCE_LOCKED : CAPTURE_SLIDER_HORDE_LOCKED);
     }
 }
 
@@ -363,15 +357,11 @@ void OutdoorPvPTF::ResetTowers(const WorldObject* objRef)
     {
         if (GameObject* go = objRef->GetMap()->GetGameObject(m_towerBanners[i]))
         {
-            go->SetCapturePointSlider(CAPTURE_SLIDER_MIDDLE, false);
-            // visual update needed because banner still has artkit from previous owner
+            go->SetCapturePointSlider(CAPTURE_SLIDER_NEUTRAL);
             SetBannerVisual(go, CAPTURE_ARTKIT_NEUTRAL, CAPTURE_ANIM_NEUTRAL);
         }
         else
-        {
-            // if grid is unloaded, changing the saved slider value is enough
-            CapturePointSlider value(CAPTURE_SLIDER_MIDDLE, false);
-            sOutdoorPvPMgr.SetCapturePointSlider(terokkarTowers[i], value);
-        }
+            // if grid is unloaded, resetting the slider value is enough
+            sOutdoorPvPMgr.SetCapturePointSlider(terokkarTowers[i], CAPTURE_SLIDER_NEUTRAL);
     }
 }

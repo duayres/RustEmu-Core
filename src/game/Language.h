@@ -971,6 +971,17 @@ enum MangosStrings
     LANG_POOL_ENTRY_LOWER_MAX_POOL      = 1509,
     // Room for more Level 2              1510-1599 not used
 
+    // Level 2 (worldstate operations)
+    LANG_WORLDSTATE_LIST                = 1550,
+    LANG_WORLDSTATE_LIST_FULL           = 1551,
+    LANG_WORLDSTATE_SET                 = 1552,
+    LANG_WORLDSTATE_UPDATE              = 1553,
+    LANG_WORLDSTATE_UPDATE_FULL         = 1554,
+    LANG_WORLDSTATE_RELOAD              = 1555,
+    LANG_WORLDSTATE_ERROR               = 1556,
+    LANG_WORLDSTATE_SETTINGS            = 1557,
+    // Room for more Level 2              1559-1599 not used
+
     // Outdoor PvP
     LANG_OPVP_EP_CAPTURE_NPT_H          = 1600,
     LANG_OPVP_EP_CAPTURE_NPT_A          = 1601,
@@ -1018,9 +1029,107 @@ enum MangosStrings
     // FREE IDS                           1700-9999
 
     // Use for not-in-official-sources patches
-    //                                    10000-10999
 
     // Use for custom patches             11000-11999
+    LANG_INVALID_REALMID                = 11001,
+
+    LANG_COMMAND_FRIEND                 = 11133,
+    LANG_COMMAND_FRIEND_ERROR           = 11134,
+    LANG_SYSTEMMESSAGE_MODERATOR        = 12000,
+    LANG_SYSTEMMESSAGE_GAMEMASTER       = 12001,
+    LANG_SYSTEMMESSAGE_ADMINISTRATOR    = 12002,
+    LANG_BAN_ACCOUNT_ANNOUNCE           = 17890,
+    LANG_PERMBAN_ACCOUNT_ANNOUNCE       = 17891,
+    LANG_BAN_CHARACTER_ANNOUNCE         = 17892,
+    LANG_PERMBAN_CHARACTER_ANNOUNCE     = 17893,
+    LANG_BAN_IP_ANNOUNCE                = 17894,
+    LANG_PERMBAN_IP_ANNOUNCE            = 17895,
+    LANG_MUTE_ANNOUNCE                  = 17896,
+    LANG_ARENA_STARTED_ANNOUNCE_WORLD   = 17898,
+
+    // SOTA
+    LANG_BG_SA_START_TWO_MINUTE             = 20000,
+    LANG_BG_SA_START_ONE_MINUTE             = 20001,
+    LANG_BG_SA_START_HALF_MINUTE            = 20002,
+    LANG_BG_SA_HAS_BEGUN                    = 20003,
+
+    LANG_BG_SA_GATE_ATTACK                  = 20004,
+    LANG_BG_SA_GATE_DAMAGE                  = 20005,
+    LANG_BG_SA_GATE_DETROYED                = 20006,
+
+    LANG_BG_SA_GATE_GREEN_EMERALD           = 20007,
+    LANG_BG_SA_GATE_BLUE_SAPHIRE            = 20008,
+    LANG_BG_SA_GATE_MAUVE_AMETHYST          = 20009,
+    LANG_BG_SA_GATE_RED_SUN_                = 20010,
+    LANG_BG_SA_GATE_YELLOW_MOON             = 20011,
+    LANG_BG_SA_GATE_ROOM_ANCIENT_SHRINE     = 20012,
+
+    LANG_BG_SA_EAST_GRAVEYARD               = 20013,
+    LANG_BG_SA_WEST_GRAVEYARD               = 20014,
+    LANG_BG_SA_SOUTH_GRAVEYARD              = 20015,
+
+    LANG_BG_SA_INSTALL_BOMB                 = 20016,
+
+    LANG_BG_SA_ALLIANCE_END_1ROUND          = 20017,
+    LANG_BG_SA_HORDE_END_1ROUND             = 20018,
+    LANG_BG_SA_ALLIANCE_END_2ROUND          = 20019,
+    LANG_BG_SA_HORDE_END_2ROUND             = 20020,
+    /*##############################################
+    #          Strings for SendWarningToAll        #
+    ##############################################*/
+    LANG_BG_SA_HORDE_EAST_CONQUESTED        = 20021,
+    LANG_BG_SA_HORDE_WEST_CONQUESTED        = 20022,
+    LANG_BG_SA_HORDE_SOUTH_CONQUESTED       = 20023,
+    LANG_BG_SA_ALLIANCE_EAST_CONQUESTED     = 20024,
+    LANG_BG_SA_ALLIANCE_WEST_CONQUESTED     = 20025,
+    LANG_BG_SA_ALLIANCE_SOUTH_CONQUESTED    = 20026,
+
+    LANG_BG_SA_GATE_ROOM_ANCIENT_SHRINE_DESTROYED = 20027,
+    LANG_BG_SA_GATE_GREEN_EMERALD_DESTROYED       = 20028,
+    LANG_BG_SA_GATE_BLUE_SAPHIRE_DESTROYED        = 20029,
+    LANG_BG_SA_GATE_MAUVE_AMETHYST_DESTROYED      = 20030,
+    LANG_BG_SA_GATE_RED_SUN_DESTROYED             = 20031,
+    LANG_BG_SA_GATE_YELLOW_MOON_DESTROYED         = 20032,
+    LANG_BG_SA_GATE_ROOM_ANCIENT_SHRINE_DAMAGED   = 20033,
+    LANG_BG_SA_GATE_GREEN_EMERALD_DAMAGED         = 20034,
+    LANG_BG_SA_GATE_BLUE_SAPHIRE_DAMAGED          = 20035,
+    LANG_BG_SA_GATE_MAUVE_AMETHYST_DAMAGED        = 20036,
+    LANG_BG_SA_GATE_RED_SUN_DAMAGED               = 20037,
+    LANG_BG_SA_GATE_YELLOW_MOON_DAMAGED           = 20038,
+
+    LANG_BG_SA_HORDE_TIMEOUT_END_1ROUND           = 20039,
+    LANG_BG_SA_ALLIANCE_TIMEOUT_END_1ROUND        = 20040,
+
+    LANG_BG_SA_HORDE_TIMEOUT_END_2ROUND           = 20041,
+    LANG_BG_SA_ALLIANCE_TIMEOUT_END_2ROUND        = 20042,
+
+    LANG_BG_SA_END_1ROUND                         = 20043,
+    LANG_BG_WIN_NONE                              = 20044,
+
+    // Isle of Conquest
+    LANG_BG_IC_START_TWO_MINUTES        = 20080,
+    LANG_BG_IC_START_ONE_MINUTE         = 20081,
+    LANG_BG_IC_START_HALF_MINUTE        = 20082,
+    LANG_BG_IC_HAS_BEGUN                = 20083,
+    LANG_BG_IC_ALLIANCE_KEEP            = 20084,
+    LANG_BG_IC_HORDE_KEEP               = 20085,
+    LANG_BG_IC_ALLIANCE_WINS            = 20086,
+    LANG_BG_IC_HORDE_WINS               = 20087,
+    LANG_BG_IC_A_WEST_GATE_DESTROYED    = 20088,
+    LANG_BG_IC_A_EAST_GATE_DESTROYED    = 20089,
+    LANG_BG_IC_A_FRONT_GATE_DESTROYED   = 20090,
+    LANG_BG_IC_H_WEST_GATE_DESTROYED    = 20091,
+    LANG_BG_IC_H_EAST_GATE_DESTROYED    = 20092,
+    LANG_BG_IC_H_FRONT_GATE_DESTROYED   = 20093,
+    LANG_BG_IC_NODE_ASSAULTED           = 20094,
+    LANG_BG_IC_NODE_DEFENDED            = 20095,
+    LANG_BG_IC_NODE_CLAIMED             = 20096,
+    LANG_BG_IC_NODE_TAKEN               = 20097,
+    LANG_BG_IC_NODE_WORKSHOP            = 20098,
+    LANG_BG_IC_NODE_DOCKS               = 20099,
+    LANG_BG_IC_NODE_REFINERY            = 20100,
+    LANG_BG_IC_NODE_QUARRY              = 20101,
+    LANG_BG_IC_NODE_HANGAR              = 20102,
 
     // NOT RESERVED IDS                   12000-1999999999
     // `db_script_string` table index     2000000000-2000999999 (MIN_DB_SCRIPT_STRING_ID-MAX_DB_SCRIPT_STRING_ID)

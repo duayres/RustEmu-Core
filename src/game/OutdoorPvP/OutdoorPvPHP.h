@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
 
 #include "Common.h"
 #include "OutdoorPvP.h"
-#include "Language.h"
+#include "../Language.h"
 
 enum
 {
@@ -148,15 +148,15 @@ static const uint32 hellfireBanners[MAX_HP_TOWERS] = {GO_HELLFIRE_BANNER_OVERLOO
 class OutdoorPvPHP : public OutdoorPvP
 {
     public:
-        OutdoorPvPHP();
+        OutdoorPvPHP(uint32 id);
 
         void HandlePlayerEnterZone(Player* player, bool isMainZone) override;
         void HandlePlayerLeaveZone(Player* player, bool isMainZone) override;
-        void FillInitialWorldStates(WorldPacket& data, uint32& count) override;
+        void FillInitialWorldStates(uint32 zoneId) override;
         void SendRemoveWorldStates(Player* player) override;
 
         bool HandleEvent(uint32 eventId, GameObject* go) override;
-        void HandleObjectiveComplete(uint32 eventId, const std::list<Player*> &players, Team team) override;
+        void HandleObjectiveComplete(uint32 eventId, std::list<Player*> players, Team team) override;
 
         void HandleGameObjectCreate(GameObject* go) override;
         void HandlePlayerKillInsideArea(Player* player) override;
@@ -167,8 +167,8 @@ class OutdoorPvPHP : public OutdoorPvP
 
         Team m_towerOwner[MAX_HP_TOWERS];
         uint32 m_towerWorldState[MAX_HP_TOWERS];
-        uint8 m_towersAlliance;
-        uint8 m_towersHorde;
+        uint32 m_towersAlliance;
+        uint32 m_towersHorde;
 
         ObjectGuid m_towers[MAX_HP_TOWERS];
         ObjectGuid m_banners[MAX_HP_TOWERS];

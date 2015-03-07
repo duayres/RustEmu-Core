@@ -839,14 +839,4 @@ class MANGOS_DLL_SPEC Creature : public Unit
         Spell const* m_focusSpell;                          // Locks the target during spell cast for proper facing
 };
 
-class ForcedDespawnDelayEvent : public BasicEvent
-{
-    public:
-        ForcedDespawnDelayEvent(Creature& owner) : BasicEvent(), m_owner(owner) { }
-        bool Execute(uint64 e_time, uint32 p_time) override;
-
-    private:
-        Creature& m_owner;
-};
-
 #endif

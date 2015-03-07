@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,8 +34,17 @@ class BattleGroundAA : public BattleGround
 
     public:
         BattleGroundAA();
+        ~BattleGroundAA();
+        void Update(uint32 diff);
 
         /* inherited from BattlegroundClass */
-        virtual void AddPlayer(Player* plr) override;
+        virtual void AddPlayer(Player* plr);
+        virtual void StartingEventCloseDoors();
+        virtual void StartingEventOpenDoors();
+
+        void RemovePlayer(Player* plr, ObjectGuid guid);
+        void HandleAreaTrigger(Player* Source, uint32 Trigger);
+        bool SetupBattleGround();
+        void HandleKillPlayer(Player* player, Player* killer);
 };
 #endif

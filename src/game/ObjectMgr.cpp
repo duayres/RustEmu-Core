@@ -5839,8 +5839,8 @@ void ObjectMgr::LoadAreaTriggerTeleports()
 
         bar.step();
 
-        sLog.outString(">> Loaded %u area trigger teleport definitions", count);
         sLog.outString();
+        sLog.outString(">> Loaded %u area trigger teleport definitions", count);
         return;
     }
 
@@ -5869,17 +5869,17 @@ void ObjectMgr::LoadAreaTriggerTeleports()
         at.requiredQuestHeroicH = fields[9].GetUInt32();
         at.minGS = fields[10].GetUInt32();
         at.maxGS = fields[11].GetUInt32();
-        at.target_mapId = fields[12].GetUInt32();
-        at.target_X = fields[13].GetFloat();
-        at.target_Y = fields[14].GetFloat();
-        at.target_Z = fields[15].GetFloat();
-        at.target_Orientation = fields[16].GetFloat();
+        at.loc = WorldLocation(fields[12].GetUInt32(),
+            fields[13].GetFloat(),
+            fields[14].GetFloat(),
+            fields[15].GetFloat(),
+            fields[16].GetFloat());
         at.achiev0 = fields[17].GetUInt32();
         at.achiev1 = fields[18].GetUInt32();
         at.combatMode = fields[19].GetUInt32();
 
         AreaTriggerEntry const* atEntry = sAreaTriggerStore.LookupEntry(Trigger_ID);
-        if (!atEntry)
+        if (!atEntry && !sWorld.getConfig(CONFIG_BOOL_ALLOW_CUSTOM_MAPS))
         {
             sLog.outErrorDb("Table `areatrigger_teleport` has area trigger (ID:%u) not listed in `AreaTrigger.dbc`.", Trigger_ID);
             continue;
@@ -5965,17 +5965,24 @@ void ObjectMgr::LoadAreaTriggerTeleports()
             }
         }
 
-        MapEntry const* mapEntry = sMapStore.LookupEntry(at.target_mapId);
+        MapEntry const* mapEntry = sMapStore.LookupEntry(at.loc.GetMapId());
         if (!mapEntry)
         {
-            sLog.outErrorDb("Table `areatrigger_teleport` has nonexistent target map (ID: %u) for Area trigger (ID:%u).", at.target_mapId, Trigger_ID);
+            sLog.outErrorDb("Table `areatrigger_teleport` has nonexistent target map (ID: %u) for Area trigger (ID:%u).", at.loc.GetMapId(), Trigger_ID);
             continue;
         }
 
-        if (at.target_X == 0 && at.target_Y == 0 && at.target_Z == 0)
+        if (at.loc.IsEmpty())
         {
-            sLog.outErrorDb("Table `areatrigger_teleport` has area trigger (ID:%u) without target coordinates.", Trigger_ID);
-            continue;
+            if (!sWorld.getConfig(CONFIG_BOOL_ALLOW_CUSTOM_MAPS))
+            {
+                sLog.outErrorDb("Table `areatrigger_teleport` has area trigger (ID:%u) without target coordinates.", Trigger_ID);
+                continue;
+            }
+            else
+            {
+                sLog.outDetail("Table `areatrigger_teleport` has area trigger (ID:%u) without correct target coordinates.", Trigger_ID);
+            }
         }
 
         mAreaTriggers[Trigger_ID] = at;
@@ -5989,63 +5996,66 @@ void ObjectMgr::LoadAreaTriggerTeleports()
 }
 
 /*
- * Searches for the areatrigger which teleports players out of the given map (only direct to continent)
- */
-AreaTrigger const* ObjectMgr::GetGoBackTrigger(uint32 map_id) const
+* Searches for the areatrigger which teleports players out of the given map (only direct to continent)
+*/
+AreaTrigger const* ObjectMgr::GetGoBackTrigger(uint32 mapId) const
 {
-    const MapEntry* mapEntry = sMapStore.LookupEntry(map_id);
+    const MapEntry* mapEntry = sMapStore.LookupEntry(mapId);
     if (!mapEntry || mapEntry->ghost_entrance_map < 0)
         return NULL;
+    uint32 ghost_entrance_map = uint32(mapEntry->ghost_entrance_map);
+    if (mapEntry->ghost_entrance_map == 0 && mapEntry->ghost_entrance_x == 0.0f && mapEntry->ghost_entrance_y == 0.0f)
+    {
+        GraveYardMapBounds bounds = mGraveYardMap.equal_range(mapEntry->linked_zone);
+        for (GraveYardMap::const_iterator itr = bounds.first; itr != bounds.second; ++itr)
+        {
+            WorldSafeLocsEntry const* worldSafeLocsEntry = sWorldSafeLocsStore.LookupEntry(itr->second.safeLocId);
+            ghost_entrance_map = worldSafeLocsEntry->map_id;
+        }
+    }
 
-    // Try to find one that teleports to the map we want to enter
-    std::list<AreaTrigger const*> ghostTrigger;
-    AreaTrigger const* compareTrigger = NULL;
     for (AreaTriggerMap::const_iterator itr = mAreaTriggers.begin(); itr != mAreaTriggers.end(); ++itr)
     {
-        if (itr->second.target_mapId == uint32(mapEntry->ghost_entrance_map))
-        {
-            ghostTrigger.push_back(&itr->second);
-            // First run, only consider AreaTrigger that teleport in the proper map
-            if ((!compareTrigger || itr->second.IsLessOrEqualThan(compareTrigger)) && sAreaTriggerStore.LookupEntry(itr->first)->mapid == map_id)
-            {
-                if (itr->second.IsMinimal())
-                    return &itr->second;
-
-                compareTrigger = &itr->second;
-            }
-        }
+        if (itr->second.loc.GetMapId() != ghost_entrance_map)
+            continue;
+        AreaTriggerEntry const* atEntry = sAreaTriggerStore.LookupEntry(itr->first);
+        if (!atEntry || atEntry->mapid != mapId)
+            continue;
+        return &itr->second;
     }
-    if (compareTrigger)
-        return compareTrigger;
 
-    // Second attempt: take one fitting
-    for (std::list<AreaTrigger const*>::const_iterator itr = ghostTrigger.begin(); itr != ghostTrigger.end(); ++itr)
+    if (sWorld.getConfig(CONFIG_BOOL_ALLOW_CUSTOM_MAPS))
     {
-        if (!compareTrigger || (*itr)->IsLessOrEqualThan(compareTrigger))
+        for (AreaTriggerMap::const_iterator itr = mAreaTriggers.begin(); itr != mAreaTriggers.end(); ++itr)
         {
-            if ((*itr)->IsMinimal())
-                return *itr;
-
-            compareTrigger = *itr;
+            if (itr->second.loc.GetMapId() == ghost_entrance_map)
+                return &itr->second;
         }
     }
-    return compareTrigger;
+
+    return NULL;
 }
 
 /**
- * Searches for the areatrigger which teleports players to the given map
- */
-AreaTrigger const* ObjectMgr::GetMapEntranceTrigger(uint32 Map) const
+* Searches for the areatrigger which teleports players to the given map
+*/
+AreaTrigger const* ObjectMgr::GetMapEntranceTrigger(uint32 mapId) const
 {
     AreaTrigger const* compareTrigger = NULL;
-    MapEntry const* mEntry = sMapStore.LookupEntry(Map);
+    MapEntry const* mEntry = sMapStore.LookupEntry(mapId);
 
     for (AreaTriggerMap::const_iterator itr = mAreaTriggers.begin(); itr != mAreaTriggers.end(); ++itr)
     {
-        if (itr->second.target_mapId == Map)
+        if (itr->second.loc.GetMapId() == mapId)
         {
+            AreaTriggerEntry const* atEntry = sAreaTriggerStore.LookupEntry(itr->first);
+            if (!atEntry && sWorld.getConfig(CONFIG_BOOL_ALLOW_CUSTOM_MAPS))
+                return &itr->second;
+
             if (mEntry->Instanceable())
             {
+                if (!atEntry || atEntry->mapid == mapId)
+                    continue;
                 // Remark that IsLessOrEqualThan is no total order, and a->IsLeQ(b) != !b->IsLeQ(a)
                 if (!compareTrigger || compareTrigger->IsLessOrEqualThan(&itr->second))
                     compareTrigger = &itr->second;
@@ -6797,17 +6807,19 @@ void ObjectMgr::LoadReputationOnKill()
     uint32 count = 0;
 
     //                                                0            1                     2
-    QueryResult* result = WorldDatabase.Query("SELECT creature_id, RewOnKillRepFaction1, RewOnKillRepFaction2,"
-                          //   3             4             5                   6             7             8                   9
-                          "IsTeamAward1, MaxStanding1, RewOnKillRepValue1, IsTeamAward2, MaxStanding2, RewOnKillRepValue2, TeamDependent "
-                          "FROM creature_onkill_reputation");
+    QueryResult *result = WorldDatabase.Query("SELECT creature_id, RewOnKillRepFaction1, RewOnKillRepFaction2,"
+        //   3             4             5                   6             7             8                   9              10
+        "IsTeamAward1, MaxStanding1, RewOnKillRepValue1, IsTeamAward2, MaxStanding2, RewOnKillRepValue2, TeamDependent, ChampioningAura "
+        "FROM creature_onkill_reputation");
 
     if (!result)
     {
         BarGoLink bar(1);
+
         bar.step();
-        sLog.outErrorDb(">> Loaded 0 creature award reputation definitions. DB table `creature_onkill_reputation` is empty.");
+
         sLog.outString();
+        sLog.outErrorDb(">> Loaded 0 creature award reputation definitions. DB table `creature_onkill_reputation` is empty.");
         return;
     }
 
@@ -6815,21 +6827,22 @@ void ObjectMgr::LoadReputationOnKill()
 
     do
     {
-        Field* fields = result->Fetch();
+        Field *fields = result->Fetch();
         bar.step();
 
         uint32 creature_id = fields[0].GetUInt32();
 
         ReputationOnKillEntry repOnKill;
-        repOnKill.repfaction1          = fields[1].GetUInt32();
-        repOnKill.repfaction2          = fields[2].GetUInt32();
-        repOnKill.is_teamaward1        = fields[3].GetBool();
-        repOnKill.reputation_max_cap1  = fields[4].GetUInt32();
-        repOnKill.repvalue1            = fields[5].GetInt32();
-        repOnKill.is_teamaward2        = fields[6].GetBool();
-        repOnKill.reputation_max_cap2  = fields[7].GetUInt32();
-        repOnKill.repvalue2            = fields[8].GetInt32();
-        repOnKill.team_dependent       = fields[9].GetUInt8();
+        repOnKill.repfaction1 = fields[1].GetUInt32();
+        repOnKill.repfaction2 = fields[2].GetUInt32();
+        repOnKill.is_teamaward1 = fields[3].GetBool();
+        repOnKill.reputation_max_cap1 = fields[4].GetUInt32();
+        repOnKill.repvalue1 = fields[5].GetInt32();
+        repOnKill.is_teamaward2 = fields[6].GetBool();
+        repOnKill.reputation_max_cap2 = fields[7].GetUInt32();
+        repOnKill.repvalue2 = fields[8].GetInt32();
+        repOnKill.team_dependent = fields[9].GetUInt8();
+        repOnKill.championingAura = fields[10].GetUInt32();
 
         if (!GetCreatureTemplate(creature_id))
         {
@@ -6839,7 +6852,7 @@ void ObjectMgr::LoadReputationOnKill()
 
         if (repOnKill.repfaction1)
         {
-            FactionEntry const* factionEntry1 = sFactionStore.LookupEntry(repOnKill.repfaction1);
+            FactionEntry const *factionEntry1 = sFactionStore.LookupEntry(repOnKill.repfaction1);
             if (!factionEntry1)
             {
                 sLog.outErrorDb("Faction (faction.dbc) %u does not exist but is used in `creature_onkill_reputation`", repOnKill.repfaction1);
@@ -6849,7 +6862,7 @@ void ObjectMgr::LoadReputationOnKill()
 
         if (repOnKill.repfaction2)
         {
-            FactionEntry const* factionEntry2 = sFactionStore.LookupEntry(repOnKill.repfaction2);
+            FactionEntry const *factionEntry2 = sFactionStore.LookupEntry(repOnKill.repfaction2);
             if (!factionEntry2)
             {
                 sLog.outErrorDb("Faction (faction.dbc) %u does not exist but is used in `creature_onkill_reputation`", repOnKill.repfaction2);
@@ -6860,13 +6873,12 @@ void ObjectMgr::LoadReputationOnKill()
         mRepOnKill[creature_id] = repOnKill;
 
         ++count;
-    }
-    while (result->NextRow());
+    } while (result->NextRow());
 
     delete result;
 
-    sLog.outString(">> Loaded %u creature award reputation definitions", count);
     sLog.outString();
+    sLog.outString(">> Loaded %u creature award reputation definitions", count);
 }
 
 void ObjectMgr::LoadReputationSpilloverTemplate()
@@ -6874,14 +6886,16 @@ void ObjectMgr::LoadReputationSpilloverTemplate()
     m_RepSpilloverTemplateMap.clear();                      // for reload case
 
     uint32 count = 0;
-    QueryResult* result = WorldDatabase.Query("SELECT faction, faction1, rate_1, rank_1, faction2, rate_2, rank_2, faction3, rate_3, rank_3, faction4, rate_4, rank_4 FROM reputation_spillover_template");
+    QueryResult *result = WorldDatabase.Query("SELECT faction, faction1, rate_1, rank_1, faction2, rate_2, rank_2, faction3, rate_3, rank_3, faction4, rate_4, rank_4 FROM reputation_spillover_template");
 
     if (!result)
     {
         BarGoLink bar(1);
+
         bar.step();
-        sLog.outString(">> Loaded `reputation_spillover_template`, table is empty.");
+
         sLog.outString();
+        sLog.outString(">> Loaded `reputation_spillover_template`, table is empty.");
         return;
     }
 
@@ -6891,26 +6905,26 @@ void ObjectMgr::LoadReputationSpilloverTemplate()
     {
         bar.step();
 
-        Field* fields = result->Fetch();
+        Field *fields = result->Fetch();
 
-        uint32 factionId                = fields[0].GetUInt32();
+        uint32 factionId = fields[0].GetUInt32();
 
         RepSpilloverTemplate repTemplate;
 
-        repTemplate.faction[0]          = fields[1].GetUInt32();
-        repTemplate.faction_rate[0]     = fields[2].GetFloat();
-        repTemplate.faction_rank[0]     = fields[3].GetUInt32();
-        repTemplate.faction[1]          = fields[4].GetUInt32();
-        repTemplate.faction_rate[1]     = fields[5].GetFloat();
-        repTemplate.faction_rank[1]     = fields[6].GetUInt32();
-        repTemplate.faction[2]          = fields[7].GetUInt32();
-        repTemplate.faction_rate[2]     = fields[8].GetFloat();
-        repTemplate.faction_rank[2]     = fields[9].GetUInt32();
-        repTemplate.faction[3]          = fields[10].GetUInt32();
-        repTemplate.faction_rate[3]     = fields[11].GetFloat();
-        repTemplate.faction_rank[3]     = fields[12].GetUInt32();
+        repTemplate.faction[0] = fields[1].GetUInt32();
+        repTemplate.faction_rate[0] = fields[2].GetFloat();
+        repTemplate.faction_rank[0] = fields[3].GetUInt32();
+        repTemplate.faction[1] = fields[4].GetUInt32();
+        repTemplate.faction_rate[1] = fields[5].GetFloat();
+        repTemplate.faction_rank[1] = fields[6].GetUInt32();
+        repTemplate.faction[2] = fields[7].GetUInt32();
+        repTemplate.faction_rate[2] = fields[8].GetFloat();
+        repTemplate.faction_rank[2] = fields[9].GetUInt32();
+        repTemplate.faction[3] = fields[10].GetUInt32();
+        repTemplate.faction_rate[3] = fields[11].GetFloat();
+        repTemplate.faction_rank[3] = fields[12].GetUInt32();
 
-        FactionEntry const* factionEntry = sFactionStore.LookupEntry(factionId);
+        FactionEntry const *factionEntry = sFactionStore.LookupEntry(factionId);
 
         if (!factionEntry)
         {
@@ -6928,7 +6942,7 @@ void ObjectMgr::LoadReputationSpilloverTemplate()
         {
             if (repTemplate.faction[i])
             {
-                FactionEntry const* factionSpillover = sFactionStore.LookupEntry(repTemplate.faction[i]);
+                FactionEntry const *factionSpillover = sFactionStore.LookupEntry(repTemplate.faction[i]);
 
                 if (!factionSpillover)
                 {
@@ -6950,25 +6964,25 @@ void ObjectMgr::LoadReputationSpilloverTemplate()
             }
         }
 
-        FactionEntry const* factionEntry0 = sFactionStore.LookupEntry(repTemplate.faction[0]);
+        FactionEntry const *factionEntry0 = sFactionStore.LookupEntry(repTemplate.faction[0]);
         if (repTemplate.faction[0] && !factionEntry0)
         {
             sLog.outErrorDb("Faction (faction.dbc) %u does not exist but is used in `reputation_spillover_template`", repTemplate.faction[0]);
             continue;
         }
-        FactionEntry const* factionEntry1 = sFactionStore.LookupEntry(repTemplate.faction[1]);
+        FactionEntry const *factionEntry1 = sFactionStore.LookupEntry(repTemplate.faction[1]);
         if (repTemplate.faction[1] && !factionEntry1)
         {
             sLog.outErrorDb("Faction (faction.dbc) %u does not exist but is used in `reputation_spillover_template`", repTemplate.faction[1]);
             continue;
         }
-        FactionEntry const* factionEntry2 = sFactionStore.LookupEntry(repTemplate.faction[2]);
+        FactionEntry const *factionEntry2 = sFactionStore.LookupEntry(repTemplate.faction[2]);
         if (repTemplate.faction[2] && !factionEntry2)
         {
             sLog.outErrorDb("Faction (faction.dbc) %u does not exist but is used in `reputation_spillover_template`", repTemplate.faction[2]);
             continue;
         }
-        FactionEntry const* factionEntry3 = sFactionStore.LookupEntry(repTemplate.faction[3]);
+        FactionEntry const *factionEntry3 = sFactionStore.LookupEntry(repTemplate.faction[3]);
         if (repTemplate.faction[3] && !factionEntry3)
         {
             sLog.outErrorDb("Faction (faction.dbc) %u does not exist but is used in `reputation_spillover_template`", repTemplate.faction[3]);
@@ -6978,13 +6992,12 @@ void ObjectMgr::LoadReputationSpilloverTemplate()
         m_RepSpilloverTemplateMap[factionId] = repTemplate;
 
         ++count;
-    }
-    while (result->NextRow());
+    } while (result->NextRow());
 
     delete result;
 
-    sLog.outString(">> Loaded %u reputation_spillover_template", count);
     sLog.outString();
+    sLog.outString(">> Loaded %u reputation_spillover_template", count);
 }
 
 void ObjectMgr::LoadPointsOfInterest()
@@ -8831,14 +8844,16 @@ void ObjectMgr::LoadGameTele()
     m_GameTeleMap.clear();                                  // for reload case
 
     uint32 count = 0;
-    QueryResult* result = WorldDatabase.Query("SELECT id, position_x, position_y, position_z, orientation, map, name FROM game_tele");
+    QueryResult *result = WorldDatabase.Query("SELECT id, position_x, position_y, position_z, orientation, map, name FROM game_tele");
 
     if (!result)
     {
         BarGoLink bar(1);
+
         bar.step();
-        sLog.outErrorDb(">> Loaded `game_tele`, table is empty!");
+
         sLog.outString();
+        sLog.outErrorDb(">> Loaded `game_tele`, table is empty!");
         return;
     }
 
@@ -8848,20 +8863,20 @@ void ObjectMgr::LoadGameTele()
     {
         bar.step();
 
-        Field* fields = result->Fetch();
+        Field *fields = result->Fetch();
 
-        uint32 id         = fields[0].GetUInt32();
+        uint32 id = fields[0].GetUInt32();
 
         GameTele gt;
 
-        gt.position_x     = fields[1].GetFloat();
-        gt.position_y     = fields[2].GetFloat();
-        gt.position_z     = fields[3].GetFloat();
-        gt.orientation    = fields[4].GetFloat();
-        gt.mapId          = fields[5].GetUInt32();
-        gt.name           = fields[6].GetCppString();
+        gt.loc.x = fields[1].GetFloat();
+        gt.loc.y = fields[2].GetFloat();
+        gt.loc.z = fields[3].GetFloat();
+        gt.loc.orientation = fields[4].GetFloat();
+        gt.loc.SetMapId(fields[5].GetUInt32());
+        gt.name = fields[6].GetCppString();
 
-        if (!MapManager::IsValidMapCoord(gt.mapId, gt.position_x, gt.position_y, gt.position_z, gt.orientation))
+        if (!MapManager::IsValidMapCoord(gt.loc))
         {
             sLog.outErrorDb("Wrong position for id %u (name: %s) in `game_tele` table, ignoring.", id, gt.name.c_str());
             continue;
@@ -8878,15 +8893,14 @@ void ObjectMgr::LoadGameTele()
         m_GameTeleMap[id] = gt;
 
         ++count;
-    }
-    while (result->NextRow());
+    } while (result->NextRow());
     delete result;
 
-    sLog.outString(">> Loaded %u GameTeleports", count);
     sLog.outString();
+    sLog.outString(">> Loaded %u GameTeleports", count);
 }
 
-GameTele const* ObjectMgr::GetGameTele(const std::string& name) const
+GameTele const* ObjectMgr::GetGameTele(std::string const& name) const
 {
     // explicit name case
     std::wstring wname;
@@ -8899,12 +8913,33 @@ GameTele const* ObjectMgr::GetGameTele(const std::string& name) const
     // Alternative first GameTele what contains wnameLow as substring in case no GameTele location found
     const GameTele* alt = NULL;
     for (GameTeleMap::const_iterator itr = m_GameTeleMap.begin(); itr != m_GameTeleMap.end(); ++itr)
+    {
         if (itr->second.wnameLow == wname)
             return &itr->second;
         else if (alt == NULL && itr->second.wnameLow.find(wname) != std::wstring::npos)
             alt = &itr->second;
+    }
 
     return alt;
+}
+
+GameTele const* ObjectMgr::GetGameTeleExactName(std::string const& name) const
+{
+    // explicit name case
+    std::wstring wname;
+    if (!Utf8toWStr(name, wname))
+        return NULL;
+
+    // converting string that we try to find to lower case
+    wstrToLower(wname);
+
+    for (GameTeleMap::const_iterator itr = m_GameTeleMap.begin(); itr != m_GameTeleMap.end(); ++itr)
+    {
+        if (itr->second.wnameLow == wname)
+            return &itr->second;
+    }
+
+    return NULL;
 }
 
 bool ObjectMgr::AddGameTele(GameTele& tele)
@@ -8912,8 +8947,10 @@ bool ObjectMgr::AddGameTele(GameTele& tele)
     // find max id
     uint32 new_id = 0;
     for (GameTeleMap::const_iterator itr = m_GameTeleMap.begin(); itr != m_GameTeleMap.end(); ++itr)
+    {
         if (itr->first > new_id)
             new_id = itr->first;
+    }
 
     // use next
     ++new_id;
@@ -8924,14 +8961,15 @@ bool ObjectMgr::AddGameTele(GameTele& tele)
     wstrToLower(tele.wnameLow);
 
     m_GameTeleMap[new_id] = tele;
+
     std::string safeName(tele.name);
     WorldDatabase.escape_string(safeName);
 
     return WorldDatabase.PExecuteLog("INSERT INTO game_tele "
-                                     "(id,position_x,position_y,position_z,orientation,map,name) "
-                                     "VALUES (%u,%f,%f,%f,%f,%u,'%s')",
-                                     new_id, tele.position_x, tele.position_y, tele.position_z,
-                                     tele.orientation, tele.mapId, safeName.c_str());
+        "(id,position_x,position_y,position_z,orientation,map,name) "
+        "VALUES (%u,%f,%f,%f,%f,%u,'%s')",
+        new_id, tele.loc.x, tele.loc.y, tele.loc.z,
+        tele.loc.o, tele.loc.GetMapId(), safeName.c_str());
 }
 
 bool ObjectMgr::DeleteGameTele(const std::string& name)
@@ -9295,57 +9333,6 @@ void ObjectMgr::LoadVendorTemplates()
 
     for (std::set<uint32>::const_iterator vItr = vendor_ids.begin(); vItr != vendor_ids.end(); ++vItr)
         sLog.outErrorDb("Table `npc_vendor_template` has vendor template %u not used by any vendors ", *vItr);
-}
-
-/* This function is supposed to take care of three things:
-*  1) Load Transports on Map or on Continents
-*  2) Load Active Npcs on Map or Continents
-*  3) Load Everything dependend on config setting LoadAllGridsOnMaps
-*
-*  This function is currently WIP, hence parts exist only as draft.
-*/
-void ObjectMgr::LoadActiveEntities(Map* _map)
-{
-    // Special case on startup - load continents
-    if (!_map)
-    {
-        uint32 continents[] = { 0, 1, 530, 571 };
-        for (int i = 0; i < countof(continents); ++i)
-        {
-            _map = sMapMgr.FindMap(continents[i]);
-            if (!_map)
-                _map = sMapMgr.CreateMap(continents[i], NULL);
-
-            if (_map)
-                LoadActiveEntities(_map);
-            else
-                sLog.outError("ObjectMgr::LoadActiveEntities - Unable to create Map %u", continents[i]);
-        }
-
-        return;
-    }
-
-    // Load active objects for _map
-    std::set<uint32> const* mapList = sWorld.getConfigForceLoadMapIds();
-    if (mapList && mapList->find(_map->GetId()) != mapList->end())
-    {
-        for (CreatureDataMap::const_iterator itr = mCreatureDataMap.begin(); itr != mCreatureDataMap.end(); ++itr)
-        {
-            if (itr->second.mapid == _map->GetId())
-                _map->ForceLoadGrid(itr->second.posX, itr->second.posY);
-        }
-    }
-    else                                                    // Normal case - Load all npcs that are active
-    {
-        std::pair<ActiveCreatureGuidsOnMap::const_iterator, ActiveCreatureGuidsOnMap::const_iterator> bounds = m_activeCreatures.equal_range(_map->GetId());
-        for (ActiveCreatureGuidsOnMap::const_iterator itr = bounds.first; itr != bounds.second; ++itr)
-            {
-                CreatureData const& data = mCreatureDataMap[itr->second];
-                _map->ForceLoadGrid(data.posX, data.posY);
-            }
-    }
-
-    // Load Transports on Map _map
 }
 
 void ObjectMgr::LoadNpcGossips()

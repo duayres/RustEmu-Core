@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,12 +17,12 @@
  */
 
 #include "OutdoorPvPGH.h"
-#include "Map.h"
-#include "Object.h"
-#include "Creature.h"
-#include "GameObject.h"
+#include "../Map.h"
+#include "../Object.h"
+#include "../Creature.h"
+#include "../GameObject.h"
 
-OutdoorPvPGH::OutdoorPvPGH() : OutdoorPvP(),
+OutdoorPvPGH::OutdoorPvPGH(uint32 id) : OutdoorPvP(id),
     m_zoneOwner(TEAM_NONE)
 {
 }
@@ -63,12 +63,13 @@ void OutdoorPvPGH::HandleCreatureDeath(Creature* creature)
 
 void OutdoorPvPGH::HandleGameObjectCreate(GameObject* go)
 {
-    OutdoorPvP::HandleGameObjectCreate(go);
-
     if (go->GetEntry() == GO_VENTURE_BAY_LIGHTHOUSE)
     {
         m_capturePoint = go->GetObjectGuid();
+        m_zoneOwner    = go->GetTeam();
         go->SetGoArtKit(GetBannerArtKit(m_zoneOwner));
+        LockLighthouse(go);
+        DespawnVendors(go);
     }
 }
 
@@ -138,24 +139,18 @@ void OutdoorPvPGH::DespawnVendors(const WorldObject* objRef)
 void OutdoorPvPGH::LockLighthouse(const WorldObject* objRef)
 {
     if (GameObject* go = objRef->GetMap()->GetGameObject(m_capturePoint))
-        go->SetLootState(GO_JUST_DEACTIVATED);
-    else
-    {
-        // if grid is unloaded, changing the saved slider value is enough
-        CapturePointSlider value(m_zoneOwner == ALLIANCE ? CAPTURE_SLIDER_ALLIANCE : CAPTURE_SLIDER_HORDE, true);
-        sOutdoorPvPMgr.SetCapturePointSlider(GO_VENTURE_BAY_LIGHTHOUSE, value);
-    }
+        go->SetCapturePointSlider(m_zoneOwner == ALLIANCE ? CAPTURE_SLIDER_ALLIANCE_LOCKED : CAPTURE_SLIDER_HORDE_LOCKED);
+
+    sOutdoorPvPMgr.SetCapturePointSlider(m_capturePoint, m_zoneOwner == ALLIANCE ? CAPTURE_SLIDER_ALLIANCE_LOCKED : CAPTURE_SLIDER_HORDE_LOCKED);
 }
 
 // Handle Lighthouse unlock when the commander is killed
 void OutdoorPvPGH::UnlockLighthouse(const WorldObject* objRef)
 {
     if (GameObject* go = objRef->GetMap()->GetGameObject(m_capturePoint))
-        go->SetLootState(GO_ACTIVATED);
+        go->SetCapturePointSlider(CAPTURE_SLIDER_GET_VALUE);
+        // no banner visual update needed because it already has the correct one
     else
-    {
-        // if grid is unloaded, changing the saved slider value is enough
-        CapturePointSlider value(m_zoneOwner == ALLIANCE ? CAPTURE_SLIDER_ALLIANCE : CAPTURE_SLIDER_HORDE, false);
-        sOutdoorPvPMgr.SetCapturePointSlider(GO_VENTURE_BAY_LIGHTHOUSE, value);
-    }
+        // if grid is unloaded, resetting the slider value is enough
+        sOutdoorPvPMgr.SetCapturePointSlider(m_capturePoint, m_zoneOwner == ALLIANCE ? CAPTURE_SLIDER_ALLIANCE : CAPTURE_SLIDER_HORDE);
 }

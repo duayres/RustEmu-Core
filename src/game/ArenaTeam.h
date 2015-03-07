@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +27,13 @@ class QueryResult;
 class WorldPacket;
 class WorldSession;
 class Player;
+
+enum ArenaWorldStates
+{
+    ARENA_SEASON_ID          = 3191,
+    ARENA_SEASON_PREVIOUS_ID = 3901,
+};
+
 
 enum ArenaTeamCommandTypes
 {
@@ -97,8 +104,10 @@ struct ArenaTeamMember
     uint32 games_season;
     uint32 wins_season;
     uint32 personal_rating;
+    uint32 matchmaker_rating;
 
     void ModifyPersonalRating(Player* plr, int32 mod, uint32 slot);
+    void ModifyMatchmakerRating(Player* plr, int32 mod, ArenaType type);
 };
 
 struct ArenaTeamStats
@@ -207,6 +216,9 @@ class ArenaTeam
         void FinishWeek();
         void FinishGame(int32 mod);
 
+        void SetBattleRating(uint32 rating) { BattleRating = rating; }
+        uint32 GetBattleRating() { return BattleRating; }
+
         // Calendar
         void MassInviteToEvent(WorldSession* session);
 
@@ -225,5 +237,7 @@ class ArenaTeam
 
         MemberList m_members;
         ArenaTeamStats m_stats;
+
+        uint32 BattleRating;
 };
 #endif

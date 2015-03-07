@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,10 +19,10 @@
 #include "InstanceData.h"
 #include "Database/DatabaseEnv.h"
 #include "Map.h"
+#include "MapPersistentStateMgr.h"
 #include "Log.h"
-#include "WorldPacket.h"
 
-void InstanceData::SaveToDB() const
+void InstanceData::SaveToDB()
 {
     // no reason to save BGs/Arenas
     if (instance->IsBattleGroundOrArena())
@@ -47,42 +47,27 @@ bool InstanceData::CheckAchievementCriteriaMeet(uint32 criteria_id, Player const
     return false;
 }
 
-bool InstanceData::CheckConditionCriteriaMeet(Player const* /*source*/, uint32 instance_condition_id, WorldObject const* /*conditionSource*/, uint32 conditionSourceType) const
+bool InstanceData::CheckConditionCriteriaMeet(Player const* /*source*/, uint32 instance_condition_id, WorldObject const* /*conditionSource*/, ConditionSource conditionSourceType) const
 {
     sLog.outError("Condition system call InstanceData::CheckConditionCriteriaMeet but instance script for map %u not have implementation for player condition criteria with internal id %u (called from %u)",
                   instance->GetId(), instance_condition_id, uint32(conditionSourceType));
     return false;
 }
 
-void InstanceData::SendEncounterFrame(uint32 type, ObjectGuid sourceGuid /*= NULL*/, uint8 param1 /*= 0*/, uint8 param2 /*= 0*/)
+void InstanceData::UpdateSpecialEncounterState(EncounterFrameCommand command, ObjectGuid linkedGuid, uint8 data1, uint8 data2)
 {
-    // size of this packet is at most 15 (usually less)
-    WorldPacket data(SMSG_INSTANCE_ENCOUNTER, 15);
-    data << uint32(type);
+    DungeonPersistentState* state = ((DungeonMap*)instance)->GetPersistanceState();
+    if (!state)
+        return;
 
-    switch (type)
-    {
-        case ENCOUNTER_FRAME_ENGAGE:
-        case ENCOUNTER_FRAME_DISENGAGE:
-        case ENCOUNTER_FRAME_UPDATE_PRIORITY:
-            MANGOS_ASSERT(sourceGuid);
+    state->UpdateSpecialEncounterState(command, linkedGuid, data1, data2);
+}
 
-            data << sourceGuid.WriteAsPacked();
-            data << uint8(param1);
-            break;
-        case ENCOUNTER_FRAME_ADD_TIMER:
-        case ENCOUNTER_FRAME_ENABLE_OBJECTIVE:
-        case ENCOUNTER_FRAME_DISABLE_OBJECTIVE:
-            data << uint8(param1);
-            break;
-        case ENCOUNTER_FRAME_UPDATE_OBJECTIVE:
-            data << uint8(param1);
-            data << uint8(param2);
-            break;
-        case ENCOUNTER_FRAME_UNK7:
-        default:
-            break;
-    }
+void InstanceData::SendSpecialEncounterState(ObjectGuid linkedGuid)
+{
+    DungeonPersistentState* state = ((DungeonMap*)instance)->GetPersistanceState();
+    if (!state)
+        return;
 
-    instance->SendToPlayers(&data);
+    state->SendSpecialEncounterState(linkedGuid);
 }

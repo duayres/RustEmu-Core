@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,14 +18,14 @@
 
 #include "OutdoorPvPZM.h"
 #include "WorldPacket.h"
-#include "World.h"
-#include "ObjectMgr.h"
-#include "Object.h"
-#include "Creature.h"
-#include "GameObject.h"
-#include "Player.h"
+#include "../World.h"
+#include "../ObjectMgr.h"
+#include "../Object.h"
+#include "../Creature.h"
+#include "../GameObject.h"
+#include "../Player.h"
 
-OutdoorPvPZM::OutdoorPvPZM() : OutdoorPvP(),
+OutdoorPvPZM::OutdoorPvPZM(uint32 id) : OutdoorPvP(id),
     m_graveyardOwner(TEAM_NONE),
     m_graveyardWorldState(WORLD_STATE_ZM_GRAVEYARD_NEUTRAL),
     m_scoutWorldStateAlliance(WORLD_STATE_ZM_FLAG_NOT_READY_ALLIANCE),
@@ -34,6 +34,7 @@ OutdoorPvPZM::OutdoorPvPZM() : OutdoorPvP(),
     m_towersHorde(0)
 {
     // init world states
+    // FIXME- wrong, need read data from WorldStates
     m_towerWorldState[0] = WORLD_STATE_ZM_BEACON_EAST_UI_NEUTRAL;
     m_towerWorldState[1] = WORLD_STATE_ZM_BEACON_WEST_UI_NEUTRAL;
     m_towerMapState[0] = WORLD_STATE_ZM_BEACON_EAST_NEUTRAL;
@@ -46,30 +47,8 @@ OutdoorPvPZM::OutdoorPvPZM() : OutdoorPvP(),
     sObjectMgr.SetGraveYardLinkTeam(GRAVEYARD_ID_TWIN_SPIRE, GRAVEYARD_ZONE_TWIN_SPIRE, TEAM_INVALID);
 }
 
-void OutdoorPvPZM::FillInitialWorldStates(WorldPacket& data, uint32& count)
-{
-    FillInitialWorldState(data, count, m_scoutWorldStateAlliance, WORLD_STATE_ADD);
-    FillInitialWorldState(data, count, m_scoutWorldStateHorde, WORLD_STATE_ADD);
-    FillInitialWorldState(data, count, m_graveyardWorldState, WORLD_STATE_ADD);
-
-    for (uint8 i = 0; i < MAX_ZM_TOWERS; ++i)
-    {
-        FillInitialWorldState(data, count, m_towerWorldState[i], WORLD_STATE_ADD);
-        FillInitialWorldState(data, count, m_towerMapState[i], WORLD_STATE_ADD);
-    }
-}
-
 void OutdoorPvPZM::SendRemoveWorldStates(Player* player)
 {
-    player->SendUpdateWorldState(m_scoutWorldStateAlliance, WORLD_STATE_REMOVE);
-    player->SendUpdateWorldState(m_scoutWorldStateHorde, WORLD_STATE_REMOVE);
-    player->SendUpdateWorldState(m_graveyardWorldState, WORLD_STATE_REMOVE);
-
-    for (uint8 i = 0; i < MAX_ZM_TOWERS; ++i)
-    {
-        player->SendUpdateWorldState(m_towerWorldState[i], WORLD_STATE_REMOVE);
-        player->SendUpdateWorldState(m_towerMapState[i], WORLD_STATE_REMOVE);
-    }
 }
 
 void OutdoorPvPZM::HandlePlayerEnterZone(Player* player, bool isMainZone)
@@ -97,19 +76,19 @@ void OutdoorPvPZM::HandleCreatureCreate(Creature* creature)
     switch (creature->GetEntry())
     {
         case NPC_PVP_BEAM_RED:
-            if (creature->GetPositionY() < 7000.0f)         // East Beam
+            if (creature->GetPositionY() < 7000.0f)                 // East Beam
                 m_beamTowerRed[0] = creature->GetObjectGuid();
-            else if (creature->GetPositionY() < 7300.0f)    // Center Beam
+            else if (creature->GetPositionY() < 7300.0f)            // Center Beam
                 m_beamGraveyardRed = creature->GetObjectGuid();
-            else                                            // West Beam
+            else                                                    // West Beam
                 m_beamTowerRed[1] = creature->GetObjectGuid();
             break;
         case NPC_PVP_BEAM_BLUE:
-            if (creature->GetPositionY() < 7000.0f)         // East Beam
+            if (creature->GetPositionY() < 7000.0f)                 // East Beam
                 m_beamTowerBlue[0] = creature->GetObjectGuid();
-            else if (creature->GetPositionY() < 7300.0f)    // Center Beam
+            else if (creature->GetPositionY() < 7300.0f)            // Center Beam
                 m_beamGraveyardBlue = creature->GetObjectGuid();
-            else                                            // West Beam
+            else                                                    // West Beam
                 m_beamTowerBlue[1] = creature->GetObjectGuid();
             break;
     }
@@ -117,8 +96,6 @@ void OutdoorPvPZM::HandleCreatureCreate(Creature* creature)
 
 void OutdoorPvPZM::HandleGameObjectCreate(GameObject* go)
 {
-    OutdoorPvP::HandleGameObjectCreate(go);
-
     switch (go->GetEntry())
     {
         case GO_ZANGA_BANNER_EAST:

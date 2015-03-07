@@ -41,6 +41,7 @@
 #include "AccountMgr.h"
 #include "GMTicketMgr.h"
 #include "WaypointManager.h"
+#include "WorldStateMgr.h"
 #include "Util.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
@@ -159,18 +160,18 @@ void ChatHandler::ShowTriggerTargetListHelper(uint32 id, AreaTrigger const* at, 
         char dist_buf[50];
         if (!subpart)
         {
-            float dist = m_session->GetPlayer()->GetDistance2d(at->target_X, at->target_Y);
+            float dist = m_session->GetPlayer()->GetDistance2d(at->loc.x, at->loc.y);
             snprintf(dist_buf, 50, GetMangosString(LANG_TRIGGER_DIST), dist);
         }
         else
             dist_buf[0] = '\0';
 
         PSendSysMessage(LANG_TRIGGER_TARGET_LIST_CHAT,
-                        subpart ? " -> " : "", id, id, at->target_mapId, at->target_X, at->target_Y, at->target_Z, dist_buf);
+            subpart ? " -> " : "", id, id, at->loc.GetMapId(), at->loc.x, at->loc.y, at->loc.z, dist_buf);
     }
     else
         PSendSysMessage(LANG_TRIGGER_TARGET_LIST_CONSOLE,
-                        subpart ? " -> " : "", id, at->target_mapId, at->target_X, at->target_Y, at->target_Z);
+        subpart ? " -> " : "", id, at->loc.GetMapId(), at->loc.x, at->loc.y, at->loc.z);
 }
 
 void ChatHandler::ShowTriggerListHelper(AreaTriggerEntry const* atEntry)
@@ -344,7 +345,7 @@ bool ChatHandler::HandleTriggerActiveCommand(char* /*args*/)
 bool ChatHandler::HandleTriggerNearCommand(char* args)
 {
     float distance = (!*args) ? 10.0f : (float)atof(args);
-    float dist2 =  distance * distance;
+    float dist2 = distance * distance;
     uint32 counter = 0;                                     // Counter for figure out that we found smth.
 
     Player* pl = m_session->GetPlayer();
@@ -381,11 +382,11 @@ bool ChatHandler::HandleTriggerNearCommand(char* args)
         if (!at)
             continue;
 
-        if (at->target_mapId != m_session->GetPlayer()->GetMapId())
+        if (at->loc.GetMapId() != m_session->GetPlayer()->GetMapId())
             continue;
 
-        float dx = at->target_X - pl->GetPositionX();
-        float dy = at->target_Y - pl->GetPositionY();
+        float dx = at->loc.x - pl->GetPositionX();
+        float dy = at->loc.y - pl->GetPositionY();
 
         if (dx * dx + dy * dy > dist2)
             continue;
@@ -448,7 +449,7 @@ bool ChatHandler::HandleGoTriggerCommand(char* args)
             return false;
         }
 
-        return HandleGoHelper(_player, at->target_mapId, at->target_X, at->target_Y, &at->target_Z);
+        return HandleGoHelper(_player, at->loc.GetMapId(), at->loc.x, at->loc.y, &at->loc.z);
     }
     else
         return HandleGoHelper(_player, atEntry->mapid, atEntry->x, atEntry->y, &atEntry->z);

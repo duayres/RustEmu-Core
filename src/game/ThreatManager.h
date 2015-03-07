@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +25,6 @@
 #include "UnitEvents.h"
 #include "Timer.h"
 #include "ObjectGuid.h"
-#include <list>
 
 //==============================================================
 
@@ -72,11 +71,11 @@ class MANGOS_DLL_SPEC HostileReference : public Reference<Unit, ThreatManager>
 
         // used for temporary setting a threat and reducting it later again.
         // the threat modification is stored
-        void setTempThreat(float pThreat) { iTempThreatModifyer = pThreat - getThreat(); if (iTempThreatModifyer != 0.0f) addThreat(iTempThreatModifyer);  }
+        void setTempThreat(float pThreat) { iTempThreatModifyer = pThreat - getThreat(); if (fabs(iTempThreatModifyer) > M_NULL_F) addThreat(iTempThreatModifyer);  }
 
         void resetTempThreat()
         {
-            if (iTempThreatModifyer != 0.0f)
+            if (fabs(iTempThreatModifyer) > M_NULL_F)
             {
                 addThreat(-iTempThreatModifyer);  iTempThreatModifyer = 0.0f;
             }
@@ -111,13 +110,13 @@ class MANGOS_DLL_SPEC HostileReference : public Reference<Unit, ThreatManager>
         //=================================================
 
         // Tell our refTo (target) object that we have a link
-        void targetObjectBuildLink() override;
+        void targetObjectBuildLink();
 
         // Tell our refTo (taget) object, that the link is cut
-        void targetObjectDestroyLink() override;
+        void targetObjectDestroyLink();
 
         // Tell our refFrom (source) object, that the link is cut (Target destroyed)
-        void sourceObjectDestroyLink() override;
+        void sourceObjectDestroyLink();
     private:
         // Inform the source, that the status of that reference was changed
         void fireStatusChanged(ThreatRefStatusChangeEvent& pThreatRefStatusChangeEvent);
@@ -155,9 +154,11 @@ class MANGOS_DLL_SPEC ThreatContainer
 
         HostileReference* addThreat(Unit* pVictim, float pThreat);
 
-        void modifyThreatPercent(Unit* pVictim, int32 percent);
+        void modifyThreatPercent(Unit *pVictim, int32 percent);
 
-        HostileReference* selectNextVictim(Creature* pAttacker, HostileReference* pCurrentVictim);
+//        bool IsSecondChoiceTarget(Creature* pAttacker, Unit* pTarget, bool bCheckThreatArea, bool bCheckMeleeRange);
+
+        HostileReference* selectNextVictim(Unit* pUnitAttacker, HostileReference* pCurrentVictim);
 
         void setDirty(bool pDirty) { iDirty = pDirty; }
 
@@ -179,21 +180,21 @@ class MANGOS_DLL_SPEC ThreatManager
     public:
         friend class HostileReference;
 
-        explicit ThreatManager(Unit* pOwner);
+        explicit ThreatManager(Unit& aOwner);
 
         ~ThreatManager() { clearReferences(); }
 
         void clearReferences();
 
-        void addThreat(Unit* pVictim, float threat, bool crit, SpellSchoolMask schoolMask, SpellEntry const* threatSpell);
-        void addThreat(Unit* pVictim, float threat) { addThreat(pVictim, threat, false, SPELL_SCHOOL_MASK_NONE, NULL); }
+        void addThreat(Unit* pVictim, float threat, bool crit, SpellSchoolMask schoolMask, SpellEntry const *threatSpell);
+        void addThreat(Unit* pVictim, float threat) { addThreat(pVictim,threat,false,SPELL_SCHOOL_MASK_NONE,NULL); }
 
         // add threat as raw value (ignore redirections and expection all mods applied already to it
         void addThreatDirectly(Unit* pVictim, float threat);
 
         void modifyThreatPercent(Unit* pVictim, int32 pPercent);
 
-        float getThreat(Unit* pVictim, bool pAlsoSearchOfflineList = false);
+        float getThreat(Unit *pVictim, bool pAlsoSearchOfflineList = false);
 
         bool isThreatListEmpty() const { return iThreatContainer.empty(); }
 
@@ -203,7 +204,9 @@ class MANGOS_DLL_SPEC ThreatManager
 
         HostileReference* getCurrentVictim() { return iCurrentVictim; }
 
-        Unit*  getOwner() const { return iOwner; }
+        Unit* getOwner() { return &owner; }
+
+        bool isOwnerOnline() const;
 
         Unit* getHostileTarget();
 
@@ -218,7 +221,7 @@ class MANGOS_DLL_SPEC ThreatManager
         ThreatList const& getThreatList() const { return iThreatContainer.getThreatList(); }
     private:
         HostileReference* iCurrentVictim;
-        Unit* iOwner;
+        Unit& owner;
         ShortTimeTracker iUpdateTimer;
         bool iUpdateNeed;
         ThreatContainer iThreatContainer;

@@ -50,11 +50,7 @@ class MOTransport;
 
 struct GameTele
 {
-    float  position_x;
-    float  position_y;
-    float  position_z;
-    float  orientation;
-    uint32 mapId;
+    WorldLocation loc;
     std::string name;
     std::wstring wnameLow;
 };
@@ -93,11 +89,7 @@ struct AreaTrigger
     uint32 achiev0;
     uint32 achiev1;
     uint32 combatMode;
-    uint32 target_mapId;
-    float  target_X;
-    float  target_Y;
-    float  target_Z;
-    float  target_Orientation;
+    WorldLocation loc;
 
     // Operators
     bool IsMinimal() const {
@@ -118,7 +110,7 @@ struct AreaTrigger
 
     bool IsLessOrEqualThan(AreaTrigger const* l) const      // Expected to have same map
     {
-        MANGOS_ASSERT(target_mapId == l->target_mapId);
+        MANGOS_ASSERT(loc.GetMapId() == l->loc.GetMapId());
         return (requiredLevel <= l->requiredLevel
             && requiredItem <= l->requiredItem
             && requiredItem2 <= l->requiredItem2
@@ -134,6 +126,9 @@ struct AreaTrigger
             && achiev1 <= l->achiev1
             );
     }
+
+    bool operator <= (AreaTrigger const* l) const { return IsLessOrEqualThan(l); }
+
 };
 
 typedef std::map < uint32/*player guid*/, uint32/*instance*/ > CellCorpseSet;
@@ -312,6 +307,7 @@ struct ReputationOnKillEntry
     uint32 reputation_max_cap2;
     int32 repvalue2;
     bool team_dependent;
+    uint32 championingAura;
 };
 
 struct RepSpilloverTemplate
@@ -821,9 +817,6 @@ class ObjectMgr
         void LoadTrainerTemplates();
         void LoadTrainers() { LoadTrainers("npc_trainer", false); }
 
-        /// @param _map Map* of the map for which to load active entities. If NULL active entities on continents are loaded
-        void LoadActiveEntities(Map* _map);
-
         void LoadVehicleAccessory();
 
         void LoadTransports(Map* map);
@@ -1052,14 +1045,14 @@ class ObjectMgr
         GameTele const* GetGameTele(uint32 id) const
         {
             GameTeleMap::const_iterator itr = m_GameTeleMap.find(id);
-            if (itr == m_GameTeleMap.end()) return NULL;
-            return &itr->second;
+            return itr != m_GameTeleMap.end() ? &itr->second : NULL;
         }
 
-        GameTele const* GetGameTele(const std::string& name) const;
+        GameTele const* GetGameTele(std::string const& name) const;
+        GameTele const* GetGameTeleExactName(std::string const& name) const;
         GameTeleMap const& GetGameTeleMap() const { return m_GameTeleMap; }
         bool AddGameTele(GameTele& data);
-        bool DeleteGameTele(const std::string& name);
+        bool DeleteGameTele(std::string const& name);
 
         uint32 GetNpcGossip(uint32 entry) const
         {

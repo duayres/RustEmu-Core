@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,15 +34,20 @@ class BattleGroundNA : public BattleGround
 
     public:
         BattleGroundNA();
+        ~BattleGroundNA();
+        void Update(uint32 diff);
 
         /* inherited from BattlegroundClass */
-        virtual void AddPlayer(Player* plr) override;
-        virtual void StartingEventOpenDoors() override;
+        virtual void AddPlayer(Player* plr);
+        virtual void StartingEventCloseDoors();
+        virtual void StartingEventOpenDoors();
 
-        void RemovePlayer(Player* plr, ObjectGuid guid) override;
-        void HandleAreaTrigger(Player* source, uint32 trigger) override;
-        virtual void FillInitialWorldStates(WorldPacket& d, uint32& count) override;
-        void HandleKillPlayer(Player* player, Player* killer) override;
-        bool HandlePlayerUnderMap(Player* plr) override;
+        void RemovePlayer(Player* plr, ObjectGuid guid);
+        void HandleAreaTrigger(Player* source, uint32 trigger);
+        bool SetupBattleGround();
+        virtual void Reset();
+        virtual void FillInitialWorldStates();
+        void HandleKillPlayer(Player* player, Player* killer);
+        bool HandlePlayerUnderMap(Player* plr);
 };
 #endif

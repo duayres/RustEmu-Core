@@ -2160,6 +2160,41 @@ void WorldObject::SetActiveObjectState(bool active)
     m_isActiveObject = active;
 }
 
+void WorldObject::UpdateWorldState(uint32 state, uint32 value)
+{
+    if (GetMap())
+        sWorldStateMgr.SetWorldStateValueFor(GetMap(), state, value);
+}
+
+uint32 WorldObject::GetWorldState(uint32 stateId)
+{
+    return sWorldStateMgr.GetWorldStateValueFor(this, stateId);
+}
+
+WorldObjectEventProcessor* WorldObject::GetEvents()
+{
+    return &m_Events;
+}
+
+void WorldObject::KillAllEvents(bool force)
+{
+    GetEvents()->KillAllEvents(force);
+}
+
+void WorldObject::AddEvent(BasicEvent* Event, uint64 e_time, bool set_addtime)
+{
+    if (set_addtime)
+        GetEvents()->AddEvent(Event, GetEvents()->CalculateTime(e_time), set_addtime);
+    else
+        GetEvents()->AddEvent(Event, e_time, set_addtime);
+}
+
+void WorldObject::UpdateEvents(uint32 update_diff, uint32 time)
+{
+    GetEvents()->RenewEvents();
+    GetEvents()->Update(update_diff);
+}
+
 Transport* WorldObject::GetTransport() const
 {
     return IsOnTransport() ? sObjectMgr.GetTransportByGuid(GetTransportInfo()->GetTransportGuid()) : NULL;

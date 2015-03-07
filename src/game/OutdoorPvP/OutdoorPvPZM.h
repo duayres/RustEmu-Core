@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,12 +16,13 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
 
+
 #ifndef WORLD_PVP_ZM
 #define WORLD_PVP_ZM
 
 #include "Common.h"
 #include "OutdoorPvP.h"
-#include "Language.h"
+#include "../Language.h"
 
 enum
 {
@@ -131,11 +132,10 @@ static const uint32 zangarmarshTowers[MAX_ZM_TOWERS] = {GO_ZANGA_BANNER_EAST, GO
 class OutdoorPvPZM : public OutdoorPvP
 {
     public:
-        OutdoorPvPZM();
+        OutdoorPvPZM(uint32 id);
 
         void HandlePlayerEnterZone(Player* player, bool isMainZone) override;
         void HandlePlayerLeaveZone(Player* player, bool isMainZone) override;
-        void FillInitialWorldStates(WorldPacket& data, uint32& count) override;
         void SendRemoveWorldStates(Player* player) override;
 
         bool HandleEvent(uint32 eventId, GameObject* go) override;
@@ -166,8 +166,8 @@ class OutdoorPvPZM : public OutdoorPvP
         uint32 m_graveyardWorldState;
         uint32 m_scoutWorldStateAlliance;
         uint32 m_scoutWorldStateHorde;
-        uint8 m_towersAlliance;
-        uint8 m_towersHorde;
+        uint32 m_towersAlliance;
+        uint32 m_towersHorde;
 
         ObjectGuid m_towerBanners[MAX_ZM_TOWERS];
         ObjectGuid m_graveyardBannerAlliance;

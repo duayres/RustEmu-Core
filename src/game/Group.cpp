@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -128,9 +128,7 @@ Group::~Group()
         // it is undefined whether objectmgr (which stores the groups) or instancesavemgr
         // will be unloaded first so we must be prepared for both cases
         // this may unload some dungeon persistent state
-        for (uint8 i = 0; i < MAX_DIFFICULTY; ++i)
-            for (BoundInstancesMap::iterator itr2 = m_boundInstances[i].begin(); itr2 != m_boundInstances[i].end(); ++itr2)
-                itr2->second.state->RemoveGroup(this);
+        sMapPersistentStateMgr.AddToUnbindQueue(GetObjectGuid());
 
         if (isLFDGroup())
             sLFGMgr.RemoveLFGState(GetObjectGuid());
@@ -1619,8 +1617,8 @@ void Group::_setLeader(ObjectGuid guid)
                 {
                     if (itr->second.perm)
                     {
-                        itr->second.state->RemoveGroup(this);
-                        m_boundInstances[i].erase(itr++);
+                        itr->second.state->RemoveFromBindList(GetObjectGuid());
+                        itr = m_boundInstances[i].erase(itr);
                     }
                     else
                         ++itr;
@@ -2170,7 +2168,7 @@ void Group::ResetInstances(InstanceResetMethod method, bool isRaid, Player* Send
             itr = m_boundInstances[diff].begin();
             // this unloads the instance save unless online players are bound to it
             // (eg. permanent binds or GM solo binds)
-            state->RemoveGroup(this);
+            state->RemoveFromBindList(GetObjectGuid());
         }
         else
             ++itr;
@@ -2239,9 +2237,9 @@ InstanceGroupBind* Group::BindToInstance(DungeonPersistentState *state, bool per
         if (bind.state != state)
         {
             if (bind.state)
-                bind.state->RemoveGroup(this);
+                bind.state->RemoveFromBindList(GetObjectGuid());
 
-            state->AddGroup(this);
+            state->AddToBindList(GetObjectGuid());
         }
 
         bind.state = state;
@@ -2271,7 +2269,7 @@ void Group::UnbindInstance(uint32 mapid, uint8 difficulty, bool unload)
                 .PExecute(GetLeaderGuid().GetCounter(), itr->second.state->GetInstanceId());
         }
 
-        itr->second.state->RemoveGroup(this);  // state can become invalid
+        itr->second.state->RemoveFromBindList(GetObjectGuid());  // state can become invalid
         m_boundInstances[difficulty].erase(itr);
     }
 }

@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,8 @@
 #include "OutdoorPvPMgr.h"
 #include "Policies/Singleton.h"
 #include "OutdoorPvP.h"
-#include "World.h"
+#include "../GameObject.h"
+#include "../World.h"
 #include "Log.h"
 #include "OutdoorPvPEP.h"
 #include "OutdoorPvPGH.h"
@@ -28,12 +29,14 @@
 #include "OutdoorPvPSI.h"
 #include "OutdoorPvPTF.h"
 #include "OutdoorPvPZM.h"
+#include "BattleField/BattleField.h"
 
 INSTANTIATE_SINGLETON_1(OutdoorPvPMgr);
 
 OutdoorPvPMgr::OutdoorPvPMgr()
 {
-    m_updateTimer.SetInterval(TIMER_OPVP_MGR_UPDATE);
+    m_updateTimer.SetInterval(sWorld.getConfig(CONFIG_UINT32_INTERVAL_MAPUPDATE));
+    // warning - unsafe place. 
     memset(&m_scripts, 0, sizeof(m_scripts));
 }
 
@@ -46,8 +49,27 @@ OutdoorPvPMgr::~OutdoorPvPMgr()
 #define LOAD_OPVP_ZONE(a)                                           \
     if (sWorld.getConfig(CONFIG_BOOL_OUTDOORPVP_##a##_ENABLED))     \
     {                                                               \
-        m_scripts[OPVP_ID_##a] = new OutdoorPvP##a();               \
-        ++counter;                                                  \
+        m_scripts[OPVP_ID_##a] = new OutdoorPvP##a(OPVP_ID_##a);    \
+        if (!m_scripts[OPVP_ID_##a]->InitOutdoorPvPArea())          \
+        {                                                           \
+            delete m_scripts[OPVP_ID_##a];                          \
+            m_scripts[OPVP_ID_##a] = NULL;                          \
+        }                                                           \
+        else                                                        \
+            ++counter;                                              \
+    }
+
+#define LOAD_BATTLEFIELD(a)                                         \
+    if (sWorld.getConfig(CONFIG_BOOL_BATTLEFIELD_##a##_ENABLED))    \
+    {                                                               \
+        m_scripts[OPVP_ID_##a] = new BattleField##a(OPVP_ID_##a);   \
+        if (!m_scripts[OPVP_ID_##a]->InitOutdoorPvPArea())          \
+        {                                                           \
+            delete m_scripts[OPVP_ID_##a];                          \
+            m_scripts[OPVP_ID_##a] = NULL;                          \
+        }                                                           \
+        else                                                        \
+            ++counter;                                              \
     }
 /**
    Function which loads all outdoor pvp scripts
@@ -64,8 +86,11 @@ void OutdoorPvPMgr::InitOutdoorPvP()
     LOAD_OPVP_ZONE(NA);
     LOAD_OPVP_ZONE(GH);
 
-    sLog.outString(">> Loaded %u Outdoor PvP zones", counter);
+// currently disabled, be enabled after finish development phase
+//    LOAD_OPVP_ZONE(WG);
+
     sLog.outString();
+    sLog.outString(">> Loaded %u Outdoor PvP zones", counter);
 }
 
 OutdoorPvP* OutdoorPvPMgr::GetScript(uint32 zoneId)
@@ -86,6 +111,8 @@ OutdoorPvP* OutdoorPvPMgr::GetScript(uint32 zoneId)
             return m_scripts[OPVP_ID_NA];
         case ZONE_ID_GRIZZLY_HILLS:
             return m_scripts[OPVP_ID_GH];
+        case ZONE_ID_WINTERGRASP:
+            return m_scripts[OPVP_ID_WG];
         default:
             return NULL;
     }
@@ -118,6 +145,8 @@ OutdoorPvP* OutdoorPvPMgr::GetScriptOfAffectedZone(uint32 zoneId)
         case ZONE_ID_SETHEKK_HALLS:
         case ZONE_ID_MANA_TOMBS:
             return m_scripts[OPVP_ID_TF];
+        case ZONE_ID_WINTERGRASP:
+            return m_scripts[OPVP_ID_WG];
         default:
             return NULL;
     }
@@ -162,5 +191,74 @@ void OutdoorPvPMgr::Update(uint32 diff)
         if (m_scripts[i])
             m_scripts[i]->Update(m_updateTimer.GetCurrent());
 
-    m_updateTimer.Reset();
+    m_updateTimer.SetCurrent(0);
+}
+
+/**
+   Function that gets the capture point slider value
+
+   @param   capture point entry
+*/
+int8 OutdoorPvPMgr::GetCapturePointSliderValue(uint32 entry)
+{
+    std::map<uint32, int8>::iterator itr = m_capturePointSlider.find(entry);
+
+    if (itr != m_capturePointSlider.end())
+        return itr->second;
+
+    // return default value if we can't find any
+    return CAPTURE_SLIDER_NEUTRAL;
+}
+
+uint32 OutdoorPvPMgr::GetZoneOfAffectedScript(OutdoorPvP const* script) const
+{
+    uint8 scriptId = MAX_OPVP_ID;
+
+    for (uint8 i = 0; i < MAX_OPVP_ID; ++i)
+    {
+        if (m_scripts[i] == script)
+        {
+            scriptId = i;
+            break;
+        }
+    }
+
+    switch (scriptId)
+    {
+        case OPVP_ID_SI:
+            return ZONE_ID_SILITHUS;
+        case OPVP_ID_EP:
+            return ZONE_ID_EASTERN_PLAGUELANDS;
+        case OPVP_ID_HP:
+            return ZONE_ID_HELLFIRE_PENINSULA;
+        case OPVP_ID_ZM:
+            return ZONE_ID_ZANGARMARSH;
+        case OPVP_ID_TF:
+            return ZONE_ID_TEROKKAR_FOREST;
+        case OPVP_ID_NA:
+            return ZONE_ID_NAGRAND;
+        case OPVP_ID_GH:
+            return ZONE_ID_GRIZZLY_HILLS;
+        case OPVP_ID_WG:
+            return ZONE_ID_WINTERGRASP;
+
+        case MAX_OPVP_ID:
+        default:
+            return ZONE_ID_ERROR;
+    }
+}
+
+BattleField* OutdoorPvPMgr::GetBattlefieldByGuid(ObjectGuid guid)
+{
+    return GetBattlefieldById(guid.GetCounter() & 0xFFFF);
+}
+
+BattleField* OutdoorPvPMgr::GetBattlefieldById(uint32 id)
+{
+    for (uint8 i = 0; i < MAX_OPVP_ID; ++i)
+        if (OutdoorPvP* opvp = m_scripts[i])
+            if (opvp->IsBattleField() && ((BattleField*)opvp)->GetBattlefieldId() == id)
+                return (BattleField*)opvp;
+
+    return NULL;
 }

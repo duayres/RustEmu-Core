@@ -682,7 +682,7 @@ enum SpellEffects
     SPELL_EFFECT_DUAL_WIELD                = 40,
     SPELL_EFFECT_JUMP                      = 41,
     SPELL_EFFECT_JUMP2                     = 42,
-    SPELL_EFFECT_TELEPORT_UNITS_FACE_CASTER = 43,
+    SPELL_EFFECT_TELEPORT_UNITS_FACE_CASTER= 43,
     SPELL_EFFECT_SKILL_STEP                = 44,
     SPELL_EFFECT_ADD_HONOR                 = 45,
     SPELL_EFFECT_SPAWN                     = 46,
@@ -761,7 +761,7 @@ enum SpellEffects
     SPELL_EFFECT_APPLY_AREA_AURA_PET       = 119,
     SPELL_EFFECT_TELEPORT_GRAVEYARD        = 120,
     SPELL_EFFECT_NORMALIZED_WEAPON_DMG     = 121,
-    SPELL_EFFECT_122                       = 122,
+    SPELL_EFFECT_SERVER_SIDE               = 122,
     SPELL_EFFECT_SEND_TAXI                 = 123,
     SPELL_EFFECT_PLAYER_PULL               = 124,
     SPELL_EFFECT_MODIFY_THREAT_PERCENT     = 125,
@@ -787,7 +787,7 @@ enum SpellEffects
     SPELL_EFFECT_SUSPEND_GRAVITY           = 145,
     SPELL_EFFECT_ACTIVATE_RUNE             = 146,
     SPELL_EFFECT_QUEST_FAIL                = 147,
-    SPELL_EFFECT_148                       = 148,
+    SPELL_EFFECT_TRIGGER_MISSILE_2         = 148,
     SPELL_EFFECT_CHARGE2                   = 149,
     SPELL_EFFECT_QUEST_OFFER               = 150,
     SPELL_EFFECT_TRIGGER_SPELL_2           = 151,
@@ -1108,8 +1108,7 @@ enum SpellCastResultCustom
 
 // Spell aura states
 enum AuraState
-{
-    // (C) used in caster aura state     (T) used in target aura state
+{   // (C) used in caster aura state     (T) used in target aura state
     // (c) used in caster aura state-not (t) used in target aura state-not
     AURA_STATE_DEFENSE                      = 1,            // C   |
     AURA_STATE_HEALTHLESS_20_PERCENT        = 2,            // CcT |
@@ -1141,38 +1140,38 @@ enum AuraState
 // Spell mechanics
 enum Mechanics
 {
-    MECHANIC_NONE             = 0,
-    MECHANIC_CHARM            = 1,
-    MECHANIC_DISORIENTED      = 2,
-    MECHANIC_DISARM           = 3,
-    MECHANIC_DISTRACT         = 4,
-    MECHANIC_FEAR             = 5,
-    MECHANIC_GRIP             = 6,
-    MECHANIC_ROOT             = 7,
-    MECHANIC_PACIFY           = 8,                          // No spells use this mechanic
-    MECHANIC_SILENCE          = 9,
-    MECHANIC_SLEEP            = 10,
-    MECHANIC_SNARE            = 11,
-    MECHANIC_STUN             = 12,
-    MECHANIC_FREEZE           = 13,
-    MECHANIC_KNOCKOUT         = 14,
-    MECHANIC_BLEED            = 15,
-    MECHANIC_BANDAGE          = 16,
-    MECHANIC_POLYMORPH        = 17,
-    MECHANIC_BANISH           = 18,
-    MECHANIC_SHIELD           = 19,
-    MECHANIC_SHACKLE          = 20,
-    MECHANIC_MOUNT            = 21,
-    MECHANIC_INFECTED         = 22,
-    MECHANIC_TURN             = 23,
-    MECHANIC_HORROR           = 24,
-    MECHANIC_INVULNERABILITY  = 25,
-    MECHANIC_INTERRUPT        = 26,
-    MECHANIC_DAZE             = 27,
-    MECHANIC_DISCOVERY        = 28,
-    MECHANIC_IMMUNE_SHIELD    = 29,                         // Divine (Blessing) Shield/Protection and Ice Block
-    MECHANIC_SAPPED           = 30,
-    MECHANIC_ENRAGED          = 31
+    MECHANIC_NONE             = 0,  // 0x00000000
+    MECHANIC_CHARM            = 1,  // 0x00000001
+    MECHANIC_DISORIENTED      = 2,  // 0x00000002
+    MECHANIC_DISARM           = 3,  // 0x00000004
+    MECHANIC_DISTRACT         = 4,  // 0x00000008
+    MECHANIC_FEAR             = 5,  // 0x00000010
+    MECHANIC_GRIP             = 6,  // 0x00000020
+    MECHANIC_ROOT             = 7,  // 0x00000040
+    MECHANIC_SLOWATTACK       = 8,  // 0x00000080           //0 spells use this mechanic, but some SPELL_AURA_MOD_HASTE and SPELL_AURA_MOD_RANGED_HASTE use as effect mechanic
+    MECHANIC_SILENCE          = 9,  // 0x00000100
+    MECHANIC_SLEEP            = 10, // 0x00000200
+    MECHANIC_SNARE            = 11, // 0x00000400
+    MECHANIC_STUN             = 12, // 0x00000800
+    MECHANIC_FREEZE           = 13, // 0x00001000
+    MECHANIC_KNOCKOUT         = 14, // 0x00002000
+    MECHANIC_BLEED            = 15, // 0x00004000
+    MECHANIC_BANDAGE          = 16, // 0x00008000
+    MECHANIC_POLYMORPH        = 17, // 0x00010000
+    MECHANIC_BANISH           = 18, // 0x00020000
+    MECHANIC_SHIELD           = 19, // 0x00040000
+    MECHANIC_SHACKLE          = 20, // 0x00080000
+    MECHANIC_MOUNT            = 21, // 0x00100000
+    MECHANIC_INFECTED         = 22, // 0x00200000
+    MECHANIC_TURN             = 23, // 0x00400000
+    MECHANIC_HORROR           = 24, // 0x00800000
+    MECHANIC_INVULNERABILITY  = 25, // 0x01000000
+    MECHANIC_INTERRUPT        = 26, // 0x02000000
+    MECHANIC_DAZE             = 27, // 0x04000000
+    MECHANIC_DISCOVERY        = 28, // 0x08000000
+    MECHANIC_IMMUNE_SHIELD    = 29, // 0x10000000           // Divine (Blessing) Shield/Protection and Ice Block
+    MECHANIC_SAPPED           = 30, // 0x20000000
+    MECHANIC_ENRAGED          = 31  // 0x40000000
 };
 
 #define FIRST_MECHANIC          1
@@ -1181,7 +1180,7 @@ enum Mechanics
 // Used for spell 42292 Immune Movement Impairment and Loss of Control (0x49967da6)
 #define IMMUNE_TO_MOVEMENT_IMPAIRMENT_AND_LOSS_CONTROL_MASK ( \
     (1<<(MECHANIC_CHARM   -1))|(1<<(MECHANIC_DISORIENTED-1))|(1<<(MECHANIC_FEAR  -1))| \
-    (1<<(MECHANIC_ROOT    -1))|(1<<(MECHANIC_PACIFY     -1))|(1<<(MECHANIC_SLEEP -1))| \
+    (1<<(MECHANIC_ROOT    -1))|(1<<(MECHANIC_SLOWATTACK -1))|(1<<(MECHANIC_SLEEP -1))| \
     (1<<(MECHANIC_SNARE   -1))|(1<<(MECHANIC_STUN       -1))|(1<<(MECHANIC_FREEZE-1))| \
     (1<<(MECHANIC_KNOCKOUT-1))|(1<<(MECHANIC_POLYMORPH  -1))|(1<<(MECHANIC_BANISH-1))| \
     (1<<(MECHANIC_SHACKLE -1))|(1<<(MECHANIC_TURN       -1))|(1<<(MECHANIC_HORROR-1))| \
@@ -1201,10 +1200,10 @@ enum Mechanics
 
 // Daze and all croud control spells except polymorph are not removed
 #define MECHANIC_NOT_REMOVED_BY_SHAPESHIFT ( \
-    (1<<(MECHANIC_CHARM -1))|(1<<(MECHANIC_DISORIENTED-1))|(1<<(MECHANIC_FEAR  -1))| \
-    (1<<(MECHANIC_PACIFY-1))|(1<<(MECHANIC_STUN       -1))|(1<<(MECHANIC_FREEZE-1))| \
-    (1<<(MECHANIC_BANISH-1))|(1<<(MECHANIC_SHACKLE    -1))|(1<<(MECHANIC_HORROR-1))| \
-    (1<<(MECHANIC_TURN  -1))|(1<<(MECHANIC_DAZE       -1))|(1<<(MECHANIC_SAPPED-1)))
+    (1<<(MECHANIC_CHARM  -1))|(1<<(MECHANIC_DISORIENTED-1))|(1<<(MECHANIC_FEAR  -1))| \
+    (1<<(MECHANIC_STUN   -1))|(1<<(MECHANIC_FREEZE     -1))|(1<<(MECHANIC_BANISH-1))| \
+    (1<<(MECHANIC_SHACKLE-1))|(1<<(MECHANIC_HORROR     -1))|(1<<(MECHANIC_TURN  -1))| \
+    (1<<(MECHANIC_DAZE   -1))|(1<<(MECHANIC_SAPPED     -1)))
 
 #define IMMUNE_BY_UNVULNERABILITY_MASK ( \
     (1<<(MECHANIC_SHIELD-1))|(1<<(MECHANIC_INVULNERABILITY-1))|(1<<(MECHANIC_IMMUNE_SHIELD-1)))
@@ -1223,15 +1222,33 @@ enum DispelType
     DISPEL_SPE_NPC_ONLY = 8,
     DISPEL_ENRAGE       = 9,
     DISPEL_ZG_TICKET    = 10,
-    DESPEL_OLD_UNUSED   = 11
+    DISPEL_OLD_UNUSED   = 11
 };
 
 #define DISPEL_ALL_MASK ( (1<<DISPEL_MAGIC) | (1<<DISPEL_CURSE) | (1<<DISPEL_DISEASE) | (1<<DISPEL_POISON) )
 
-// To all Immune system,if target has immunes,
-// some spell that related to ImmuneToDispel or ImmuneToSchool or ImmuneToDamage type can't cast to it,
-// some spell_effects that related to ImmuneToEffect<effect>(only this effect in the spell) can't cast to it,
-// some aura(related to Mechanics or ImmuneToState<aura>) can't apply to it.
+enum InvisibilityType
+{
+    INVISIBILITY_GENERAL     = 0,
+    INVISIBILITY_UNK1        = 1,
+    INVISIBILITY_UNK2        = 2,
+    INVISIBILITY_TRAP        = 3,
+    INVISIBILITY_UNK4        = 4,
+    INVISIBILITY_UNK5        = 5,
+    INVISIBILITY_DRUNK       = 6,
+    INVISIBILITY_UNK7        = 7,
+    INVISIBILITY_UNK8        = 8,
+    INVISIBILITY_UNK9        = 9,
+    INVISIBILITY_UNK10       = 10,
+    INVISIBILITY_UNK11       = 11,
+
+    TOTAL_INVISIBILITY_TYPES = 12
+};
+
+//To all Immune system,if target has immunes,
+//some spell that related to ImmuneToDispel or ImmuneToSchool or ImmuneToDamage type can't cast to it,
+//some spell_effects that related to ImmuneToEffect<effect>(only this effect in the spell) can't cast to it,
+//some aura(related to Mechanics or ImmuneToState<aura>) can't apply to it.
 enum SpellImmunity
 {
     IMMUNITY_EFFECT                = 0,                     // enum SpellEffects
@@ -1253,7 +1270,7 @@ enum WeaponAttackType
     // leave these greater than or equal to MAX_ATTACK
     NONSTACKING_POS_MOD_MELEE = 3,
     NONSTACKING_NEG_MOD_MELEE = 4,
-    NONSTACKING_MOD_ALL       = 5
+    NONSTACKING_MOD_ALL = 5
 };
 
 #define MAX_ATTACK  3
@@ -1478,17 +1495,17 @@ enum GameobjectTypes
 
 enum GameObjectFlags
 {
-    GO_FLAG_IN_USE          = 0x00000001,                   // disables interaction while animated
-    GO_FLAG_LOCKED          = 0x00000002,                   // require key, spell, event, etc to be opened. Makes "Locked" appear in tooltip
-    GO_FLAG_INTERACT_COND   = 0x00000004,                   // cannot interact (condition to interact)
-    GO_FLAG_TRANSPORT       = 0x00000008,                   // any kind of transport? Object can transport (elevator, boat, car)
-    GO_FLAG_NO_INTERACT     = 0x00000010,                   // players cannot interact with this go (often need to remove flag in event)
-    GO_FLAG_NODESPAWN       = 0x00000020,                   // never despawn, typically for doors, they just change state
-    GO_FLAG_TRIGGERED       = 0x00000040,                   // typically, summoned objects. Triggered by spell or other events
+    GO_FLAG_IN_USE          = 0x00000001,                   //disables interaction while animated
+    GO_FLAG_LOCKED          = 0x00000002,                   //require key, spell, event, etc to be opened. Makes "Locked" appear in tooltip
+    GO_FLAG_INTERACT_COND   = 0x00000004,                   //cannot interact (condition to interact)
+    GO_FLAG_TRANSPORT       = 0x00000008,                   //any kind of transport? Object can transport (elevator, boat, car)
+    GO_FLAG_NO_INTERACT     = 0x00000010,                   //players cannot interact with this go (often need to remove flag in event)
+    GO_FLAG_NODESPAWN       = 0x00000020,                   //never despawn, typically for doors, they just change state
+    GO_FLAG_TRIGGERED       = 0x00000040,                   //typically, summoned objects. Triggered by spell or other events
     GO_FLAG_UNK_8           = 0x00000080,
-    GO_FLAG_UNK_9           = 0x00000100,                   //? Seen on type 33, meaning unknown
-    GO_FLAG_UNK_10          = 0x00000200,                   //? Seen on type 33, likely damaged
-    GO_FLAG_UNK_11          = 0x00000400                    //? Seen on type 33, likely destroyed
+    GO_FLAG_UNK_9           = 0x00000100,                   //? Seen on type 33, possible meaning "destruct in progress"
+    GO_FLAG_DAMAGED         = 0x00000200,                   //Seen on type 33
+    GO_FLAG_DESTROYED       = 0x00000400                    //Seen on type 33, meaning "destroyed"
 };
 
 enum GameObjectDynamicLowFlags
@@ -2943,6 +2960,23 @@ enum BattleGroundTypeId
 };
 #define MAX_BATTLEGROUND_TYPE_ID 33
 
+// handle the queue types and bg types separately to enable joining queue for different sized arenas at the same time
+enum BattleGroundQueueTypeId
+{
+    BATTLEGROUND_QUEUE_NONE     = 0,
+    BATTLEGROUND_QUEUE_AV       = 1,    // Alterac Vally
+    BATTLEGROUND_QUEUE_WS       = 2,    // Warsong Gulch
+    BATTLEGROUND_QUEUE_AB       = 3,    // Arathi basin
+    BATTLEGROUND_QUEUE_EY       = 4,    // Eye of the Storm
+    BATTLEGROUND_QUEUE_SA       = 5,    // Strand of the Ancients
+    BATTLEGROUND_QUEUE_IC       = 6,    // Isle of Conquest
+    BATTLEGROUND_QUEUE_RB       = 7,
+    BATTLEGROUND_QUEUE_2v2      = 8,
+    BATTLEGROUND_QUEUE_3v3      = 9,
+    BATTLEGROUND_QUEUE_5v5      = 10
+};
+#define MAX_BATTLEGROUND_QUEUE_TYPES 11
+
 enum ArenaType
 {
     ARENA_TYPE_NONE         = 0,                            // used for mark non-arenas or problematic cases
@@ -3047,10 +3081,17 @@ enum EncounterCreditType
     ENCOUNTER_CREDIT_CAST_SPELL     = 1
 };
 
-enum WorldStateType
+enum EncounterFrameCommand
 {
-    WORLD_STATE_REMOVE              = 0,
-    WORLD_STATE_ADD                 = 1
+    ENCOUNTER_FRAME_ENGAGE              = 0,
+    ENCOUNTER_FRAME_DISENGAGE           = 1,
+    ENCOUNTER_FRAME_UPDATE_PRIORITY     = 2,
+    ENCOUNTER_FRAME_ADD_TIMER           = 3,
+    ENCOUNTER_FRAME_ENABLE_OBJECTIVE    = 4,
+    ENCOUNTER_FRAME_UPDATE_OBJECTIVE    = 5,
+    ENCOUNTER_FRAME_DISABLE_OBJECTIVE   = 6,
+    ENCOUNTER_FRAME_UNK7                = 7,    // Seems to have something to do with sorting the encounter units
+    ENCOUNTER_FRAME_MAX
 };
 
 enum PhaseMasks
@@ -3100,6 +3141,38 @@ enum TrackedAuraType
     TRACK_AURA_TYPE_SINGLE_TARGET               = 1,        // relation - caster : target is 1:1. Might get stolen
     TRACK_AURA_TYPE_CONTROL_VEHICLE             = 2,        // relation - caster : target is N:1.
     MAX_TRACKED_AURA_TYPES
+};
+
+enum AIEventType
+{
+    // Usable with Event AI
+    AI_EVENT_JUST_DIED          = 0,                        // Sender = Killed Npc, Invoker = Killer
+    AI_EVENT_CRITICAL_HEALTH    = 1,                        // Sender = Hurt Npc, Invoker = DamageDealer - Expected to be sent by 10% health
+    AI_EVENT_LOST_HEALTH        = 2,                        // Sender = Hurt Npc, Invoker = DamageDealer - Expected to be sent by 50% health
+    AI_EVENT_LOST_SOME_HEALTH   = 3,                        // Sender = Hurt Npc, Invoker = DamageDealer - Expected to be sent by 90% health
+    AI_EVENT_GOT_FULL_HEALTH    = 4,                        // Sender = Healed Npc, Invoker = Healer
+    AI_EVENT_CUSTOM_EVENTAI_A   = 5,                        // Sender = Npc that throws custom event, Invoker = TARGET_T_ACTION_INVOKER (if exists)
+    AI_EVENT_CUSTOM_EVENTAI_B   = 6,                        // Sender = Npc that throws custom event, Invoker = TARGET_T_ACTION_INVOKER (if exists)
+    AI_EVENT_GOT_CCED           = 7,                        // Sender = CCed Npc, Invoker = Caster that CCed
+    MAXIMAL_AI_EVENT_EVENTAI    = 8,
+
+    // Internal Use
+    AI_EVENT_CALL_ASSISTANCE    = 10,                       // Sender = Attacked Npc, Invoker = Enemy
+
+    // Predefined for SD2
+    AI_EVENT_START_ESCORT       = 100,                      // Invoker = Escorting Player
+    AI_EVENT_START_ESCORT_B     = 101,                      // Invoker = Escorting Player
+    AI_EVENT_START_EVENT        = 102,                      // Invoker = EventStarter
+    AI_EVENT_START_EVENT_A      = 103,                      // Invoker = EventStarter
+    AI_EVENT_START_EVENT_B      = 104,                      // Invoker = EventStarter
+
+    // Some IDs for special cases in SD2
+    AI_EVENT_CUSTOM_A           = 1000,
+    AI_EVENT_CUSTOM_B           = 1001,
+    AI_EVENT_CUSTOM_C           = 1002,
+    AI_EVENT_CUSTOM_D           = 1003,
+    AI_EVENT_CUSTOM_E           = 1004,
+    AI_EVENT_CUSTOM_F           = 1005,
 };
 
 // we need to stick to 1 version or half of the stuff will work for someone

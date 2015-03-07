@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,6 +37,24 @@ BattleGroundNA::BattleGroundNA()
     m_StartMessageIds[BG_STARTING_EVENT_FOURTH] = LANG_ARENA_HAS_BEGUN;
 }
 
+BattleGroundNA::~BattleGroundNA()
+{
+
+}
+
+void BattleGroundNA::Update(uint32 diff)
+{
+    BattleGround::Update(diff);
+
+    /*if (GetStatus() == STATUS_IN_PROGRESS)
+    {
+        // update something
+    }*/
+}
+
+void BattleGroundNA::StartingEventCloseDoors()
+{
+}
 
 void BattleGroundNA::StartingEventOpenDoors()
 {
@@ -113,11 +131,22 @@ void BattleGroundNA::HandleAreaTrigger(Player* source, uint32 trigger)
     //    HandleTriggerBuff(buff_guid, source);
 }
 
-void BattleGroundNA::FillInitialWorldStates(WorldPacket& data, uint32& count)
+void BattleGroundNA::FillInitialWorldStates()
 {
-    FillInitialWorldState(data, count, 0xa0f, GetAlivePlayersCountByTeam(ALLIANCE));
-    FillInitialWorldState(data, count, 0xa10, GetAlivePlayersCountByTeam(HORDE));
-    FillInitialWorldState(data, count, 0xa11, 1);
+    FillInitialWorldState(0xa0f, GetAlivePlayersCountByTeam(ALLIANCE));
+    FillInitialWorldState(0xa10, GetAlivePlayersCountByTeam(HORDE));
+    FillInitialWorldState(0xa11, 1);
+}
+
+void BattleGroundNA::Reset()
+{
+    // call parent's class reset
+    BattleGround::Reset();
+}
+
+bool BattleGroundNA::SetupBattleGround()
+{
+    return true;
 }
 
 /*

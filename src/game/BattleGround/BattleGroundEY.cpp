@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,6 +36,10 @@ BattleGroundEY::BattleGroundEY()
     m_StartMessageIds[BG_STARTING_EVENT_FOURTH] = LANG_BG_EY_HAS_BEGUN;
 }
 
+BattleGroundEY::~BattleGroundEY()
+{
+}
+
 void BattleGroundEY::Update(uint32 diff)
 {
     BattleGround::Update(diff);
@@ -68,6 +72,10 @@ void BattleGroundEY::Update(uint32 diff)
     }
 }
 
+void BattleGroundEY::StartingEventCloseDoors()
+{
+}
+
 void BattleGroundEY::StartingEventOpenDoors()
 {
     // eye-doors are despawned, not opened
@@ -79,7 +87,7 @@ void BattleGroundEY::StartingEventOpenDoors()
 
 void BattleGroundEY::AddPoints(Team team, uint32 points)
 {
-    PvpTeamIndex team_index = GetTeamIndexByTeamId(team);
+    PvpTeamIndex team_index = GetTeamIndex(team);
     m_TeamScores[team_index] += points;
     m_honorScoreTicks[team_index] += points;
     if (m_honorScoreTicks[team_index] >= m_honorTicks)
@@ -105,7 +113,7 @@ void BattleGroundEY::UpdateResources()
 
 void BattleGroundEY::UpdateTeamScore(Team team)
 {
-    uint32 score = m_TeamScores[GetTeamIndexByTeamId(team)];
+    uint32 score = m_TeamScores[GetTeamIndex(team)];
 
     if (score >= EY_MAX_TEAM_SCORE)
     {
@@ -172,19 +180,21 @@ void BattleGroundEY::HandleGameObjectCreate(GameObject* go)
     {
         case GO_CAPTURE_POINT_BLOOD_ELF_TOWER:
             m_towers[NODE_BLOOD_ELF_TOWER] = go->GetObjectGuid();
-            go->SetCapturePointSlider(CAPTURE_SLIDER_MIDDLE, false);
+            go->SetCapturePointSlider(CAPTURE_SLIDER_NEUTRAL);
             break;
         case GO_CAPTURE_POINT_FEL_REAVER_RUINS:
             m_towers[NODE_FEL_REAVER_RUINS] = go->GetObjectGuid();
-            go->SetCapturePointSlider(CAPTURE_SLIDER_MIDDLE, false);
+            go->SetCapturePointSlider(CAPTURE_SLIDER_NEUTRAL);
             break;
         case GO_CAPTURE_POINT_MAGE_TOWER:
             m_towers[NODE_MAGE_TOWER] = go->GetObjectGuid();
-            go->SetCapturePointSlider(CAPTURE_SLIDER_MIDDLE, false);
+            go->SetCapturePointSlider(CAPTURE_SLIDER_NEUTRAL);
             break;
         case GO_CAPTURE_POINT_DRAENEI_RUINS:
             m_towers[NODE_DRAENEI_RUINS] = go->GetObjectGuid();
-            go->SetCapturePointSlider(CAPTURE_SLIDER_MIDDLE, false);
+            go->SetCapturePointSlider(CAPTURE_SLIDER_NEUTRAL);
+            break;
+        default:
             break;
     }
 }
@@ -198,7 +208,7 @@ bool BattleGroundEY::HandleEvent(uint32 eventId, GameObject* go)
         {
             for (uint8 j = 0; j < 4; ++j)
             {
-                if (eyTowerEvents[i][j].eventEntry == eventId)
+                if (eyTowerEvents[i][j].eventEntry == eventId && m_towerWorldState[i] != eyTowerEvents[i][j].worldState)
                 {
                     ProcessCaptureEvent(go, i, eyTowerEvents[i][j].team, eyTowerEvents[i][j].worldState, eyTowerEvents[i][j].message);
 
@@ -214,7 +224,7 @@ bool BattleGroundEY::HandleEvent(uint32 eventId, GameObject* go)
     return false;
 }
 
-void BattleGroundEY::ProcessCaptureEvent(GameObject* /*go*/, uint32 towerId, Team team, uint32 newWorldState, uint32 message)
+void BattleGroundEY::ProcessCaptureEvent(GameObject* go, uint32 towerId, Team team, uint32 newWorldState, uint32 message)
 {
     if (team == ALLIANCE)
     {
@@ -297,6 +307,11 @@ void BattleGroundEY::HandleAreaTrigger(Player* source, uint32 trigger)
                 EventPlayerCapturedFlag(source, NODE_DRAENEI_RUINS);
             break;
     }
+}
+
+bool BattleGroundEY::SetupBattleGround()
+{
+    return true;
 }
 
 void BattleGroundEY::Reset()
@@ -493,6 +508,7 @@ void BattleGroundEY::UpdatePlayerScore(Player* source, uint32 type, uint32 value
     {
         case SCORE_FLAG_CAPTURES:                           // flags captured
             ((BattleGroundEYScore*)itr->second)->FlagCaptures += value;
+            source->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_BG_OBJECTIVE_CAPTURE, 1, EY_OBJECTIVE_CAPTURE_FLAG);
             break;
         default:
             BattleGround::UpdatePlayerScore(source, type, value);
@@ -500,40 +516,39 @@ void BattleGroundEY::UpdatePlayerScore(Player* source, uint32 type, uint32 value
     }
 }
 
-void BattleGroundEY::FillInitialWorldStates(WorldPacket& data, uint32& count)
+void BattleGroundEY::FillInitialWorldStates()
 {
     // counter states
-    FillInitialWorldState(data, count, WORLD_STATE_EY_TOWER_COUNT_ALLIANCE, m_towersAlliance);
-    FillInitialWorldState(data, count, WORLD_STATE_EY_TOWER_COUNT_HORDE, m_towersHorde);
+    FillInitialWorldState(WORLD_STATE_EY_TOWER_COUNT_ALLIANCE, m_towersAlliance);
+    FillInitialWorldState(WORLD_STATE_EY_TOWER_COUNT_HORDE, m_towersHorde);
 
-    FillInitialWorldState(data, count, WORLD_STATE_EY_RESOURCES_ALLIANCE, m_TeamScores[TEAM_INDEX_ALLIANCE]);
-    FillInitialWorldState(data, count, WORLD_STATE_EY_RESOURCES_HORDE, m_TeamScores[TEAM_INDEX_HORDE]);
+    FillInitialWorldState(WORLD_STATE_EY_RESOURCES_ALLIANCE, m_TeamScores[TEAM_INDEX_ALLIANCE]);
+    FillInitialWorldState(WORLD_STATE_EY_RESOURCES_HORDE, m_TeamScores[TEAM_INDEX_HORDE]);
 
     // tower world states
-    FillInitialWorldState(data, count, WORLD_STATE_EY_BLOOD_ELF_TOWER_ALLIANCE, m_towerOwner[NODE_BLOOD_ELF_TOWER] == ALLIANCE);
-    FillInitialWorldState(data, count, WORLD_STATE_EY_BLOOD_ELF_TOWER_HORDE, m_towerOwner[NODE_BLOOD_ELF_TOWER] == HORDE);
-    FillInitialWorldState(data, count, WORLD_STATE_EY_BLOOD_ELF_TOWER_NEUTRAL, m_towerOwner[NODE_BLOOD_ELF_TOWER] == TEAM_NONE);
+    FillInitialWorldState(WORLD_STATE_EY_BLOOD_ELF_TOWER_ALLIANCE, m_towerOwner[NODE_BLOOD_ELF_TOWER] == ALLIANCE);
+    FillInitialWorldState(WORLD_STATE_EY_BLOOD_ELF_TOWER_HORDE, m_towerOwner[NODE_BLOOD_ELF_TOWER] == HORDE);
+    FillInitialWorldState(WORLD_STATE_EY_BLOOD_ELF_TOWER_NEUTRAL, m_towerOwner[NODE_BLOOD_ELF_TOWER] == TEAM_NONE);
 
-    FillInitialWorldState(data, count, WORLD_STATE_EY_FEL_REAVER_RUINS_ALLIANCE, m_towerOwner[NODE_FEL_REAVER_RUINS] == ALLIANCE);
-    FillInitialWorldState(data, count, WORLD_STATE_EY_FEL_REAVER_RUINS_HORDE, m_towerOwner[NODE_FEL_REAVER_RUINS] == HORDE);
-    FillInitialWorldState(data, count, WORLD_STATE_EY_FEL_REAVER_RUINS_NEUTRAL, m_towerOwner[NODE_FEL_REAVER_RUINS] == TEAM_NONE);
+    FillInitialWorldState(WORLD_STATE_EY_FEL_REAVER_RUINS_ALLIANCE, m_towerOwner[NODE_FEL_REAVER_RUINS] == ALLIANCE);
+    FillInitialWorldState(WORLD_STATE_EY_FEL_REAVER_RUINS_HORDE, m_towerOwner[NODE_FEL_REAVER_RUINS] == HORDE);
+    FillInitialWorldState(WORLD_STATE_EY_FEL_REAVER_RUINS_NEUTRAL, m_towerOwner[NODE_FEL_REAVER_RUINS] == TEAM_NONE);
 
-    FillInitialWorldState(data, count, WORLD_STATE_EY_MAGE_TOWER_ALLIANCE, m_towerOwner[NODE_MAGE_TOWER] == ALLIANCE);
-    FillInitialWorldState(data, count, WORLD_STATE_EY_MAGE_TOWER_HORDE, m_towerOwner[NODE_MAGE_TOWER] == HORDE);
-    FillInitialWorldState(data, count, WORLD_STATE_EY_MAGE_TOWER_NEUTRAL, m_towerOwner[NODE_MAGE_TOWER] == TEAM_NONE);
+    FillInitialWorldState(WORLD_STATE_EY_MAGE_TOWER_ALLIANCE, m_towerOwner[NODE_MAGE_TOWER] == ALLIANCE);
+    FillInitialWorldState(WORLD_STATE_EY_MAGE_TOWER_HORDE, m_towerOwner[NODE_MAGE_TOWER] == HORDE);
+    FillInitialWorldState(WORLD_STATE_EY_MAGE_TOWER_NEUTRAL, m_towerOwner[NODE_MAGE_TOWER] == TEAM_NONE);
 
-    FillInitialWorldState(data, count, WORLD_STATE_EY_DRAENEI_RUINS_ALLIANCE, m_towerOwner[NODE_DRAENEI_RUINS] == ALLIANCE);
-    FillInitialWorldState(data, count, WORLD_STATE_EY_DRAENEI_RUINS_HORDE, m_towerOwner[NODE_DRAENEI_RUINS] == HORDE);
-    FillInitialWorldState(data, count, WORLD_STATE_EY_DRAENEI_RUINS_NEUTRAL, m_towerOwner[NODE_DRAENEI_RUINS] == TEAM_NONE);
+    FillInitialWorldState(WORLD_STATE_EY_DRAENEI_RUINS_ALLIANCE, m_towerOwner[NODE_DRAENEI_RUINS] == ALLIANCE);
+    FillInitialWorldState(WORLD_STATE_EY_DRAENEI_RUINS_HORDE, m_towerOwner[NODE_DRAENEI_RUINS] == HORDE);
+    FillInitialWorldState(WORLD_STATE_EY_DRAENEI_RUINS_NEUTRAL, m_towerOwner[NODE_DRAENEI_RUINS] == TEAM_NONE);
 
     // flag states
-    FillInitialWorldState(data, count, WORLD_STATE_EY_NETHERSTORM_FLAG_READY, m_flagState == EY_FLAG_STATE_ON_BASE);
-    FillInitialWorldState(data, count, WORLD_STATE_EY_NETHERSTORM_FLAG_STATE_ALLIANCE, m_flagState == EY_FLAG_STATE_ON_ALLIANCE_PLAYER ? 2 : 1);
-    FillInitialWorldState(data, count, WORLD_STATE_EY_NETHERSTORM_FLAG_STATE_HORDE, m_flagState == EY_FLAG_STATE_ON_HORDE_PLAYER ? 2 : 1);
+    FillInitialWorldState(WORLD_STATE_EY_NETHERSTORM_FLAG_READY, m_flagState == EY_FLAG_STATE_ON_BASE);
+    FillInitialWorldState(WORLD_STATE_EY_NETHERSTORM_FLAG_STATE_ALLIANCE, m_flagState == EY_FLAG_STATE_ON_ALLIANCE_PLAYER ? 2 : 1);
+    FillInitialWorldState(WORLD_STATE_EY_NETHERSTORM_FLAG_STATE_HORDE, m_flagState == EY_FLAG_STATE_ON_HORDE_PLAYER ? 2 : 1);
 
-    // capture point states
-    // if you leave the bg while being in capture point radius - and later join same type of bg the slider would still be displayed because the client caches it
-    FillInitialWorldState(data, count, WORLD_STATE_EY_CAPTURE_POINT_SLIDER_DISPLAY, WORLD_STATE_REMOVE);
+    // capture point states - not need fill! unique for each other point
+    // FillInitialWorldState(WORLD_STATE_EY_CAPTURE_POINT_SLIDER_DISPLAY, WORLD_STATE_REMOVE);
 }
 
 WorldSafeLocsEntry const* BattleGroundEY::GetClosestGraveYard(Player* player)
@@ -561,6 +576,7 @@ WorldSafeLocsEntry const* BattleGroundEY::GetClosestGraveYard(Player* player)
     float plr_x = player->GetPositionX();
     float plr_y = player->GetPositionY();
     float plr_z = player->GetPositionZ();
+
 
     distance = (entry->x - plr_x) * (entry->x - plr_x) + (entry->y - plr_y) * (entry->y - plr_y) + (entry->z - plr_z) * (entry->z - plr_z);
     nearestDistance = distance;

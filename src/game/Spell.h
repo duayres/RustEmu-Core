@@ -934,18 +934,4 @@ namespace MaNGOS
 }
 
 typedef void(Spell::*pEffect)(SpellEffectIndex eff_idx);
-
-class SpellEvent : public BasicEvent
-{
-public:
-    SpellEvent(Spell* spell);
-    virtual ~SpellEvent();
-
-    virtual bool Execute(uint64 e_time, uint32 p_time) override;
-    virtual void Abort(uint64 e_time) override;
-    virtual bool IsDeletable() const override;
-protected:
-    Spell* m_Spell;
-};
-
 #endif

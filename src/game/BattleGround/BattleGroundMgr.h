@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,11 +21,9 @@
 
 #include "Common.h"
 #include "Policies/Singleton.h"
-#include "Utilities/EventProcessor.h"
 #include "SharedDefines.h"
 #include "DBCEnums.h"
 #include "BattleGround.h"
-
 #include <boost/thread/recursive_mutex.hpp>
 
 typedef std::map<uint32, BattleGround*> BattleGroundSet;
@@ -97,6 +95,7 @@ class BattleGroundQueue
         // mutex that should not allow changing private data, nor allowing to update Queue during private data change.
         boost::recursive_mutex m_Lock;
 
+
         typedef std::map<ObjectGuid, PlayerQueueInfo> QueuedPlayersMap;
         QueuedPlayersMap m_QueuedPlayers;
 
@@ -137,54 +136,7 @@ class BattleGroundQueue
         uint32 m_SumOfWaitTimes[PVP_TEAM_COUNT][MAX_BATTLEGROUND_BRACKETS];
 };
 
-/*
-    This class is used to invite player to BG again, when minute lasts from his first invitation
-    it is capable to solve all possibilities
-*/
-class BGQueueInviteEvent : public BasicEvent
-{
-    public:
-        BGQueueInviteEvent(ObjectGuid pl_guid, uint32 BgInstanceGUID, BattleGroundTypeId BgTypeId, ArenaType arenaType, uint32 removeTime) :
-            m_PlayerGuid(pl_guid), m_BgInstanceGUID(BgInstanceGUID), m_BgTypeId(BgTypeId), m_ArenaType(arenaType), m_RemoveTime(removeTime)
-        {
-        };
-        virtual ~BGQueueInviteEvent() {};
-
-        virtual bool Execute(uint64 e_time, uint32 p_time) override;
-        virtual void Abort(uint64 e_time) override;
-    private:
-        ObjectGuid m_PlayerGuid;
-        uint32 m_BgInstanceGUID;
-        BattleGroundTypeId m_BgTypeId;
-        ArenaType m_ArenaType;
-        uint32 m_RemoveTime;
-};
-
-/*
-    This class is used to remove player from BG queue after 1 minute 20 seconds from first invitation
-    We must store removeInvite time in case player left queue and joined and is invited again
-    We must store bgQueueTypeId, because battleground can be deleted already, when player entered it
-*/
-class BGQueueRemoveEvent : public BasicEvent
-{
-    public:
-        BGQueueRemoveEvent(ObjectGuid plGuid, uint32 bgInstanceGUID, BattleGroundTypeId BgTypeId, BattleGroundQueueTypeId bgQueueTypeId, uint32 removeTime)
-            : m_PlayerGuid(plGuid), m_BgInstanceGUID(bgInstanceGUID), m_RemoveTime(removeTime), m_BgTypeId(BgTypeId), m_BgQueueTypeId(bgQueueTypeId)
-        {}
-
-        virtual ~BGQueueRemoveEvent() {}
-
-        virtual bool Execute(uint64 e_time, uint32 p_time) override;
-        virtual void Abort(uint64 e_time) override;
-    private:
-        ObjectGuid m_PlayerGuid;
-        uint32 m_BgInstanceGUID;
-        uint32 m_RemoveTime;
-        BattleGroundTypeId m_BgTypeId;
-        BattleGroundQueueTypeId m_BgQueueTypeId;
-};
-
-class BattleGroundMgr
+class BattleGroundMgr : public MaNGOS::Singleton<BattleGroundMgr, MaNGOS::ClassLevelLockable<BattleGroundMgr, boost::mutex> >
 {
     public:
         /* Construction */

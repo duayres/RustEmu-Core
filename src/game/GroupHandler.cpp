@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,8 +28,6 @@
 #include "Group.h"
 #include "SocialMgr.h"
 #include "Util.h"
-#include "Vehicle.h"
-#include "TransportSystem.h"
 
 /* differeces from off:
     -you can uninvite yourself - is is useful
@@ -211,8 +209,7 @@ void WorldSession::HandleGroupAcceptOpcode(WorldPacket& recv_data)
     group->RemoveInvite(GetPlayer());
 
     /** error handling **/
-    /********************/ 
-
+    /********************/
     Player* leader = sObjectMgr.GetPlayer(group->GetLeaderGuid());
 
     // forming a new group, create it
@@ -247,7 +244,6 @@ void WorldSession::HandleGroupAcceptOpcode(WorldPacket& recv_data)
     // everything is fine, do it, PLAYER'S GROUP IS SET IN ADDMEMBER!!!
     if (!group->AddMember(GetPlayer()->GetObjectGuid(), GetPlayer()->GetName()))
         return;
-
 }
 
 void WorldSession::HandleGroupDeclineOpcode(WorldPacket& /*recv_data*/ )
@@ -880,7 +876,7 @@ void WorldSession::HandleRequestPartyMemberStatsOpcode(WorldPacket& recv_data)
     Pet* pet = player->GetPet();
     if (pet)
         updateFlags |= GROUP_UPDATE_FLAG_PET_GUID | GROUP_UPDATE_FLAG_PET_CUR_HP | GROUP_UPDATE_FLAG_PET_MAX_HP |
-        GROUP_UPDATE_FLAG_PET_POWER_TYPE | GROUP_UPDATE_FLAG_PET_CUR_POWER | GROUP_UPDATE_FLAG_PET_MAX_POWER;
+            GROUP_UPDATE_FLAG_PET_POWER_TYPE | GROUP_UPDATE_FLAG_PET_CUR_POWER | GROUP_UPDATE_FLAG_PET_MAX_POWER;
 
     if (player->GetVehicle())
         updateFlags |= GROUP_UPDATE_FLAG_VEHICLE_SEAT;
@@ -957,7 +953,7 @@ void WorldSession::HandleRequestPartyMemberStatsOpcode(WorldPacket& recv_data)
     }
     data.put<uint64>(maskPos, auramask);                    // GROUP_UPDATE_FLAG_AURAS
 
-    if (pet)
+    if(pet)
     {
         Powers petPowerType = pet->GetPowerType();
         data << pet->GetObjectGuid();                       // GROUP_UPDATE_FLAG_PET_GUID

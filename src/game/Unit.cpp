@@ -194,8 +194,8 @@ void GlobalCooldownMgr::CancelGlobalCooldown(SpellEntry const* spellInfo)
 Unit::Unit() :
     m_charmInfo(NULL),
     i_motionMaster(this),
-    m_ThreatManager(this),
-    m_HostileRefManager(this),
+    m_ThreatManager(*this),
+    m_HostileRefManager(new HostileRefManager(this)),
     m_stateMgr(this)
 {
     m_objectType |= TYPEMASK_UNIT;
@@ -330,7 +330,7 @@ void Unit::Update(uint32 update_diff, uint32 p_time)
     // WARNING! Order of execution here is important, do not change.
     // Spells must be processed with event system BEFORE they go to _UpdateSpells.
     // Or else we may have some SPELL_STATE_FINISHED spells stalled in pointers, that is bad.
-    m_Events.Update(update_diff);
+    UpdateEvents(update_diff, p_time);
     _UpdateSpells(update_diff);
 
     CleanupDeletedHolders(false);
@@ -352,7 +352,7 @@ void Unit::Update(uint32 update_diff, uint32 p_time)
         // Check UNIT_STAT_MELEE_ATTACKING or UNIT_STAT_CHASE (without UNIT_STAT_FOLLOW in this case) so pets can reach far away
         // targets without stopping half way there and running off.
         // These flags are reset after target dies or another command is given.
-        if (m_HostileRefManager.isEmpty())
+        if (m_HostileRefManager->isEmpty())
         {
             // m_CombatTimer set at aura start and it will be freeze until aura removing
             if (m_CombatTimer <= update_diff)
@@ -10567,7 +10567,7 @@ float Unit::ApplyTotalThreatModifier(float threat, SpellSchoolMask schoolMask)
 
 //======================================================================
 
-void Unit::AddThreat(Unit* pVictim, float threat /*= 0.0f*/, bool crit /*= false*/, SpellSchoolMask schoolMask /*= SPELL_SCHOOL_MASK_NONE*/, SpellEntry const* threatSpell /*= NULL*/)
+void Unit::AddThreat(Unit* pVictim, float threat /*= 0.0f*/, bool crit /*= false*/, SpellSchoolMask schoolMask /*= SPELL_SCHOOL_MASK_NONE*/, SpellEntry const *threatSpell /*= NULL*/)
 {
     // Only mobs can manage threat lists
     if (CanHaveThreatList())
@@ -10578,10 +10578,12 @@ void Unit::AddThreat(Unit* pVictim, float threat /*= 0.0f*/, bool crit /*= false
 
 void Unit::DeleteThreatList()
 {
-    if (CanHaveThreatList(true) && !m_ThreatManager.isThreatListEmpty())
-        SendThreatClear();
-
-    m_ThreatManager.clearReferences();
+    if (CanHaveThreatList())
+    {
+        if (!m_ThreatManager.isThreatListEmpty())
+            SendThreatClear();
+        m_ThreatManager.clearReferences();
+    }
 }
 
 //======================================================================
@@ -10641,7 +10643,6 @@ void Unit::TauntFadeOut(Unit* taunter)
         return;
 
     Unit* target = getVictim();
-
     if (!target || target != taunter)
         return;
 
@@ -10649,11 +10650,7 @@ void Unit::TauntFadeOut(Unit* taunter)
     {
         m_fixateTargetGuid.Clear();
 
-        if (((Creature*)this)->AI())
-            ((Creature*)this)->AI()->EnterEvadeMode();
-
-        if (InstanceData* mapInstance = GetInstanceData())
-            mapInstance->OnCreatureEvade((Creature*)this);
+        AddEvent(new EvadeDelayEvent(*this), EVADE_TIME_DELAY_MIN);
 
         if (m_isCreatureLinkingTrigger)
             GetMap()->GetCreatureLinkingHolder()->DoCreatureLinkingEvent(LINKING_EVENT_EVADE, (Creature*)this);
@@ -10704,23 +10701,23 @@ bool Unit::IsSecondChoiceTarget(Unit* pTarget, bool checkThreatArea) const
     return
         pTarget->IsImmunedToDamage(GetMeleeDamageSchoolMask()) ||
         pTarget->hasNegativeAuraWithInterruptFlag(AURA_INTERRUPT_FLAG_DAMAGE) ||
-        checkThreatArea && ((Creature*)this)->IsOutOfThreatArea(pTarget);
+        (checkThreatArea && ((Creature*)this)->IsOutOfThreatArea(pTarget));
 }
 
 //======================================================================
 
-bool Unit::SelectHostileTarget()
+bool Unit::SelectHostileTarget(bool withEvade)
 {
-    // function provides main threat functionality
-    // next-victim-selection algorithm and evade mode are called
-    // threat list sorting etc.
+    //function provides main threat functionality
+    //next-victim-selection algorithm and evade mode are called
+    //threat list sorting etc.
 
     MANGOS_ASSERT(GetTypeId() == TYPEID_UNIT);
 
-    if (!this->isAlive())
+    if (!GetMap() || !isAlive())
         return false;
 
-    // This function only useful once AI has been initialized
+    //This function only useful once AI has been initialized
     if (!((Creature*)this)->AI())
         return false;
 
@@ -10739,22 +10736,27 @@ bool Unit::SelectHostileTarget()
                 target = pFixateTarget;
         }
     }
+
     // then checking if we have some taunt on us
     if (!target)
     {
-        const AuraList& tauntAuras = GetAurasByType(SPELL_AURA_MOD_TAUNT);
-        Unit* caster;
-
-        // Find first available taunter target
-        // Auras are pushed_back, last caster will be on the end
-        for (AuraList::const_reverse_iterator aura = tauntAuras.rbegin(); aura != tauntAuras.rend(); ++aura)
+        AuraList const& tauntAuras = GetAurasByType(SPELL_AURA_MOD_TAUNT);
+        if (!tauntAuras.empty())
         {
-            if ((caster = (*aura)->GetCaster()) && caster->IsInMap(this) &&
-                    caster->isTargetableForAttack() && caster->isInAccessablePlaceFor((Creature*)this) &&
-                    !IsSecondChoiceTarget(caster, true))
+            Unit* caster = NULL;
+
+            // Find first available taunter target
+            // Auras are pushed_back, last caster will be on the end
+            for (AuraList::const_reverse_iterator aura = tauntAuras.rbegin(); aura != tauntAuras.rend(); ++aura)
             {
-                target = caster;
-                break;
+                if ((caster = (*aura)->GetCaster()) && caster->IsInMap(this) &&
+                    caster->isTargetableForAttack() && caster->isInAccessablePlaceFor(this) &&
+                    (!IsCombatStationary() || CanReachWithMeleeAttack(caster)) &&
+                    !IsSecondChoiceTarget(caster, true))
+                {
+                    target = caster;
+                    break;
+                }
             }
         }
     }
@@ -10767,9 +10769,6 @@ bool Unit::SelectHostileTarget()
     {
         if (!hasUnitState(UNIT_STAT_STUNNED | UNIT_STAT_DIED))
         {
-            SetInFront(target);
-            if (oldTarget != target)
-                ((Creature*)this)->AI()->AttackStart(target);
 
             // check if currently selected target is reachable
             // NOTE: path alrteady generated from AttackStart()
@@ -10781,20 +10780,25 @@ bool Unit::SelectHostileTarget()
                 if (m_ThreatManager.getThreatList().size() < 2)
                 {
                     // only one target in list, we have to evade after timer
-                    // TODO: make timer - inside Creature class
-                    ((Creature*)this)->AI()->EnterEvadeMode();
+                    if (withEvade)
+                        AddEvent(new EvadeDelayEvent(*this), EVADE_TIME_DELAY);
                 }
                 else
                 {
                     // remove unreachable target from our threat list
                     // next iteration we will select next possible target
-                    m_HostileRefManager.deleteReference(target);
+                    m_HostileRefManager->deleteReference(target);
                     m_ThreatManager.modifyThreatPercent(target, -101);
                     // remove target from current attacker, do not exit combat settings
                     AttackStop(true);
                 }
-
                 return false;
+            }
+            else
+            {
+                SetInFront(target);
+                if (oldTarget != target)
+                    ((Creature*)this)->AI()->AttackStart(target);
             }
         }
         return true;
@@ -10819,13 +10823,13 @@ bool Unit::SelectHostileTarget()
                 return false;
         }
     }
+    if (!withEvade)
+        return false;
 
     // enter in evade mode in other case
     m_fixateTargetGuid.Clear();
-    ((Creature*)this)->AI()->EnterEvadeMode();
 
-    if (InstanceData* mapInstance = GetInstanceData())
-        mapInstance->OnCreatureEvade((Creature*)this);
+    AddEvent(new EvadeDelayEvent(*this), EVADE_TIME_DELAY_MIN);
 
     if (m_isCreatureLinkingTrigger)
         GetMap()->GetCreatureLinkingHolder()->DoCreatureLinkingEvent(LINKING_EVENT_EVADE, (Creature*)this);
@@ -11600,7 +11604,7 @@ void Unit::CleanupsBeforeDelete()
     if (m_uint32Values)                                     // only for fully created object
     {
         InterruptNonMeleeSpells(true);
-        m_Events.KillAllEvents(false);                      // non-delatable (currently casted spells) will not deleted now but it will deleted at call in Map::RemoveAllObjectsInRemoveList
+        KillAllEvents(false);                      // non-delatable (currently casted spells) will not deleted now but it will deleted at call in Map::RemoveAllObjectsInRemoveList
         CombatStop();
         ClearComboPointHolders();
         if (CanHaveThreatList())
@@ -14068,44 +14072,10 @@ bool Unit::IsAllowedDamageInArea(Unit* pVictim) const
     return true;
 }
 
-class RelocationNotifyEvent : public BasicEvent
-{
-    public:
-        RelocationNotifyEvent(Unit& owner) : BasicEvent(), m_owner(owner)
-        {
-            m_owner._SetAINotifyScheduled(true);
-        }
-
-        bool Execute(uint64 /*e_time*/, uint32 /*p_time*/)
-        {
-            float radius = MAX_CREATURE_ATTACK_RADIUS * sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
-            if (m_owner.GetTypeId() == TYPEID_PLAYER)
-            {
-                MaNGOS::PlayerRelocationNotifier notify((Player&)m_owner);
-                Cell::VisitAllObjects(&m_owner, notify, radius);
-            }
-            else // if(m_owner.GetTypeId() == TYPEID_UNIT)
-            {
-                MaNGOS::CreatureRelocationNotifier notify((Creature&)m_owner);
-                Cell::VisitAllObjects(&m_owner, notify, radius);
-            }
-            m_owner._SetAINotifyScheduled(false);
-            return true;
-        }
-
-        void Abort(uint64)
-        {
-            m_owner._SetAINotifyScheduled(false);
-        }
-
-    private:
-        Unit& m_owner;
-};
-
 void Unit::ScheduleAINotify(uint32 delay)
 {
     if (!IsAINotifyScheduled())
-        m_Events.AddEvent(new RelocationNotifyEvent(*this), m_Events.CalculateTime(delay));
+        AddEvent(new RelocationNotifyEvent(*this), delay);
 }
 
 void Unit::OnRelocated()
@@ -14850,4 +14820,9 @@ void Unit::BuildCooldownPacket(WorldPacket& data, uint8 flags, PacketCooldowns c
         data << uint32(itr->first);
         data << uint32(itr->second);
     }
+}
+
+void Unit::RemoveUnitFromHostileRefManager(Unit* pUnit)
+{
+    getHostileRefManager().deleteReference(pUnit);
 }

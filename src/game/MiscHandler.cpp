@@ -688,48 +688,48 @@ void WorldSession::HandleResurrectResponseOpcode(WorldPacket& recv_data)
 
 void WorldSession::HandleAreaTriggerOpcode(WorldPacket& recv_data)
 {
-    DEBUG_LOG("WORLD: Received opcode CMSG_AREATRIGGER");
+    DEBUG_LOG("WORLD: Received CMSG_AREATRIGGER");
 
     uint32 Trigger_ID;
-
     recv_data >> Trigger_ID;
-    DEBUG_LOG("Trigger ID: %u", Trigger_ID);
-    Player* player = GetPlayer();
 
-    if (player->IsTaxiFlying())
+    DEBUG_LOG("Trigger ID: %u", Trigger_ID);
+
+    if (GetPlayer()->IsTaxiFlying())
     {
-        DEBUG_LOG("Player '%s' (GUID: %u) in flight, ignore Area Trigger ID: %u", player->GetName(), player->GetGUIDLow(), Trigger_ID);
+        DEBUG_LOG("Player '%s' (GUID: %u) in flight, ignore Area Trigger ID: %u", GetPlayer()->GetName(), GetPlayer()->GetGUIDLow(), Trigger_ID);
         return;
     }
 
     AreaTriggerEntry const* atEntry = sAreaTriggerStore.LookupEntry(Trigger_ID);
     if (!atEntry)
     {
-        DEBUG_LOG("Player '%s' (GUID: %u) send unknown (by DBC) Area Trigger ID: %u", player->GetName(), player->GetGUIDLow(), Trigger_ID);
+        DEBUG_LOG("Player '%s' (GUID: %u) send unknown (by DBC) Area Trigger ID: %u", GetPlayer()->GetName(), GetPlayer()->GetGUIDLow(), Trigger_ID);
         return;
     }
 
     // delta is safe radius
-    const float delta = 5.0f;
-
+    float const delta = 5.0f;
     // check if player in the range of areatrigger
-    if (!IsPointInAreaTriggerZone(atEntry, player->GetMapId(), player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), delta))
+    Player* pl = GetPlayer();
+
+    if (!IsPointInAreaTriggerZone(atEntry, pl->GetMapId(), pl->GetPositionX(), pl->GetPositionY(), pl->GetPositionZ(), delta))
     {
-        DEBUG_LOG("Player '%s' (GUID: %u) too far, ignore Area Trigger ID: %u", player->GetName(), player->GetGUIDLow(), Trigger_ID);
+        DEBUG_LOG("Player '%s' (GUID: %u) too far, ignore Area Trigger ID: %u", pl->GetName(), pl->GetGUIDLow(), Trigger_ID);
         return;
     }
 
-    if (sScriptMgr.OnAreaTrigger(player, atEntry))
+    if (sScriptMgr.OnAreaTrigger(pl, atEntry))
         return;
 
     uint32 quest_id = sObjectMgr.GetQuestForAreaTrigger(Trigger_ID);
-    if (quest_id && player->isAlive() && player->IsActiveQuest(quest_id))
+    if (quest_id && pl->isAlive() && pl->IsActiveQuest(quest_id))
     {
         Quest const* pQuest = sObjectMgr.GetQuestTemplate(quest_id);
         if (pQuest)
         {
-            if (player->GetQuestStatus(quest_id) == QUEST_STATUS_INCOMPLETE)
-                player->AreaExploredOrEventHappens(quest_id);
+            if (pl->GetQuestStatus(quest_id) == QUEST_STATUS_INCOMPLETE)
+                pl->AreaExploredOrEventHappens(quest_id);
         }
     }
 
@@ -737,19 +737,19 @@ void WorldSession::HandleAreaTriggerOpcode(WorldPacket& recv_data)
     if (sObjectMgr.IsTavernAreaTrigger(Trigger_ID))
     {
         // set resting flag we are in the inn
-        if (player->GetRestType() != REST_TYPE_IN_CITY)
-            player->SetRestType(REST_TYPE_IN_TAVERN, Trigger_ID);
+        if (pl->GetRestType() != REST_TYPE_IN_CITY)
+            pl->SetRestType(REST_TYPE_IN_TAVERN, Trigger_ID);
         return;
     }
 
-    if (BattleGround* bg = player->GetBattleGround())
+    if (BattleGround* bg = pl->GetBattleGround())
     {
-        bg->HandleAreaTrigger(player, Trigger_ID);
+        bg->HandleAreaTrigger(pl, Trigger_ID);
         return;
     }
-    else if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(player->GetCachedZoneId()))
+    else if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(pl->GetCachedZoneId()))
     {
-        if (outdoorPvP->HandleAreaTrigger(player, Trigger_ID))
+        if (outdoorPvP->HandleAreaTrigger(pl, Trigger_ID))
             return;
     }
 
@@ -758,58 +758,12 @@ void WorldSession::HandleAreaTriggerOpcode(WorldPacket& recv_data)
     if (!at)
         return;
 
-    MapEntry const* targetMapEntry = sMapStore.LookupEntry(at->target_mapId);
+    MapEntry const* targetMapEntry = sMapStore.LookupEntry(at->loc.GetMapId());
     if (!targetMapEntry)
         return;
 
-    // ghost resurrected at enter attempt to dungeon with corpse (including fail enter cases)
-    if (!player->isAlive() && targetMapEntry->IsDungeon())
-    {
-        int32 corpseMapId = 0;
-        if (Corpse* corpse = player->GetCorpse())
-            corpseMapId = corpse->GetMapId();
-
-        // check back way from corpse to entrance
-        uint32 instance_map = corpseMapId;
-        do
-        {
-            // most often fast case
-            if (instance_map == targetMapEntry->MapID)
-                break;
-
-            InstanceTemplate const* instance = ObjectMgr::GetInstanceTemplate(instance_map);
-            instance_map = instance ? instance->parent : 0;
-        }
-        while (instance_map);
-
-        // corpse not in dungeon or some linked deep dungeons
-        if (!instance_map)
-        {
-            WorldPacket data(SMSG_AREA_TRIGGER_NO_CORPSE);
-            player->GetSession()->SendPacket(&data);
-            return;
-        }
-
-        // need find areatrigger to inner dungeon for landing point
-        if (at->target_mapId != corpseMapId)
-        {
-            if (AreaTrigger const* corpseAt = sObjectMgr.GetMapEntranceTrigger(corpseMapId))
-            {
-                at = corpseAt;
-                targetMapEntry = sMapStore.LookupEntry(at->target_mapId);
-                if (!targetMapEntry)
-                    return;
-            }
-        }
-
-        // now we can resurrect player, and then check teleport requirements
-        player->ResurrectPlayer(0.5f);
-        player->SpawnCorpseBones();
-    }
-
-    // teleport player (trigger requirement will be checked on TeleportTo)
-    if (player->CheckTransferPossibility(at))
-        player->TeleportTo(at->target_mapId, at->target_X, at->target_Y, at->target_Z, at->target_Orientation, TELE_TO_NOT_LEAVE_TRANSPORT | TELE_TO_CHECKED);
+    if (GetPlayer()->CheckTransferPossibility(at))
+        GetPlayer()->TeleportTo(at->loc.GetMapId(), at->loc.x, at->loc.y, at->loc.z, at->loc.orientation, TELE_TO_NOT_LEAVE_TRANSPORT | TELE_TO_CHECKED);
 }
 
 void WorldSession::HandleUpdateAccountData(WorldPacket& recv_data)

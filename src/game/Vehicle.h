@@ -64,7 +64,7 @@ struct VehicleAccessory
     void Offset(float x, float y, float z, float o = 0.0f) { m_offsetX = x; m_offsetY = y; m_offsetZ = z; m_offsetO = o; }
 };
 
-class VehicleKit : public TransportBase
+class MANGOS_DLL_SPEC VehicleKit : public TransportBase
 {
     public:
         explicit VehicleKit(Unit* base, VehicleEntry const* entry);

@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,8 @@ class BattleGround;
 
 #define EY_FLAG_RESPAWN_TIME            (10 * IN_MILLISECONDS) //10 seconds
 #define EY_RESOURCES_UPDATE_TIME        (2 * IN_MILLISECONDS) //2 seconds
+#define BG_EY_EVENT_START_BATTLE        13180
+#define EY_OBJECTIVE_CAPTURE_FLAG       183
 
 enum EYWorldStates
 {
@@ -61,7 +63,6 @@ enum EYWorldStates
     WORLD_STATE_EY_NETHERSTORM_FLAG_STATE_ALLIANCE      = 2769,
     WORLD_STATE_EY_NETHERSTORM_FLAG_STATE_HORDE         = 2770,
 
-    WORLD_STATE_EY_CAPTURE_POINT_SLIDER_DISPLAY         = 2718
 };
 
 enum EYCapturePoints
@@ -162,6 +163,24 @@ enum EYNodes
 #define EY_EVENT2_FLAG_CENTER 4 // maximum node is 3 so 4 for center is ok
 // all other event2 are just nodeids, i won't define something here
 
+enum EYBuffs
+{
+    // buffs
+    EY_OBJECT_SPEEDBUFF_FEL_REAVER_RUINS    = 1,
+    EY_OBJECT_REGENBUFF_FEL_REAVER_RUINS    = 2,
+    EY_OBJECT_BERSERKBUFF_FEL_REAVER_RUINS  = 3,
+    EY_OBJECT_SPEEDBUFF_BLOOD_ELF_TOWER     = 4,
+    EY_OBJECT_REGENBUFF_BLOOD_ELF_TOWER     = 5,
+    EY_OBJECT_BERSERKBUFF_BLOOD_ELF_TOWER   = 6,
+    EY_OBJECT_SPEEDBUFF_DRAENEI_RUINS       = 7,
+    EY_OBJECT_REGENBUFF_DRAENEI_RUINS       = 8,
+    EY_OBJECT_BERSERKBUFF_DRAENEI_RUINS     = 9,
+    EY_OBJECT_SPEEDBUFF_MAGE_TOWER          = 10,
+    EY_OBJECT_REGENBUFF_MAGE_TOWER          = 11,
+    EY_OBJECT_BERSERKBUFF_MAGE_TOWER        = 12,
+    EY_OBJECT_MAX                           = 13
+};
+
 #define EY_NORMAL_HONOR_INTERVAL        260
 #define EY_WEEKEND_HONOR_INTERVAL       160
 #define EY_EVENT_START_BATTLE           13180
@@ -239,11 +258,13 @@ class BattleGroundEY : public BattleGround
 
     public:
         BattleGroundEY();
-        void Update(uint32 diff) override;
+        ~BattleGroundEY();
+        void Update(uint32 diff);
 
         /* inherited from BattlegroundClass */
-        virtual void AddPlayer(Player* plr) override;
-        virtual void StartingEventOpenDoors() override;
+        virtual void AddPlayer(Player* plr);
+        virtual void StartingEventCloseDoors();
+        virtual void StartingEventOpenDoors();
 
         /* BG Flags */
         ObjectGuid const& GetFlagCarrierGuid() const { return m_flagCarrier; }
@@ -261,18 +282,19 @@ class BattleGroundEY : public BattleGround
         void HandleKillPlayer(Player* player, Player* killer) override;
 
         virtual WorldSafeLocsEntry const* GetClosestGraveYard(Player* player) override;
+        virtual bool SetupBattleGround() override;
         virtual void Reset() override;
         void UpdateTeamScore(Team team);
-        void EndBattleGround(Team winner) override;
-        void UpdatePlayerScore(Player* source, uint32 type, uint32 value) override;
-        virtual void FillInitialWorldStates(WorldPacket& data, uint32& count) override;
+        void EndBattleGround(Team winner);
+        void UpdatePlayerScore(Player* source, uint32 type, uint32 value);
+        virtual void FillInitialWorldStates();
         void SetDroppedFlagGuid(ObjectGuid guid)     { m_DroppedFlagGuid = guid;}
         void ClearDroppedFlagGuid()                  { m_DroppedFlagGuid.Clear();}
         ObjectGuid const& GetDroppedFlagGuid() const { return m_DroppedFlagGuid;}
 
         /* Battleground Events */
-        virtual void EventPlayerClickedOnFlag(Player* source, GameObject* target_obj) override;
-        virtual void EventPlayerDroppedFlag(Player* source) override;
+        virtual void EventPlayerClickedOnFlag(Player* source, GameObject* target_obj);
+        virtual void EventPlayerDroppedFlag(Player* source);
 
         /* achievement req. */
         bool IsAllNodesControlledByTeam(Team team) const override;

@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,14 +18,14 @@
 
 #include "OutdoorPvPNA.h"
 #include "WorldPacket.h"
-#include "World.h"
-#include "ObjectMgr.h"
-#include "Object.h"
-#include "Creature.h"
-#include "GameObject.h"
-#include "Player.h"
+#include "../World.h"
+#include "../ObjectMgr.h"
+#include "../Object.h"
+#include "../Creature.h"
+#include "../GameObject.h"
+#include "../Player.h"
 
-OutdoorPvPNA::OutdoorPvPNA() : OutdoorPvP(),
+OutdoorPvPNA::OutdoorPvPNA(uint32 id) : OutdoorPvP(id),
     m_zoneOwner(TEAM_NONE),
     m_soldiersRespawnTimer(0),
     m_zoneWorldState(0),
@@ -35,31 +35,29 @@ OutdoorPvPNA::OutdoorPvPNA() : OutdoorPvP(),
 {
     // initially set graveyard owner to neither faction
     sObjectMgr.SetGraveYardLinkTeam(GRAVEYARD_ID_HALAA, GRAVEYARD_ZONE_ID_HALAA, TEAM_INVALID);
+
+    uint32 zoneId = sOutdoorPvPMgr.GetZoneOfAffectedScript(this);
+    FillInitialWorldStates(zoneId);
 }
 
-void OutdoorPvPNA::FillInitialWorldStates(WorldPacket& data, uint32& count)
+void OutdoorPvPNA::FillInitialWorldStates(uint32 zoneId)
 {
     if (m_zoneOwner != TEAM_NONE)
     {
-        FillInitialWorldState(data, count, m_zoneWorldState, WORLD_STATE_ADD);
+        FillInitialWorldState(zoneId, m_zoneWorldState, WORLD_STATE_ADD);
 
         // map states
         for (uint8 i = 0; i < MAX_NA_ROOSTS; ++i)
-            FillInitialWorldState(data, count, m_roostWorldState[i], WORLD_STATE_ADD);
+            FillInitialWorldState(zoneId, m_roostWorldState[i], WORLD_STATE_ADD);
     }
 
-    FillInitialWorldState(data, count, m_zoneMapState, WORLD_STATE_ADD);
-    FillInitialWorldState(data, count, WORLD_STATE_NA_GUARDS_MAX, MAX_NA_GUARDS);
-    FillInitialWorldState(data, count, WORLD_STATE_NA_GUARDS_LEFT, m_guardsLeft);
+    FillInitialWorldState(zoneId, m_zoneMapState, WORLD_STATE_ADD);
+    FillInitialWorldState(zoneId, WORLD_STATE_NA_GUARDS_MAX, MAX_NA_GUARDS);
+    FillInitialWorldState(zoneId, WORLD_STATE_NA_GUARDS_LEFT, m_guardsLeft);
 }
 
 void OutdoorPvPNA::SendRemoveWorldStates(Player* player)
 {
-    player->SendUpdateWorldState(m_zoneWorldState, WORLD_STATE_REMOVE);
-    player->SendUpdateWorldState(m_zoneMapState, WORLD_STATE_REMOVE);
-
-    for (uint8 i = 0; i < MAX_NA_ROOSTS; ++i)
-        player->SendUpdateWorldState(m_roostWorldState[i], WORLD_STATE_REMOVE);
 }
 
 void OutdoorPvPNA::HandlePlayerEnterZone(Player* player, bool isMainZone)
@@ -82,11 +80,11 @@ void OutdoorPvPNA::HandlePlayerLeaveZone(Player* player, bool isMainZone)
     OutdoorPvP::HandlePlayerLeaveZone(player, isMainZone);
 }
 
-void OutdoorPvPNA::HandleObjectiveComplete(uint32 eventId, const std::list<Player*> &players, Team team)
+void OutdoorPvPNA::HandleObjectiveComplete(uint32 eventId, std::list<Player*> players, Team team)
 {
     if (eventId == EVENT_HALAA_BANNER_WIN_ALLIANCE || eventId == EVENT_HALAA_BANNER_WIN_HORDE)
     {
-        for (std::list<Player*>::const_iterator itr = players.begin(); itr != players.end(); ++itr)
+        for (std::list<Player*>::iterator itr = players.begin(); itr != players.end(); ++itr)
         {
             if ((*itr) && (*itr)->GetTeam() == team)
                 (*itr)->KilledMonsterCredit(NPC_HALAA_COMBATANT);
@@ -189,8 +187,6 @@ void OutdoorPvPNA::HandleCreatureDeath(Creature* creature)
 
 void OutdoorPvPNA::HandleGameObjectCreate(GameObject* go)
 {
-    OutdoorPvP::HandleGameObjectCreate(go);
-
     switch (go->GetEntry())
     {
         case GO_HALAA_BANNER:
@@ -359,7 +355,7 @@ void OutdoorPvPNA::ProcessCaptureEvent(GameObject* go, Team team)
     SendUpdateWorldState(WORLD_STATE_NA_GUARDS_LEFT, m_guardsLeft);
 
     BuffTeam(m_zoneOwner, SPELL_STRENGTH_HALAANI);
-    sWorld.SendDefenseMessage(ZONE_ID_NAGRAND, m_zoneOwner == ALLIANCE ? LANG_OPVP_NA_CAPTURE_A : LANG_OPVP_NA_CAPTURE_H);
+    sWorld.SendDefenseMessage(ZONE_ID_NAGRAND, m_zoneOwner == ALLIANCE ? LANG_OPVP_NA_CAPTURE_A: LANG_OPVP_NA_CAPTURE_H);
 }
 
 // Handle the gameobjects spawn/despawn depending on the controller faction
@@ -525,7 +521,7 @@ void OutdoorPvPNA::Update(uint32 diff)
 // Handle soldiers respawn on timer - this will summon a replacement for the dead soldier
 void OutdoorPvPNA::RespawnSoldier()
 {
-    for (GuidZoneMap::const_iterator itr = m_zonePlayers.begin(); itr != m_zonePlayers.end(); ++itr)
+    for (GuidZoneMap::iterator itr = m_zonePlayers.begin(); itr != m_zonePlayers.end(); ++itr)
     {
         // Find player who is in main zone (Nagrand) to get correct map reference
         if (!itr->second)
@@ -534,8 +530,7 @@ void OutdoorPvPNA::RespawnSoldier()
         if (Player* player = sObjectMgr.GetPlayer(itr->first))
         {
             // summon a soldier replacement in the order they were set in the deque. delete the element after summon
-            const HalaaSoldiersSpawns &location = m_deadSoldiers.front();
-            player->SummonCreature(m_zoneOwner == ALLIANCE ? NPC_ALLIANCE_HANAANI_GUARD : NPC_HORDE_HALAANI_GUARD, location.x, location.y, location.z, location.o, TEMPSUMMON_DEAD_DESPAWN, 0, true);
+            player->SummonCreature(m_zoneOwner == ALLIANCE ? NPC_ALLIANCE_HANAANI_GUARD : NPC_HORDE_HALAANI_GUARD, m_deadSoldiers.front().x, m_deadSoldiers.front().y, m_deadSoldiers.front().z, m_deadSoldiers.front().o, TEMPSUMMON_DEAD_DESPAWN, 0, true);
             m_deadSoldiers.pop();
             break;
         }
@@ -547,23 +542,17 @@ void OutdoorPvPNA::LockHalaa(const WorldObject* objRef)
 {
     if (GameObject* go = objRef->GetMap()->GetGameObject(m_capturePoint))
         go->SetLootState(GO_JUST_DEACTIVATED);
-    else
-    {
-        // if grid is unloaded, changing the saved slider value is enough
-        CapturePointSlider value(m_zoneOwner == ALLIANCE ? CAPTURE_SLIDER_ALLIANCE : CAPTURE_SLIDER_HORDE, true);
-        sOutdoorPvPMgr.SetCapturePointSlider(GO_HALAA_BANNER, value);
-    }
+
+    sOutdoorPvPMgr.SetCapturePointSlider(m_capturePoint, m_zoneOwner == ALLIANCE ? CAPTURE_SLIDER_ALLIANCE_LOCKED : CAPTURE_SLIDER_HORDE_LOCKED);
 }
 
 // Unlock Halaa when all the soldiers are killed
 void OutdoorPvPNA::UnlockHalaa(const WorldObject* objRef)
 {
     if (GameObject* go = objRef->GetMap()->GetGameObject(m_capturePoint))
-        go->SetLootState(GO_ACTIVATED);
+        go->SetCapturePointSlider(m_zoneOwner == ALLIANCE ? CAPTURE_SLIDER_ALLIANCE : CAPTURE_SLIDER_HORDE);
+        // no banner visual update needed because it already has the correct one
     else
-    {
-        // if grid is unloaded, changing the saved slider value is enough
-        CapturePointSlider value(m_zoneOwner == ALLIANCE ? CAPTURE_SLIDER_ALLIANCE : CAPTURE_SLIDER_HORDE, false);
-        sOutdoorPvPMgr.SetCapturePointSlider(GO_HALAA_BANNER, value);
-    }
+        // if grid is unloaded, resetting the slider value is enough
+        sOutdoorPvPMgr.SetCapturePointSlider(m_capturePoint, m_zoneOwner == ALLIANCE ? CAPTURE_SLIDER_ALLIANCE : CAPTURE_SLIDER_HORDE);
 }

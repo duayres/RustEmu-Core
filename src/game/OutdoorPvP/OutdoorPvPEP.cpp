@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,17 +18,18 @@
 
 #include "OutdoorPvPEP.h"
 #include "WorldPacket.h"
-#include "World.h"
-#include "ObjectMgr.h"
-#include "Object.h"
-#include "Creature.h"
-#include "GameObject.h"
-#include "Player.h"
+#include "../World.h"
+#include "../ObjectMgr.h"
+#include "../Object.h"
+#include "../Creature.h"
+#include "../GameObject.h"
+#include "../Player.h"
 
-OutdoorPvPEP::OutdoorPvPEP() : OutdoorPvP(),
+OutdoorPvPEP::OutdoorPvPEP(uint32 id) : OutdoorPvP(id),
     m_towersAlliance(0),
     m_towersHorde(0)
 {
+    // FIXME - need read data from worlstates
     m_towerWorldState[0] = WORLD_STATE_EP_NORTHPASS_NEUTRAL;
     m_towerWorldState[1] = WORLD_STATE_EP_CROWNGUARD_NEUTRAL;
     m_towerWorldState[2] = WORLD_STATE_EP_EASTWALL_NEUTRAL;
@@ -39,15 +40,15 @@ OutdoorPvPEP::OutdoorPvPEP() : OutdoorPvP(),
 
     // initially set graveyard owner to neither faction
     sObjectMgr.SetGraveYardLinkTeam(GRAVEYARD_ID_EASTERN_PLAGUE, GRAVEYARD_ZONE_EASTERN_PLAGUE, TEAM_INVALID);
+
+    uint32 zoneId = sOutdoorPvPMgr.GetZoneOfAffectedScript(this);
+    FillInitialWorldStates(zoneId);
 }
 
-void OutdoorPvPEP::FillInitialWorldStates(WorldPacket& data, uint32& count)
+void OutdoorPvPEP::FillInitialWorldStates(uint32 zoneId)
 {
-    FillInitialWorldState(data, count, WORLD_STATE_EP_TOWER_COUNT_ALLIANCE, m_towersAlliance);
-    FillInitialWorldState(data, count, WORLD_STATE_EP_TOWER_COUNT_HORDE, m_towersHorde);
-
-    for (uint8 i = 0; i < MAX_EP_TOWERS; ++i)
-        FillInitialWorldState(data, count, m_towerWorldState[i], WORLD_STATE_ADD);
+    FillInitialWorldState(zoneId, WORLD_STATE_EP_TOWER_COUNT_ALLIANCE, m_towersAlliance);
+    FillInitialWorldState(zoneId, WORLD_STATE_EP_TOWER_COUNT_HORDE, m_towersHorde);
 }
 
 void OutdoorPvPEP::SendRemoveWorldStates(Player* player)
@@ -109,8 +110,6 @@ void OutdoorPvPEP::HandleCreatureCreate(Creature* creature)
 
 void OutdoorPvPEP::HandleGameObjectCreate(GameObject* go)
 {
-    OutdoorPvP::HandleGameObjectCreate(go);
-
     switch (go->GetEntry())
     {
         case GO_TOWER_BANNER_NORTHPASS:
@@ -145,7 +144,7 @@ void OutdoorPvPEP::HandleGameObjectCreate(GameObject* go)
     }
 }
 
-void OutdoorPvPEP::HandleObjectiveComplete(uint32 eventId, const std::list<Player*> &players, Team team)
+void OutdoorPvPEP::HandleObjectiveComplete(uint32 eventId, std::list<Player*> players, Team team)
 {
     uint32 credit = 0;
 
@@ -171,7 +170,7 @@ void OutdoorPvPEP::HandleObjectiveComplete(uint32 eventId, const std::list<Playe
             return;
     }
 
-    for (std::list<Player*>::const_iterator itr = players.begin(); itr != players.end(); ++itr)
+    for (std::list<Player*>::iterator itr = players.begin(); itr != players.end(); ++itr)
     {
         if ((*itr) && (*itr)->GetTeam() == team)
         {
@@ -337,6 +336,7 @@ bool OutdoorPvPEP::HandleGameObjectUse(Player* /*player*/, GameObject* go)
 void OutdoorPvPEP::InitBanner(GameObject* go, uint32 towerId)
 {
     m_towerBanners[towerId].push_back(go->GetObjectGuid());
+    m_towerOwner[towerId] = go->GetTeam();
     go->SetGoArtKit(GetBannerArtKit(m_towerOwner[towerId]));
 }
 

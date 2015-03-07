@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,6 +30,24 @@ BattleGroundRB::BattleGroundRB()
     m_StartMessageIds[BG_STARTING_EVENT_FOURTH] = LANG_BG_WS_HAS_BEGUN;
 }
 
+BattleGroundRB::~BattleGroundRB()
+{
+
+}
+
+void BattleGroundRB::Update(uint32 diff)
+{
+    BattleGround::Update(diff);
+}
+
+void BattleGroundRB::StartingEventCloseDoors()
+{
+}
+
+void BattleGroundRB::StartingEventOpenDoors()
+{
+}
+
 void BattleGroundRB::AddPlayer(Player* plr)
 {
     BattleGround::AddPlayer(plr);
@@ -39,8 +57,21 @@ void BattleGroundRB::AddPlayer(Player* plr)
     m_PlayerScores[plr->GetObjectGuid()] = sc;
 }
 
+void BattleGroundRB::RemovePlayer(Player* /*plr*/, ObjectGuid /*guid*/)
+{
+
+}
+
+void BattleGroundRB::HandleAreaTrigger(Player* /*source*/, uint32 /*trigger*/)
+{
+    // this is wrong way to implement these things. On official it done by gameobject spell cast.
+    if (GetStatus() != STATUS_IN_PROGRESS)
+        return;
+}
+
 void BattleGroundRB::UpdatePlayerScore(Player* source, uint32 type, uint32 value)
 {
+
     BattleGroundScoreMap::iterator itr = m_PlayerScores.find(source->GetObjectGuid());
 
     if (itr == m_PlayerScores.end())                        // player not found...

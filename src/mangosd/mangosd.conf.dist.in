@@ -3,7 +3,7 @@
 #####################################
 
 [MangosdConf]
-ConfVersion=2015021919
+ConfVersion=2015030719
 
 ###################################################################################################################
 # CONNECTIONS AND DIRECTORIES
@@ -203,11 +203,25 @@ BindIP = "0.0.0.0"
 #        Default: 1 (Enable)
 #                 0 (Disabled)
 #
+#    WorldState.ExpireTime
+#        Expire time for cleanup WorldStates in seconds.
+#        Default: 604800 (1 week)
+#
+#    WorldState.Timer (milliseconds)
+#        Timer for update worldstates
+#        Default: 60000 (1 minute)
+#
 #    MapUpdate.MaxVisitorsInUpdate
 #    MapUpdate.MaxVisitsInUpdate
 #        Limitation for units update time delta per map update cycle.
 #        MaxVisitorsInUpdate - count of maximal update diffs for calculation update deadline. Min = 1, default = 9, max = 50.
 #        MaxVisitsInUpdate   - limits count of units in one per-visit update cycle (for maps only) min = 10, default = 20, max = 100.
+#
+#    ObjectLoadingSplitter.MaxAllowedTime
+#        Limitation for time, used per map update cycle, for object loading (in ms)
+#        Default: 10
+#        Min:     5    ( less then 3 - objects not be loaded anyway )
+#        Max:     1000 ( value more may cause false-freeze detection )
 #
 #    MapUpdate.PositionUpdateDelay
 #        Time (in ms!) for recalculation unit/GO position while spline movement.
@@ -243,8 +257,11 @@ UpdateUptimeInterval = 10
 MaxCoreStuckTime = 0
 AddonChannel = 1
 CleanCharacterDB = 1
+WorldState.ExpireTime = 604800
+WorldState.Timer     = 60000
 MapUpdate.MaxVisitorsInUpdate = 9
 MapUpdate.MaxVisitsInUpdate = 10
+ObjectLoadingSplitter.MaxAllowedTime = 10
 MapUpdate.PositionUpdateDelay = 400
 
 ###################################################################################################################
@@ -846,6 +863,12 @@ LogColors = ""
 #        enable/disable alternative resilence damage reduction calculation (for Avenger/Sanctified wrath mostly)
 #        Default: 0     (disable, default mangos style)
 #
+#    AllowTransferToCustomMap
+#        Allowing moving to maps, enter for which absent in AraeTrigger.dbc (by custom areatrigger_teleport entryes)
+#        Attention! Changing this option "on-the-fly" required reload areatrigger_teleport table!
+#        Default: 0 - disabled (only GM's may transfer to this maps
+#                 1 - enabled  (any player, fit to custom areatrigger_teleport condition, may transfer to this maps).
+#
 #    Resistance.CalculationMethod
 #        Method of resistance calculation.
 #                 0 (TBC,   resistance chance - 0%, 25%, 50%, 75% or 100%)
@@ -944,6 +967,7 @@ Raid.MinLevel = 10
 PlayerCommands = 1
 CrowdControlHPBase = 0.1
 ResilienceAlternativeCalculation = 0
+AllowTransferToCustomMap = 0
 Resistance.CalculationMethod = 1
 Resistance.AddByOverLevel = 0
 Melee.Distance.Addition = 4
@@ -1007,6 +1031,7 @@ TalentsInspecting = 1
 #        Default: 100 yards
 #
 #    Rate.Creature.Aggro
+#    Rate.Creature.Aggro.Instance
 #        Aggro radius percent or off.
 #        Default: 1   - 100%
 #                 1.5 - 150%
@@ -1108,6 +1133,7 @@ TalentsInspecting = 1
 
 ThreatRadius = 100
 Rate.Creature.Aggro = 1
+Rate.Creature.Aggro.Instance = 1.0
 CreatureRespawnAggroDelay = 5000
 CreatureFamilyFleeAssistanceRadius = 30
 CreatureFamilyAssistanceRadius = 10
@@ -1647,13 +1673,14 @@ BattleGround.Random.ResetHour = 6
 #        Default: 0 (disable)
 #                 1 (enable)
 #
-#    Arena.ArenaSeason.ID
-#        Current area season id show in client
-#        Default: 1
+#    Arena.QueueAnnouncer.Start
+#        Enable arena queue announcer posting to chat at Arena start
+#        Default: 0 (disable)
+#                 1 (enable)
 #
+#    Arena.ArenaSeason.ID
 #    Arena.ArenaSeasonPrevious.ID
-#        Previous area season id show in client
-#        Default: 0
+#        Keys redundant, use WorldStates 3191 and 3901 instead
 #
 #    Arena.StartRating
 #        Default Rating at team creation
@@ -1662,6 +1689,16 @@ BattleGround.Random.ResetHour = 6
 #    Arena.StartPersonalRating
 #        Default Personal Rating at team creation
 #        Default: -1 (use season dependent default value)
+#
+#    Arena.LoserNoChange
+#        If winner or loser rating is below this limit, loser loses no rating
+#        Default: 0 (disable)
+#                 1400
+#
+#    Arena.LoserHalfChange
+#        If loser rating is below this limit, he loses half of rating
+#        Default: 0 (disable)
+#                 1500
 #
 #    Arena.RemoveAurasWithDurationLess = 30
 #    At start arena remove auras with duration, less then this value (in seconds)
@@ -1677,10 +1714,11 @@ Arena.AutoDistributePoints = 0
 Arena.AutoDistributeInterval = 7
 Arena.QueueAnnouncer.Join = 0
 Arena.QueueAnnouncer.Exit = 0
-Arena.ArenaSeason.ID = 1
-Arena.ArenaSeasonPrevious.ID = 0
+Arena.QueueAnnouncer.Start = 0
 Arena.StartRating = -1
 Arena.StartPersonalRating = -1
+Arena.LoserNoChange = 0
+Arena.LoserHalfChange = 0
 Arena.RemoveAurasWithDurationLess = 30
 
 ###################################################################################################################
@@ -1856,3 +1894,17 @@ LFR.Extend              = 0
 LFG.MaxKicks            = 5
 LFG.OnlyLastEncounterForCompleteDungeon = 0
 LFG.DisableDungeonMapIds= ""
+
+###################################################################################################################
+# Virtual map serving system (VMSS) configuration
+#
+#    VMSS.MapFreeMethod
+#        Method for freeing breaked map
+#        0 - safe cleaning (clean auras, save and logout player)
+#        1 - not safe cleaning (kick players, not clean auras, not save players/worldstates)
+#        2 - not safe cleaning (another type - logout players without save)
+#        Default: 0
+#
+###################################################################################################################
+
+VMSS.MapFreeMethod = 1

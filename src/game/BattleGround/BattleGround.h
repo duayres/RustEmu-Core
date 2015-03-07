@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,14 +24,18 @@
 #include "Map.h"
 #include "ByteBuffer.h"
 #include "ObjectGuid.h"
+#include "WorldStateMgr.h"
 
 // magic event-numbers
 #define BG_EVENT_NONE 255
 // those generic events should get a high event id
 #define BG_EVENT_DOOR 254
+#define IC_EVENT_BOSS_A 251
+#define IC_EVENT_BOSS_H 252
 // only arena event
 // cause this buff apears 90sec after start in every bg i implement it here
 #define ARENA_BUFF_EVENT 253
+
 
 class Creature;
 class GameObject;
@@ -111,6 +115,7 @@ enum BattleGroundTimeIntervals
     RESPAWN_IMMEDIATELY             = 0,                    // secs
     BUFF_RESPAWN_TIME               = 180,                  // secs
     ARENA_SPAWN_BUFF_OBJECTS        = 90000,                // ms - 90sec after start
+    ARENA_TIME_LIMIT                = 2820000,              // ms - 47 minutes after start
 };
 
 enum BattleGroundStartTimeIntervals
@@ -160,27 +165,10 @@ struct BattleGroundObjectInfo
 {
     BattleGroundObjectInfo() : object(NULL), timer(0), spellid(0) {}
 
-    GameObject*  object;
+    GameObject* object;
     int32       timer;
     uint32      spellid;
 };
-
-// handle the queue types and bg types separately to enable joining queue for different sized arenas at the same time
-enum BattleGroundQueueTypeId
-{
-    BATTLEGROUND_QUEUE_NONE     = 0,
-    BATTLEGROUND_QUEUE_AV       = 1,
-    BATTLEGROUND_QUEUE_WS       = 2,
-    BATTLEGROUND_QUEUE_AB       = 3,
-    BATTLEGROUND_QUEUE_EY       = 4,
-    BATTLEGROUND_QUEUE_SA       = 5,
-    BATTLEGROUND_QUEUE_IC       = 6,
-    BATTLEGROUND_QUEUE_RB       = 7,
-    BATTLEGROUND_QUEUE_2v2      = 8,
-    BATTLEGROUND_QUEUE_3v3      = 9,
-    BATTLEGROUND_QUEUE_5v5      = 10
-};
-#define MAX_BATTLEGROUND_QUEUE_TYPES 11
 
 enum ScoreType
 {
@@ -202,13 +190,25 @@ enum ScoreType
     SCORE_GRAVEYARDS_DEFENDED   = 12,
     SCORE_TOWERS_ASSAULTED      = 13,
     SCORE_TOWERS_DEFENDED       = 14,
-    SCORE_SECONDARY_OBJECTIVES  = 15
+    SCORE_SECONDARY_OBJECTIVES  = 15,
+    // SA
+    SCORE_GATES_DESTROYED       = 16,
+    SCORE_DEMOLISHERS_DESTROYED = 17
 };
 
 enum BattleGroundType
 {
     TYPE_BATTLEGROUND     = 3,
     TYPE_ARENA            = 4
+};
+
+
+enum BattleGroundSpawnFactions
+{
+    SPAWN_FACTION_UNCHANGED = 0,
+    SPAWN_FACTION_ALLIANCE = 3,
+    SPAWN_FACTION_HORDE = 6,
+    SPAWN_FACTION_NEUTRAL = 35,
 };
 
 enum BattleGroundStartingEvents
@@ -296,6 +296,10 @@ class BattleGround
         /*BattleGround(const BattleGround& bg);*/
         virtual ~BattleGround();
         virtual void Update(uint32 diff);                   // must be implemented in BG subclass of BG specific update code, but must in begginning call parent version
+        virtual bool SetupBattleGround()                    // must be implemented in BG subclass
+        {
+            return true;
+        }
         virtual void Reset();                               // resets all common properties for battlegrounds, must be implemented and called in BG subclass
         virtual void StartingEventCloseDoors() {}
         virtual void StartingEventOpenDoors() {}
@@ -311,7 +315,7 @@ class BattleGround
         BattleGroundBracketId GetBracketId() const { return m_BracketId; }
         // the instanceId check is also used to determine a bg-template
         // that's why the m_map hack is here..
-        uint32 GetInstanceID()              { return m_Map ? GetBgMap()->GetInstanceId() : 0; }
+        uint32 GetInstanceID();
         BattleGroundStatus GetStatus() const { return m_Status; }
         uint32 GetClientInstanceID() const  { return m_ClientInstanceID; }
         uint32 GetStartTime() const         { return m_StartTime; }
@@ -331,6 +335,14 @@ class BattleGround
         uint32 GetBattlemasterEntry() const;
         uint32 GetBonusHonorFromKill(uint32 kills) const;
         bool IsRandom() { return m_IsRandom; }
+
+        // Strand of the Ancients related
+        virtual Team   GetDefender()                    const   { return TEAM_NONE; }
+        virtual uint8  GetGydController(uint8 /*gyd*/)  const   { return false; }
+
+        // Method for change BG creatures faction after spawn (by new event)
+        virtual BattleGroundSpawnFactions GetSpawnFactionFor(ObjectGuid const& guid) const;
+        virtual Team GetSpawnTeamFor(ObjectGuid const& guid) const { return TEAM_NONE; }
 
         // Set methods:
         void SetName(char const* Name)      { m_Name = Name; }
@@ -361,6 +373,8 @@ class BattleGround
 
         void DecreaseInvitedCount(Team team)      { (team == ALLIANCE) ? --m_InvitedAlliance : --m_InvitedHorde; }
         void IncreaseInvitedCount(Team team)      { (team == ALLIANCE) ? ++m_InvitedAlliance : ++m_InvitedHorde; }
+        void SetRandom(bool isRandom) { m_IsRandom = isRandom; }
+
         uint32 GetInvitedCount(Team team) const
         {
             if (team == ALLIANCE)
@@ -370,7 +384,6 @@ class BattleGround
         }
         bool HasFreeSlots() const;
         uint32 GetFreeSlotsForTeam(Team team) const;
-        void SetRandom(bool isRandom) { m_IsRandom = isRandom; }
 
         bool isArena() const        { return m_IsArena; }
         bool isBattleGround() const { return !m_IsArena; }
@@ -384,6 +397,7 @@ class BattleGround
         BattleGroundScoreMap::const_iterator GetPlayerScoresBegin() const { return m_PlayerScores.begin(); }
         BattleGroundScoreMap::const_iterator GetPlayerScoresEnd() const { return m_PlayerScores.end(); }
         uint32 GetPlayerScoresSize() const { return m_PlayerScores.size(); }
+        uint32 GetPlayerScore(Player* pPlayer, uint32 type);
 
         void StartBattleGround();
 
@@ -394,17 +408,13 @@ class BattleGround
         uint32 GetMapId() const { return m_MapId; }
 
         /* Map pointers */
-        void SetBgMap(BattleGroundMap* map) { m_Map = map; }
-        BattleGroundMap* GetBgMap()
-        {
-            MANGOS_ASSERT(m_Map);
-            return m_Map;
-        }
+        void SetBgMap(BattleGroundMap* map);
+        BattleGroundMap* GetBgMap();
 
         void SetTeamStartLoc(Team team, float X, float Y, float Z, float O);
         void GetTeamStartLoc(Team team, float& X, float& Y, float& Z, float& O) const
         {
-            PvpTeamIndex idx = GetTeamIndexByTeamId(team);
+            PvpTeamIndex idx = GetTeamIndex(team);
             X = m_TeamStartLocX[idx];
             Y = m_TeamStartLocY[idx];
             Z = m_TeamStartLocZ[idx];
@@ -413,7 +423,8 @@ class BattleGround
 
         /* Packet Transfer */
         // method that should fill worldpacket with actual world states (not yet implemented for all battlegrounds!)
-        virtual void FillInitialWorldStates(WorldPacket& /*data*/, uint32& /*count*/) {}
+        virtual void FillInitialWorldStates() {}
+        void FillInitialWorldState(uint32 stateId, uint32 value);
         void SendPacketToTeam(Team team, WorldPacket* packet, Player* sender = NULL, bool self = true);
         void SendPacketToAll(WorldPacket* packet);
 
@@ -425,6 +436,7 @@ class BattleGround
         void CastSpellOnTeam(uint32 SpellID, Team team);
         void RewardHonorToTeam(uint32 Honor, Team team);
         void RewardReputationToTeam(uint32 faction_id, uint32 Reputation, Team team);
+        void RewardXpToTeam(uint32 Xp, float percentOfLevel, Team TeamID);
         void RewardMark(Player* plr, uint32 count);
         void SendRewardMarkByMail(Player* plr, uint32 mark, uint32 count);
         void RewardItem(Player* plr, uint32 item_id, uint32 count);
@@ -438,6 +450,9 @@ class BattleGround
         void SendMessageToAll(int32 entry, ChatMsg type, Player const* source = NULL);
         void SendYellToAll(int32 entry, uint32 language, ObjectGuid guid);
         void PSendMessageToAll(int32 entry, ChatMsg type, Player const* source, ...);
+        void SendWarningToAll(int32 entry, ...);
+
+        GameObject* GetBGObject(uint32 type);
 
         // specialized version with 2 string id args
         void SendMessage2ToAll(int32 entry, ChatMsg type, Player const* source, int32 strId1 = 0, int32 strId2 = 0);
@@ -449,22 +464,21 @@ class BattleGround
 
         virtual void UpdatePlayerScore(Player* Source, uint32 type, uint32 value);
 
-        static PvpTeamIndex GetTeamIndexByTeamId(Team team) { return team == ALLIANCE ? TEAM_INDEX_ALLIANCE : TEAM_INDEX_HORDE; }
-        uint32 GetPlayersCountByTeam(Team team) const { return m_PlayersCount[GetTeamIndexByTeamId(team)]; }
+        uint32 GetPlayersCountByTeam(Team team) const { return m_PlayersCount[GetTeamIndex(team)]; }
         uint32 GetAlivePlayersCountByTeam(Team team) const; // used in arenas to correctly handle death in spirit of redemption / last stand etc. (killer = killed) cases
         void UpdatePlayersCountByTeam(Team team, bool remove)
         {
             if (remove)
-                --m_PlayersCount[GetTeamIndexByTeamId(team)];
+                --m_PlayersCount[GetTeamIndex(team)];
             else
-                ++m_PlayersCount[GetTeamIndexByTeamId(team)];
+                ++m_PlayersCount[GetTeamIndex(team)];
         }
 
         // used for rated arena battles
-        void SetArenaTeamIdForTeam(Team team, uint32 ArenaTeamId) { m_ArenaTeamIds[GetTeamIndexByTeamId(team)] = ArenaTeamId; }
-        uint32 GetArenaTeamIdForTeam(Team team) const             { return m_ArenaTeamIds[GetTeamIndexByTeamId(team)]; }
-        void SetArenaTeamRatingChangeForTeam(Team team, int32 RatingChange) { m_ArenaTeamRatingChanges[GetTeamIndexByTeamId(team)] = RatingChange; }
-        int32 GetArenaTeamRatingChangeForTeam(Team team) const    { return m_ArenaTeamRatingChanges[GetTeamIndexByTeamId(team)]; }
+        void SetArenaTeamIdForTeam(Team team, uint32 ArenaTeamId) { m_ArenaTeamIds[GetTeamIndex(team)] = ArenaTeamId; }
+        uint32 GetArenaTeamIdForTeam(Team team) const             { return m_ArenaTeamIds[GetTeamIndex(team)]; }
+        void SetArenaTeamRatingChangeForTeam(Team team, int32 RatingChange) { m_ArenaTeamRatingChanges[GetTeamIndex(team)] = RatingChange; }
+        int32 GetArenaTeamRatingChangeForTeam(Team team) const    { return m_ArenaTeamRatingChanges[GetTeamIndex(team)]; }
         void CheckArenaWinConditions();
 
         /* Triggers handle */
@@ -486,6 +500,9 @@ class BattleGround
         virtual void EventPlayerCapturedFlag(Player* /*player*/) {}
         void EventPlayerLoggedIn(Player* player, ObjectGuid plr_guid);
         void EventPlayerLoggedOut(Player* player);
+
+        virtual void EventPlayerDamageGO(Player* /*player*/, GameObject* /*target_obj*/, uint32 /*eventId*/, uint32 /*bySpellId*/) {}
+        virtual void EventSpawnGOSA(Player* /*owner*/, Creature* /*obj*/, float /*x*/, float /*y*/, float /*z*/) {}
 
         /* Death related */
         virtual WorldSafeLocsEntry const* GetClosestGraveYard(Player* player);
@@ -517,8 +534,13 @@ class BattleGround
 
         void HandleTriggerBuff(ObjectGuid go_guid);
 
+        // TODO drop m_BGObjects
+        GuidVector m_BgObjects;
         void SpawnBGObject(ObjectGuid guid, uint32 respawntime);
+        bool AddObject(uint32 type, uint32 entry, float x, float y, float z, float o, float rotation0, float rotation1, float rotation2, float rotation3, uint32 respawnTime = 0);
         void SpawnBGCreature(ObjectGuid guid, uint32 respawntime);
+        bool DelObject(uint32 type);
+        void MakeInteractive(uint8 event1, uint8 event2, bool interactive);
 
         void DoorOpen(ObjectGuid guid);
         void DoorClose(ObjectGuid guid);
@@ -528,7 +550,7 @@ class BattleGround
         // since arenas can be AvA or Hvh, we have to get the "temporary" team of a player
         Team GetPlayerTeam(ObjectGuid guid);
         static Team GetOtherTeam(Team team) { return team ? ((team == ALLIANCE) ? HORDE : ALLIANCE) : TEAM_NONE; }
-        static PvpTeamIndex GetOtherTeamIndex(PvpTeamIndex teamIdx) { return teamIdx == TEAM_INDEX_ALLIANCE ? TEAM_INDEX_HORDE : TEAM_INDEX_ALLIANCE; }
+        static PvpTeamIndex GetOtherTeamIndex(PvpTeamIndex teamIdx){ return teamIdx == TEAM_INDEX_ALLIANCE ? TEAM_INDEX_HORDE : TEAM_INDEX_ALLIANCE; }
         bool IsPlayerInBattleGround(ObjectGuid guid);
 
         /* virtual score-array - get's used in bg-subclasses */
@@ -548,6 +570,8 @@ class BattleGround
         // creatures will get added wrong
         // door-events are automaticly added - but _ALL_ other must be in this vector
         std::map<uint8, uint8> m_ActiveEvents;
+
+        uint32 GetDamageDoneForTeam(Team team);
 
     protected:
         // this method is called, when BG cannot spawn its own spirit guide, or something is wrong, It correctly ends BattleGround
@@ -571,8 +595,7 @@ class BattleGround
         // this must be filled in constructors!
         uint32 m_StartMessageIds[BG_STARTING_EVENT_COUNT];
 
-        bool    m_BuffChange;
-        bool    m_IsRandom;
+        bool   m_IsRandom;
 
     private:
         /* Battleground */
@@ -592,6 +615,7 @@ class BattleGround
         bool   m_IsRated;                                   // is this battle rated?
         bool   m_PrematureCountDown;
         uint32 m_PrematureCountDownTimer;
+        bool   m_ArenaEnded;
         char const* m_Name;
 
         /* Player lists */
@@ -631,43 +655,5 @@ class BattleGround
         float m_TeamStartLocZ[PVP_TEAM_COUNT];
         float m_TeamStartLocO[PVP_TEAM_COUNT];
 };
-
-// helper functions for world state list fill
-inline void FillInitialWorldState(ByteBuffer& data, uint32& count, uint32 state, uint32 value)
-{
-    data << uint32(state);
-    data << uint32(value);
-    ++count;
-}
-
-inline void FillInitialWorldState(ByteBuffer& data, uint32& count, uint32 state, int32 value)
-{
-    data << uint32(state);
-    data << int32(value);
-    ++count;
-}
-
-inline void FillInitialWorldState(ByteBuffer& data, uint32& count, uint32 state, bool value)
-{
-    data << uint32(state);
-    data << uint32(value ? 1 : 0);
-    ++count;
-}
-
-struct WorldStatePair
-{
-    uint32 state;
-    uint32 value;
-};
-
-inline void FillInitialWorldState(ByteBuffer& data, uint32& count, WorldStatePair const* array)
-{
-    for (WorldStatePair const* itr = array; itr->state; ++itr)
-    {
-        data << uint32(itr->state);
-        data << uint32(itr->value);
-        ++count;
-    }
-}
 
 #endif

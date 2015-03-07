@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -128,15 +128,15 @@ void CreatureEventAIMgr::LoadCreatureEventAI_Summons(bool check_entry_use)
         if (check_entry_use)
             CheckUnusedAISummons();
 
-        sLog.outString(">> Loaded %u CreatureEventAI summon definitions", Count);
         sLog.outString();
+        sLog.outString(">> Loaded %u CreatureEventAI summon definitions", Count);
     }
     else
     {
         BarGoLink bar(1);
         bar.step();
-        sLog.outString(">> Loaded 0 CreatureEventAI Summon definitions. DB table `creature_ai_summons` is empty.");
         sLog.outString();
+        sLog.outString(">> Loaded 0 CreatureEventAI Summon definitions. DB table `creature_ai_summons` is empty.");
     }
 }
 
@@ -328,7 +328,7 @@ void CreatureEventAIMgr::LoadCreatureEventAI_Scripts()
                     if (temp.percent_range.percentMax <= temp.percent_range.percentMin)
                         sLog.outErrorEventAI("Creature %u are using percentage event(%u) with param1 <= param2 (MaxPercent <= MinPercent). Event will never trigger! ", temp.creature_id, i);
 
-                    if (temp.event_flags & EFLAG_REPEATABLE && !temp.percent_range.repeatMin && !temp.percent_range.repeatMax)
+                    if ((temp.event_flags & EFLAG_REPEATABLE) && !temp.percent_range.repeatMin && !temp.percent_range.repeatMax)
                     {
                         sLog.outErrorEventAI("Creature %u has param3 and param4=0 (RepeatMin/RepeatMax) but cannot be repeatable without timers. Removing EFLAG_REPEATABLE for event %u.", temp.creature_id, i);
                         temp.event_flags &= ~EFLAG_REPEATABLE;
@@ -344,7 +344,7 @@ void CreatureEventAIMgr::LoadCreatureEventAI_Scripts()
                             continue;
                         }
 
-                        if ((temp.spell_hit.schoolMask & pSpell->SchoolMask) != pSpell->SchoolMask)
+                        if ((temp.spell_hit.schoolMask & pSpell->GetSchoolMask()) != pSpell->GetSchoolMask())
                             sLog.outErrorEventAI("Creature %u has param1(spellId %u) but param2 is not -1 and not equal to spell's school mask. Event %u can never trigger.", temp.creature_id, temp.spell_hit.schoolMask, i);
                     }
 
@@ -662,7 +662,7 @@ void CreatureEventAIMgr::LoadCreatureEventAI_Scripts()
 
                             // Spell that should only target players, but could get any
                             if (spell->HasAttribute(SPELL_ATTR_EX3_TARGET_ONLY_PLAYER) &&
-                                    (action.cast.target == TARGET_T_ACTION_INVOKER || action.cast.target == TARGET_T_HOSTILE_RANDOM || action.cast.target == TARGET_T_HOSTILE_RANDOM_NOT_TOP))
+                                  (action.cast.target == TARGET_T_ACTION_INVOKER || action.cast.target == TARGET_T_HOSTILE_RANDOM || action.cast.target == TARGET_T_HOSTILE_RANDOM_NOT_TOP))
                                 sLog.outErrorEventAI("Event %u Action %u uses Target type %u for a spell (%u) that should only target players. This could be wrong.", i, j + 1, action.cast.target, action.cast.spellId);
                         }
                         break;
@@ -907,21 +907,26 @@ void CreatureEventAIMgr::LoadCreatureEventAI_Scripts()
                 if (ainame && !hasevent)
                     sLog.outErrorEventAI("EventAI not has script for creature entry (%u), but AIName = '%s'.", i, cInfo->AIName);
                 else if (!ainame && hasevent)
-                    sLog.outErrorEventAI("EventAI has script for creature entry (%u), but AIName = '%s' instead 'EventAI'.", i, cInfo->AIName);
+                {
+                    if (cInfo->ScriptID)
+                        sLog.outErrorEventAI("EventAI has script for creature entry (%u), but AIName = '%s' instead 'EventAI'. ScriptName = '%s'", i, cInfo->AIName, sScriptMgr.GetScriptName(cInfo->ScriptID));
+                    else
+                        sLog.outErrorEventAI("EventAI has script for creature entry (%u), but AIName = '%s' instead 'EventAI'.", i, cInfo->AIName);
+                }
             }
         }
 
         CheckUnusedAITexts();
         CheckUnusedAISummons();
 
-        sLog.outString(">> Loaded %u CreatureEventAI scripts", Count);
         sLog.outString();
+        sLog.outString(">> Loaded %u CreatureEventAI scripts", Count);
     }
     else
     {
         BarGoLink bar(1);
         bar.step();
-        sLog.outString(">> Loaded 0 CreatureEventAI scripts. DB table `creature_ai_scripts` is empty.");
         sLog.outString();
+        sLog.outString(">> Loaded 0 CreatureEventAI scripts. DB table `creature_ai_scripts` is empty.");
     }
 }

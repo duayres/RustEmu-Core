@@ -98,12 +98,6 @@ VendorItem const* VendorItemData::FindItemCostPair(uint32 item_id, uint32 extend
     return NULL;
 }
 
-bool ForcedDespawnDelayEvent::Execute(uint64 /*e_time*/, uint32 /*p_time*/)
-{
-    m_owner.ForcedDespawn();
-    return true;
-}
-
 void CreatureCreatePos::SelectFinalPoint(Creature* cr, bool checkLOS /*=false*/)
 {
     // if object provided then selected point at specific dist/angle from object forward look
@@ -1733,7 +1727,7 @@ void Creature::ForcedDespawn(uint32 timeMSToDespawn)
     {
         ForcedDespawnDelayEvent* pEvent = new ForcedDespawnDelayEvent(*this);
 
-        m_Events.AddEvent(pEvent, m_Events.CalculateTime(timeMSToDespawn));
+        AddEvent(pEvent, timeMSToDespawn);
         return;
     }
 

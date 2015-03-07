@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,13 +18,13 @@
 
 #include "OutdoorPvPHP.h"
 #include "WorldPacket.h"
-#include "World.h"
-#include "Object.h"
-#include "Creature.h"
-#include "GameObject.h"
-#include "Player.h"
+#include "../World.h"
+#include "../Object.h"
+#include "../Creature.h"
+#include "../GameObject.h"
+#include "../Player.h"
 
-OutdoorPvPHP::OutdoorPvPHP() : OutdoorPvP(),
+OutdoorPvPHP::OutdoorPvPHP(uint32 id) : OutdoorPvP(id),
     m_towersAlliance(0),
     m_towersHorde(0)
 {
@@ -34,17 +34,15 @@ OutdoorPvPHP::OutdoorPvPHP() : OutdoorPvP(),
 
     for (uint8 i = 0; i < MAX_HP_TOWERS; ++i)
         m_towerOwner[i] = TEAM_NONE;
+
+    uint32 zoneId = sOutdoorPvPMgr.GetZoneOfAffectedScript(this);
+    FillInitialWorldStates(zoneId);
 }
 
-void OutdoorPvPHP::FillInitialWorldStates(WorldPacket& data, uint32& count)
+void OutdoorPvPHP::FillInitialWorldStates(uint32 zoneId)
 {
-    FillInitialWorldState(data, count, WORLD_STATE_HP_TOWER_COUNT_ALLIANCE, m_towersAlliance);
-    FillInitialWorldState(data, count, WORLD_STATE_HP_TOWER_COUNT_HORDE, m_towersHorde);
-    FillInitialWorldState(data, count, WORLD_STATE_HP_TOWER_DISPLAY_A, WORLD_STATE_ADD);
-    FillInitialWorldState(data, count, WORLD_STATE_HP_TOWER_DISPLAY_H, WORLD_STATE_ADD);
-
-    for (uint8 i = 0; i < MAX_HP_TOWERS; ++i)
-        FillInitialWorldState(data, count, m_towerWorldState[i], WORLD_STATE_ADD);
+    FillInitialWorldState(zoneId, WORLD_STATE_HP_TOWER_COUNT_ALLIANCE, m_towersAlliance);
+    FillInitialWorldState(zoneId, WORLD_STATE_HP_TOWER_COUNT_HORDE, m_towersHorde);
 }
 
 void OutdoorPvPHP::SendRemoveWorldStates(Player* player)
@@ -80,8 +78,6 @@ void OutdoorPvPHP::HandlePlayerLeaveZone(Player* player, bool isMainZone)
 
 void OutdoorPvPHP::HandleGameObjectCreate(GameObject* go)
 {
-    OutdoorPvP::HandleGameObjectCreate(go);
-
     switch (go->GetEntry())
     {
         case GO_TOWER_BANNER_OVERLOOK:
@@ -98,20 +94,23 @@ void OutdoorPvPHP::HandleGameObjectCreate(GameObject* go)
             break;
         case GO_HELLFIRE_BANNER_OVERLOOK:
             m_towers[0] = go->GetObjectGuid();
+            m_towerOwner[0] = go->GetTeam();
             go->SetGoArtKit(GetBannerArtKit(m_towerOwner[0]));
             break;
         case GO_HELLFIRE_BANNER_STADIUM:
             m_towers[1] = go->GetObjectGuid();
+            m_towerOwner[1] = go->GetTeam();
             go->SetGoArtKit(GetBannerArtKit(m_towerOwner[1]));
             break;
         case GO_HELLFIRE_BANNER_BROKEN_HILL:
             m_towers[2] = go->GetObjectGuid();
+            m_towerOwner[2] = go->GetTeam();
             go->SetGoArtKit(GetBannerArtKit(m_towerOwner[2]));
             break;
     }
 }
 
-void OutdoorPvPHP::HandleObjectiveComplete(uint32 eventId, const std::list<Player*> &players, Team team)
+void OutdoorPvPHP::HandleObjectiveComplete(uint32 eventId, std::list<Player*> players, Team team)
 {
     uint32 credit = 0;
 
@@ -133,7 +132,7 @@ void OutdoorPvPHP::HandleObjectiveComplete(uint32 eventId, const std::list<Playe
             return;
     }
 
-    for (std::list<Player*>::const_iterator itr = players.begin(); itr != players.end(); ++itr)
+    for (std::list<Player*>::iterator itr = players.begin(); itr != players.end(); ++itr)
     {
         if ((*itr) && (*itr)->GetTeam() == team)
         {

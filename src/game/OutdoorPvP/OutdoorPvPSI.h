@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
 
 #include "Common.h"
 #include "OutdoorPvP.h"
-#include "Language.h"
+#include "../Language.h"
 
 enum
 {
@@ -63,19 +63,19 @@ enum
 class OutdoorPvPSI : public OutdoorPvP
 {
     public:
-        OutdoorPvPSI();
+        OutdoorPvPSI(uint32 id);
 
         void HandlePlayerEnterZone(Player* player, bool isMainZone) override;
         void HandlePlayerLeaveZone(Player* player, bool isMainZone) override;
-        void FillInitialWorldStates(WorldPacket& data, uint32& count) override;
+        void FillInitialWorldStates(uint32 zoneId) override;
 
         bool HandleAreaTrigger(Player* player, uint32 triggerId) override;
         bool HandleGameObjectUse(Player* player, GameObject* go) override;
         bool HandleDropFlag(Player* player, uint32 spellId) override;
 
     private:
-        uint8 m_resourcesAlliance;
-        uint8 m_resourcesHorde;
+        uint32 m_resourcesAlliance;
+        uint32 m_resourcesHorde;
         Team m_zoneOwner;
 };
 
