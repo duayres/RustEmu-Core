@@ -985,7 +985,10 @@ void World::SetInitialWorldSettings()
     sLog.outString("Initialize DBC data stores...");
     LoadDBCStores(m_dataPath);
     DetectDBCLang();
-    sObjectMgr.SetDBCLocaleIndex(GetDefaultDbcLocale());    // Get once for all the locale index of DBC language (console/broadcasts)       
+    sObjectMgr.SetDBCLocaleIndex(GetDefaultDbcLocale());    // Get once for all the locale index of DBC language (console/broadcasts)              
+
+    sLog.outString("Loading SpellDbc...");
+    sSpellMgr.LoadSpellDbc();
 
     sLog.outString("Loading Script Names...");
     sScriptMgr.LoadScriptNames();
@@ -1020,14 +1023,11 @@ void World::SetInitialWorldSettings()
     sObjectMgr.LoadPageTexts();
 
     sLog.outString("Loading Game Object Templates...");     // must be after LoadPageTexts
-    sObjectMgr.LoadGameobjectInfo();
+    sObjectMgr.LoadGameobjectInfo();      
 
     sLog.outString("Loading GameObject models...");
     LoadGameObjectModelList();
     sLog.outString();
-
-    sLog.outString("Loading SpellDbc...");
-    sSpellMgr.LoadSpellDbc();
 
     sLog.outString("Loading SpellTemplate...");
     sObjectMgr.LoadSpellTemplate();

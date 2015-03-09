@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -381,14 +381,14 @@ class MANGOS_DLL_SPEC Item : public Object
         uint16 GetQueuePos() const { return m_queuePos; }
         void FSetState(ItemUpdateState state) { m_state = state; } // forced
 
-        bool HasQuest(uint32 quest_id) const override { return GetProto()->StartQuest == quest_id; }
-        bool HasInvolvedQuest(uint32 /*quest_id*/) const override { return false; }
+        bool HasQuest(uint32 quest_id) const { return GetProto()->StartQuest == quest_id; }
+        bool HasInvolvedQuest(uint32 /*quest_id*/) const { return false; }
         bool IsPotion() const { return GetProto()->IsPotion(); }
         bool IsConjuredConsumable() const { return GetProto()->IsConjuredConsumable(); }
 
         void AddToClientUpdateList() override;
         void RemoveFromClientUpdateList() override;
-        void BuildUpdateData(UpdateDataMapType& update_players) override;
+        void BuildUpdateData(UpdateDataMapType& playerMap) override;
 
         // Item Refunding system
         bool IsEligibleForRefund() const;

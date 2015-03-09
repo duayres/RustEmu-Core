@@ -3983,11 +3983,8 @@ void Player::DestroyForPlayer(Player* target, bool anim) const
 bool Player::HasSpell(uint32 spell) const
 {
     PlayerSpellMap::const_iterator itr = m_spells.find(spell);
-    if (itr == m_spells.end())
-        return false;
-
-    PlayerSpell const& playerSpell = itr->second;
-    return playerSpell.state != PLAYERSPELL_REMOVED && !playerSpell.disabled;
+    return (itr != m_spells.end() && itr->second.state != PLAYERSPELL_REMOVED &&
+        !itr->second.disabled);
 }
 
 bool Player::HasActiveSpell(uint32 spell) const
@@ -5972,20 +5969,29 @@ int16 Player::GetSkillTempBonusValue(uint32 skill) const
     return SKILL_TEMP_BONUS(GetUInt32Value(PLAYER_SKILL_BONUS_INDEX(skillStatus.pos)));
 }
 
-void Player::SendInitialActionButtons() const
+void Player::SendActionButtons(uint32 state) const
 {
     DETAIL_LOG("Initializing Action Buttons for '%u' spec '%u'", GetGUIDLow(), m_activeSpec);
 
     WorldPacket data(SMSG_ACTION_BUTTONS, 1 + (MAX_ACTION_BUTTONS * 4));
-    data << uint8(1);                                       // talent spec amount (in packet)
-    ActionButtonList const& currentActionButtonList = m_actionButtons[m_activeSpec];
-    for (uint8 button = 0; button < MAX_ACTION_BUTTONS; ++button)
+    data << uint8(state);
+    /*
+    state can be 0, 1, 2
+    0 - Looks to be sent when initial action buttons get sent, however on Trinity we use 1 since 0 had some difficulties
+    1 - Used in any SMSG_ACTION_BUTTONS packet with button data on Trinity. Only used after spec swaps on retail.
+    2 - Clears the action bars client sided. This is sent during spec swap before unlearning and before sending the new buttons
+    */
+    if (state != 2)
     {
-        ActionButtonList::const_iterator itr = currentActionButtonList.find(button);
-        if (itr != currentActionButtonList.end() && itr->second.uState != ACTIONBUTTON_DELETED)
-            data << uint32(itr->second.packedData);
-        else
-            data << uint32(0);
+        ActionButtonList const& currentActionButtonList = m_actionButtons[m_activeSpec];
+        for (uint8 button = 0; button < MAX_ACTION_BUTTONS; ++button)
+        {
+            ActionButtonList::const_iterator itr = currentActionButtonList.find(button);
+            if (itr != currentActionButtonList.end() && itr->second.uState != ACTIONBUTTON_DELETED)
+                data << uint32(itr->second.packedData);
+            else
+                data << uint32(0);
+        }
     }
 
     GetSession()->SendPacket(&data);
@@ -6009,9 +6015,10 @@ bool Player::IsActionButtonDataValid(uint8 button, uint32 action, uint8 type, Pl
         if (msg)
         {
             if (player)
-                sLog.outError("Action %u not added into button %u for player %s: button must be < %u", action, button, player->GetName(), MAX_ACTION_BUTTONS);
+                sLog.outError("Action %u not added into button %u for %s: button must be < %u", action, button, player->GetGuidStr().c_str(), MAX_ACTION_BUTTONS);
             else
                 sLog.outError("Table `playercreateinfo_action` have action %u into button %u : button must be < %u", action, button, MAX_ACTION_BUTTONS);
+
         }
         return false;
     }
@@ -6021,7 +6028,7 @@ bool Player::IsActionButtonDataValid(uint8 button, uint32 action, uint8 type, Pl
         if (msg)
         {
             if (player)
-                sLog.outError("Action %u not added into button %u for player %s: action must be < %u", action, button, player->GetName(), MAX_ACTION_BUTTON_ACTION_VALUE);
+                sLog.outError("Action %u not added into button %u for %s: action must be < %u", action, button, player->GetGuidStr().c_str(), MAX_ACTION_BUTTON_ACTION_VALUE);
             else
                 sLog.outError("Table `playercreateinfo_action` have action %u into button %u : action must be < %u", action, button, MAX_ACTION_BUTTON_ACTION_VALUE);
         }
@@ -6030,63 +6037,63 @@ bool Player::IsActionButtonDataValid(uint8 button, uint32 action, uint8 type, Pl
 
     switch (type)
     {
-        case ACTION_BUTTON_SPELL:
+    case ACTION_BUTTON_SPELL:
+    {
+        SpellEntry const* spellProto = sSpellStore.LookupEntry(action);
+        if (!spellProto)
         {
-            SpellEntry const* spellProto = sSpellStore.LookupEntry(action);
-            if (!spellProto)
+            if (msg)
             {
-                if (msg)
-                {
-                    if (player)
-                        sLog.outError("Spell action %u not added into button %u for player %s: spell not exist", action, button, player->GetName());
-                    else
-                        sLog.outError("Table `playercreateinfo_action` have spell action %u into button %u: spell not exist", action, button);
-                }
-                return false;
+                if (player)
+                    sLog.outError("Spell action %u not added into button %u for %s: spell not exist", action, button, player->GetGuidStr().c_str());
+                else
+                    sLog.outError("Table `playercreateinfo_action` have spell action %u into button %u: spell not exist", action, button);
             }
+            return false;
+        }
 
-            if (player)
-            {
-                if (!player->HasSpell(spellProto->Id))
-                {
-                    if (msg)
-                        sLog.outError("Spell action %u not added into button %u for player %s: player don't known this spell", action, button, player->GetName());
-                    return false;
-                }
-                else if (IsPassiveSpell(spellProto))
-                {
-                    if (msg)
-                        sLog.outError("Spell action %u not added into button %u for player %s: spell is passive", action, button, player->GetName());
-                    return false;
-                }
-                // current range for button of totem bar is from ACTION_BUTTON_SHAMAN_TOTEMS_BAR to (but not including) ACTION_BUTTON_SHAMAN_TOTEMS_BAR + 12
-                else if (button >= ACTION_BUTTON_SHAMAN_TOTEMS_BAR && button < (ACTION_BUTTON_SHAMAN_TOTEMS_BAR + 12)
-                         && !spellProto->HasAttribute(SPELL_ATTR_EX7_TOTEM_SPELL))
-                {
-                    if (msg)
-                        sLog.outError("Spell action %u not added into button %u for player %s: attempt to add non totem spell to totem bar", action, button, player->GetName());
-                    return false;
-                }
-            }
-            break;
-        }
-        case ACTION_BUTTON_ITEM:
+        if (player)
         {
-            if (!ObjectMgr::GetItemPrototype(action))
+            if (!player->HasSpell(spellProto->Id))
             {
                 if (msg)
-                {
-                    if (player)
-                        sLog.outError("Item action %u not added into button %u for player %s: item not exist", action, button, player->GetName());
-                    else
-                        sLog.outError("Table `playercreateinfo_action` have item action %u into button %u: item not exist", action, button);
-                }
+                    sLog.outError("Spell action %u not added into button %u for %s: player don't known this spell", action, button, player->GetGuidStr().c_str());
                 return false;
             }
-            break;
+            else if (IsPassiveSpell(spellProto))
+            {
+                if (msg)
+                    sLog.outError("Spell action %u not added into button %u for %s: spell is passive", action, button, player->GetGuidStr().c_str());
+                return false;
+            }
+            // current range for button of totem bar is from ACTION_BUTTON_SHAMAN_TOTEMS_BAR to (but not including) ACTION_BUTTON_SHAMAN_TOTEMS_BAR + 12
+            else if (button >= ACTION_BUTTON_SHAMAN_TOTEMS_BAR && button < (ACTION_BUTTON_SHAMAN_TOTEMS_BAR + 12)
+                && !spellProto->HasAttribute(SPELL_ATTR_EX7_TOTEM_SPELL))
+            {
+                if (msg)
+                    sLog.outError("Spell action %u not added into button %u for %s: attempt to add non totem spell to totem bar", action, button, player->GetGuidStr().c_str());
+                return false;
+            }
         }
-        default:
-            break;                                          // other cases not checked at this moment
+        break;
+    }
+    case ACTION_BUTTON_ITEM:
+    {
+        if (!ObjectMgr::GetItemPrototype(action))
+        {
+            if (msg)
+            {
+                if (player)
+                    sLog.outError("Item action %u not added into button %u for %s: item not exist", action, button, player->GetGuidStr().c_str());
+                else
+                    sLog.outError("Table `playercreateinfo_action` have item action %u into button %u: item not exist", action, button);
+            }
+            return false;
+        }
+        break;
+    }
+    default:
+        break;                                          // other cases not checked at this moment
     }
 
     return true;
@@ -6221,10 +6228,7 @@ void Player::SendMovieStart(uint32 MovieId)
 
 void Player::CheckAreaExploreAndOutdoor()
 {
-    if (!isAlive())
-        return;
-
-    if (IsTaxiFlying())
+    if (!isAlive() || IsTaxiFlying() || !GetMap())
         return;
 
     bool isOutdoor;
@@ -6241,28 +6245,21 @@ void Player::CheckAreaExploreAndOutdoor()
                 SetRestType(REST_TYPE_NO);
             }
         }
-        // Check if we need to reaply outdoor only passive spells
-        const PlayerSpellMap& sp_list = GetSpellMap();
-        for (PlayerSpellMap::const_iterator itr = sp_list.begin(); itr != sp_list.end(); ++itr)
-        {
-            if (itr->second.state == PLAYERSPELL_REMOVED)
-                continue;
-            SpellEntry const* spellInfo = sSpellStore.LookupEntry(itr->first);
-            if (!spellInfo || !IsNeedCastSpellAtOutdoor(spellInfo) || HasAura(itr->first))
-                continue;
-            CastSpell(this, itr->first, true, NULL);
-        }
     }
     else if (sWorld.getConfig(CONFIG_BOOL_VMAP_INDOOR_CHECK) && !isGameMaster())
-        RemoveAurasWithAttribute(SPELL_ATTR_OUTDOORS_ONLY);
+        RemoveAurasWithAttribute(SPELL_ATTR_OUTDOORS_ONLY, SPELL_ATTR_PASSIVE);
+
+    if (sWorld.getConfig(CONFIG_BOOL_VMAP_INDOOR_CHECK))
+        TriggerPassiveAurasWithAttribute(isOutdoor, SPELL_ATTR_OUTDOORS_ONLY);
 
     if (areaFlag == 0xffff)
         return;
+
     int offset = areaFlag / 32;
 
     if (offset >= PLAYER_EXPLORED_ZONES_SIZE)
     {
-        sLog.outError("Wrong area flag %u in map data for (X: %f Y: %f) point to field PLAYER_EXPLORED_ZONES_1 + %u ( %u must be < %u ).", areaFlag, GetPositionX(), GetPositionY(), offset, offset, PLAYER_EXPLORED_ZONES_SIZE);
+        sLog.outError("Wrong area flag %u in map data for (X: %f Y: %f) point to field PLAYER_EXPLORED_ZONES_1 + %u (%u must be < %u).", areaFlag, GetPositionX(), GetPositionY(), offset, offset, PLAYER_EXPLORED_ZONES_SIZE);
         return;
     }
 
@@ -6278,7 +6275,7 @@ void Player::CheckAreaExploreAndOutdoor()
         AreaTableEntry const* p = GetAreaEntryByAreaFlagAndMap(areaFlag, GetMapId());
         if (!p)
         {
-            sLog.outError("PLAYER: Player %u discovered unknown area (x: %f y: %f map: %u", GetGUIDLow(), GetPositionX(), GetPositionY(), GetMapId());
+            sLog.outError("Player::CheckAreaExploreAndOutdoor: %s discovered unknown area (x: %f y: %f map: %u", GetGuidStr().c_str(), GetPositionX(), GetPositionY(), GetMapId());
         }
         else if (p->area_level > 0)
         {
@@ -18456,10 +18453,9 @@ void Player::UpdateContestedPvP(uint32 diff)
 {
     if (!m_contestedPvPTimer || isInCombat())
         return;
+
     if (m_contestedPvPTimer <= diff)
-    {
         ResetContestedPvP();
-    }
     else
         m_contestedPvPTimer -= diff;
 }
@@ -18468,7 +18464,8 @@ void Player::UpdatePvPFlag(time_t currTime)
 {
     if (!IsPvP())
         return;
-    if (pvpInfo.endTimer == 0 || currTime < (pvpInfo.endTimer + 300))
+
+    if (pvpInfo.endTimer == 0 || currTime < (pvpInfo.endTimer + 300) || pvpInfo.inHostileArea)
         return;
 
     UpdatePvP(false);
@@ -18483,9 +18480,9 @@ void Player::UpdateDuelFlag(time_t currTime)
     duel->opponent->SetUInt32Value(PLAYER_DUEL_TEAM, 2);
 
     duel->startTimer = 0;
-    duel->startTime  = currTime;
+    duel->startTime = currTime;
     duel->opponent->duel->startTimer = 0;
-    duel->opponent->duel->startTime  = currTime;
+    duel->opponent->duel->startTime = currTime;
 }
 
 void Player::RemovePet(PetSaveMode mode)
@@ -19740,9 +19737,9 @@ void Player::UpdateHomebindTime(uint32 time)
     }
 }
 
-void Player::UpdatePvP(bool state, bool ovrride)
+void Player::UpdatePvP(bool state, bool bOverride)
 {
-    if (!state || ovrride)
+    if (!state || bOverride)
     {
         SetPvP(state);
         pvpInfo.endTimer = 0;
@@ -24079,6 +24076,92 @@ bool Player::HasOrphan()
         }
     }
     return false;
+}
+
+uint32 Player::GetModelForForm(SpellShapeshiftFormEntry const* ssEntry) const
+{
+    ShapeshiftForm form = ShapeshiftForm(ssEntry->ID);
+    Team team = TeamForRace(getRace());
+    uint32 modelid = 0;
+
+    // The following are the different shapeshifting models for cat/bear forms according
+    // to hair color for druids and skin tone for tauren introduced in patch 3.2
+    if (form == FORM_CAT || form == FORM_BEAR || form == FORM_DIREBEAR)
+    {
+        if (team == ALLIANCE)
+        {
+            uint8 hairColour = GetByteValue(PLAYER_BYTES, 3);
+            if (form == FORM_CAT)
+            {
+                if (hairColour >= 0 && hairColour <= 2) modelid = 29407;
+                else if (hairColour == 3 || hairColour == 5) modelid = 29405;
+                else if (hairColour == 4) modelid = 29408;
+                else if (hairColour == 6) modelid = 892;
+                else if (hairColour == 7) modelid = 29406;
+            }
+            else // form == FORM_BEAR || form == FORM_DIREBEAR
+            {
+                if (hairColour >= 0 && hairColour <= 2) modelid = 29413;
+                else if (hairColour == 3 || hairColour == 5) modelid = 29415;
+                else if (hairColour == 4) modelid = 29416;
+                else if (hairColour == 6) modelid = 29414;
+                else if (hairColour == 7) modelid = 29417;
+            }
+        }
+        else if (team == HORDE)
+        {
+            uint8 skinColour = GetByteValue(PLAYER_BYTES, 0);
+            if (getGender() == GENDER_MALE)
+            {
+                if (form == FORM_CAT)
+                {
+                    if (skinColour >= 0 && skinColour <= 5) modelid = 29412;
+                    else if (skinColour >= 6 && skinColour <= 8) modelid = 29411;
+                    else if (skinColour >= 9 && skinColour <= 11) modelid = 29410;
+                    else if ((skinColour >= 12 && skinColour <= 14) || skinColour == 18) modelid = 29409;
+                    else if (skinColour >= 15 && skinColour <= 17) modelid = 8571;
+                }
+                else // form == FORM_BEAR || form == FORM_DIREBEAR
+                {
+                    if (skinColour >= 0 && skinColour <= 2) modelid = 29418;
+                    else if ((skinColour >= 3 && skinColour <= 5) || (skinColour >= 12 && skinColour <= 14)) modelid = 29419;
+                    else if ((skinColour >= 9 && skinColour <= 11) || (skinColour >= 15 && skinColour <= 17)) modelid = 29420;
+                    else if (skinColour >= 6 && skinColour <= 8) modelid = 2289;
+                    else if (skinColour == 18) modelid = 29421;
+                }
+            }
+            else // getGender() == GENDER_FEMALE
+            {
+                if (form == FORM_CAT)
+                {
+                    if (skinColour >= 0 && skinColour <= 3) modelid = 29412;
+                    else if (skinColour == 4 || skinColour == 5) modelid = 29411;
+                    else if (skinColour == 6 || skinColour == 7) modelid = 29410;
+                    else if (skinColour == 8 || skinColour == 9) modelid = 8571;
+                    else if (skinColour == 10) modelid = 29409;
+                }
+                else // form == FORM_BEAR || form == FORM_DIREBEAR
+                {
+                    if (skinColour == 0 || skinColour == 1) modelid = 29418;
+                    else if (skinColour == 2 || skinColour == 3) modelid = 29419;
+                    else if (skinColour == 4 || skinColour == 5) modelid = 2289;
+                    else if (skinColour >= 6 && skinColour <= 9) modelid = 29420;
+                    else if (skinColour == 10) modelid = 29421;
+                }
+            }
+        }
+    }
+    else if (team == HORDE)
+    {
+        if (ssEntry->modelID_H)
+            modelid = ssEntry->modelID_H;           // 3.2.3 only the moonkin form has this information
+        else                                        // get model for race
+            modelid = sObjectMgr.GetModelForRace(ssEntry->modelID_A, getRaceMask());
+    }
+    // nothing found in above, so use default
+    if (!modelid)
+        modelid = ssEntry->modelID_A;
+    return modelid;
 }
 
 float Player::GetCollisionHeight(bool mounted) const

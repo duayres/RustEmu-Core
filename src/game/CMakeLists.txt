@@ -268,6 +268,7 @@ set(SRC_GRP_SERVER
     DBCfmt.h
     DBCStores.cpp
     DBCStores.h
+    DBCStructure.cpp
     DBCStructure.h
     Opcodes.cpp
     Opcodes.h

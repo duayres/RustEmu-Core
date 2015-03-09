@@ -1,5 +1,5 @@
 /*
-* This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+* Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
 *
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -453,9 +453,9 @@ enum SpellCastTargetFlags
 
 enum SpellEffectIndex
 {
-    EFFECT_INDEX_0 = 0,
-    EFFECT_INDEX_1 = 1,
-    EFFECT_INDEX_2 = 2,
+    EFFECT_INDEX_0     = 0,
+    EFFECT_INDEX_1     = 1,
+    EFFECT_INDEX_2     = 2,
     MAX_EFFECT_INDEX,
 };
 
@@ -555,7 +555,7 @@ enum VehicleSeatFlagsB
 enum MapDifficultyFlags
 {
     MAP_DIFFICULTY_FLAG_NONE        = 0x00000001,           // Not used in 3.3.5
-    MAP_DIFFICULTY_FLAG_CONDITION   = 0x00000002            // This map difficulty has condition
+    MAP_DIFFICULTY_FLAG_CONDITION   = 0x00000002,           // This map difficulty has condition
 };
 
 #endif

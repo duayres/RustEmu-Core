@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -84,6 +84,12 @@ void WorldSession::HandleSwapInvItemOpcode(WorldPacket& recv_data)
         return;
     }
 
+    if (_player->GetTradeData()) // prevent or change the bag still active trade
+    {
+        _player->SendEquipError(EQUIP_ERR_CANT_DO_RIGHT_NOW, NULL, NULL);
+        return;
+    }
+
     uint16 src = ((INVENTORY_SLOT_BAG_0 << 8) | srcslot);
     uint16 dst = ((INVENTORY_SLOT_BAG_0 << 8) | dstslot);
 
@@ -147,7 +153,7 @@ void WorldSession::HandleAutoEquipItemOpcode(WorldPacket& recv_data)
     recv_data >> srcbag >> srcslot;
     // DEBUG_LOG("STORAGE: receive srcbag = %u, srcslot = %u", srcbag, srcslot);
 
-    Item* pSrcItem  = _player->GetItemByPos(srcbag, srcslot);
+    Item* pSrcItem = _player->GetItemByPos(srcbag, srcslot);
     if (!pSrcItem)
         return;                                             // only at cheat
 
@@ -334,7 +340,7 @@ void WorldSession::HandleItemQuerySingleOpcode(WorldPacket& recv_data)
         }
         data << pProto->ScalingStatDistribution;            // scaling stats distribution
         data << pProto->ScalingStatValue;                   // some kind of flags used to determine stat values column
-        for (int i = 0; i < MAX_ITEM_PROTO_DAMAGES; ++i)
+        for (uint8 i = 0; i < MAX_ITEM_PROTO_DAMAGES; ++i)
         {
             data << pProto->Damage[i].DamageMin;
             data << pProto->Damage[i].DamageMax;
@@ -354,7 +360,7 @@ void WorldSession::HandleItemQuerySingleOpcode(WorldPacket& recv_data)
         data << pProto->AmmoType;
         data << pProto->RangedModRange;
 
-        for (int s = 0; s < MAX_ITEM_PROTO_SPELLS; ++s)
+        for (uint8 s = 0; s < MAX_ITEM_PROTO_SPELLS; ++s)
         {
             // send DBC data for cooldowns in same way as it used in Spell::SendSpellCooldown
             // use `item_template` or if not set then only use spell cooldowns
@@ -408,7 +414,7 @@ void WorldSession::HandleItemQuerySingleOpcode(WorldPacket& recv_data)
         data << pProto->Map;                                // Added in 1.12.x & 2.0.1 client branch
         data << pProto->BagFamily;
         data << pProto->TotemCategory;
-        for (int s = 0; s < MAX_ITEM_PROTO_SOCKETS; ++s)
+        for (uint8 s = 0; s < MAX_ITEM_PROTO_SOCKETS; ++s)
         {
             data << pProto->Socket[s].Color;
             data << pProto->Socket[s].Content;
@@ -433,7 +439,7 @@ void WorldSession::HandleItemQuerySingleOpcode(WorldPacket& recv_data)
 
 void WorldSession::HandleReadItemOpcode(WorldPacket& recv_data)
 {
-    // DEBUG_LOG("WORLD: Received opcode CMSG_READ_ITEM");
+    // DEBUG_LOG("WORLD: CMSG_READ_ITEM");
 
     uint8 bag, slot;
     recv_data >> bag >> slot;
@@ -457,7 +463,7 @@ void WorldSession::HandleReadItemOpcode(WorldPacket& recv_data)
             DETAIL_LOG("STORAGE: Unable to read item");
             _player->SendEquipError(msg, pItem, NULL);
         }
-        data << ObjectGuid(pItem->GetObjectGuid());
+        data << pItem->GetObjectGuid();
         SendPacket(&data);
     }
     else
@@ -466,7 +472,7 @@ void WorldSession::HandleReadItemOpcode(WorldPacket& recv_data)
 
 void WorldSession::HandlePageQuerySkippedOpcode(WorldPacket& recv_data)
 {
-    DEBUG_LOG("WORLD: Received opcode CMSG_PAGE_TEXT_QUERY");
+    DEBUG_LOG("WORLD: Received CMSG_PAGE_TEXT_QUERY");
 
     uint32 itemid;
     ObjectGuid guid;
@@ -478,7 +484,7 @@ void WorldSession::HandlePageQuerySkippedOpcode(WorldPacket& recv_data)
 
 void WorldSession::HandleSellItemOpcode(WorldPacket& recv_data)
 {
-    DEBUG_LOG("WORLD: Received opcode CMSG_SELL_ITEM");
+    DEBUG_LOG("WORLD: Received CMSG_SELL_ITEM");
 
     ObjectGuid vendorGuid;
     ObjectGuid itemGuid;
@@ -597,7 +603,7 @@ void WorldSession::HandleSellItemOpcode(WorldPacket& recv_data)
 
 void WorldSession::HandleBuybackItem(WorldPacket& recv_data)
 {
-    DEBUG_LOG("WORLD: Received opcode CMSG_BUYBACK_ITEM");
+    DEBUG_LOG("WORLD: Received CMSG_BUYBACK_ITEM");
     ObjectGuid vendorGuid;
     uint32 slot;
 
@@ -645,7 +651,7 @@ void WorldSession::HandleBuybackItem(WorldPacket& recv_data)
 
 void WorldSession::HandleBuyItemInSlotOpcode(WorldPacket& recv_data)
 {
-    DEBUG_LOG("WORLD: Received opcode CMSG_BUY_ITEM_IN_SLOT");
+    DEBUG_LOG("WORLD: Received CMSG_BUY_ITEM_IN_SLOT");
     ObjectGuid vendorGuid;
     ObjectGuid bagGuid;
     uint32 item, slot, count;
@@ -688,7 +694,7 @@ void WorldSession::HandleBuyItemInSlotOpcode(WorldPacket& recv_data)
 
 void WorldSession::HandleBuyItemOpcode(WorldPacket& recv_data)
 {
-    DEBUG_LOG("WORLD: Received opcode CMSG_BUY_ITEM");
+    DEBUG_LOG("WORLD: Received CMSG_BUY_ITEM");
     ObjectGuid vendorGuid;
     uint32 item, slot, count;
     uint8 unk1;
@@ -713,7 +719,7 @@ void WorldSession::HandleListInventoryOpcode(WorldPacket& recv_data)
     if (!GetPlayer()->isAlive())
         return;
 
-    DEBUG_LOG("WORLD: Received opcode CMSG_LIST_INVENTORY");
+    DEBUG_LOG("WORLD: Recvd CMSG_LIST_INVENTORY");
 
     SendListInventory(guid);
 }
@@ -744,7 +750,7 @@ void WorldSession::SendListInventory(ObjectGuid vendorguid)
     if (!vItems && !tItems)
     {
         WorldPacket data(SMSG_LIST_INVENTORY, (8 + 1 + 1));
-        data << ObjectGuid(vendorguid);
+        data << vendorguid;
         data << uint8(0);                                   // count==0, next will be error code
         data << uint8(0);                                   // "Vendor has no inventory"
         SendPacket(&data);
@@ -757,7 +763,7 @@ void WorldSession::SendListInventory(ObjectGuid vendorguid)
     uint8 count = 0;
 
     WorldPacket data(SMSG_LIST_INVENTORY, (8 + 1 + numitems * 8 * 4));
-    data << ObjectGuid(vendorguid);
+    data << vendorguid;
 
     size_t count_pos = data.wpos();
     data << uint8(count);                                   // placeholder, client limit 150 items (as of 3.3.3)
@@ -809,7 +815,7 @@ void WorldSession::SendListInventory(ObjectGuid vendorguid)
                 ++count;
 
                 // reputation discount
-                uint32 price = (crItem->ExtendedCost == 0 || pProto->Flags2 & ITEM_FLAG2_EXT_COST_REQUIRES_GOLD) ? uint32(floor(pProto->BuyPrice * discountMod)) : 0;
+                uint32 price = (crItem->ExtendedCost == 0 || (pProto->Flags2 & ITEM_FLAG2_EXT_COST_REQUIRES_GOLD)) ? uint32(floor(pProto->BuyPrice * discountMod)) : 0;
 
                 data << uint32(vendorslot + 1);             // client size expected counting from 1
                 data << uint32(pProto->ItemId);
@@ -884,6 +890,7 @@ void WorldSession::HandleAutoStoreBagItemOpcode(WorldPacket& recv_data)
     _player->RemoveItem(srcbag, srcslot, true);
     _player->StoreItem(dest, pItem, true);
 }
+
 
 bool WorldSession::CheckBanker(ObjectGuid guid)
 {
@@ -1030,9 +1037,9 @@ void WorldSession::HandleAutoStoreBankItemOpcode(WorldPacket& recvPacket)
 
 void WorldSession::HandleSetAmmoOpcode(WorldPacket& recv_data)
 {
-    if (!GetPlayer()->isAlive())
+    if (!_player->isAlive())
     {
-        GetPlayer()->SendEquipError(EQUIP_ERR_YOU_ARE_DEAD, NULL, NULL);
+        _player->SendEquipError(EQUIP_ERR_YOU_ARE_DEAD, NULL, NULL);
         return;
     }
 
@@ -1041,17 +1048,25 @@ void WorldSession::HandleSetAmmoOpcode(WorldPacket& recv_data)
 
     recv_data >> item;
 
-    if (!item)
-        GetPlayer()->RemoveAmmo();
+    if (item)
+    {
+        if (!_player->GetItemCount(item))
+        {
+            _player->SendEquipError(EQUIP_ERR_ITEM_NOT_FOUND, NULL, NULL);
+            return;
+        }
+
+        _player->SetAmmo(item);
+    }
     else
-        GetPlayer()->SetAmmo(item);
+        _player->RemoveAmmo();
 }
 
 void WorldSession::SendEnchantmentLog(ObjectGuid targetGuid, ObjectGuid casterGuid, uint32 itemId, uint32 spellId)
 {
     WorldPacket data(SMSG_ENCHANTMENTLOG, (8 + 8 + 4 + 4 + 1)); // last check 2.0.10
-    data << ObjectGuid(targetGuid);
-    data << ObjectGuid(casterGuid);
+    data << targetGuid;
+    data << casterGuid;
     data << uint32(itemId);
     data << uint32(spellId);
     data << uint8(0);
@@ -1062,10 +1077,10 @@ void WorldSession::SendItemEnchantTimeUpdate(ObjectGuid playerGuid, ObjectGuid i
 {
     // last check 2.0.10
     WorldPacket data(SMSG_ITEM_ENCHANT_TIME_UPDATE, (8 + 4 + 4 + 8));
-    data << ObjectGuid(itemGuid);
+    data << itemGuid;
     data << uint32(slot);
     data << uint32(duration);
-    data << ObjectGuid(playerGuid);
+    data << playerGuid;
     SendPacket(&data);
 }
 
@@ -1178,7 +1193,11 @@ void WorldSession::HandleWrapItemOpcode(WorldPacket& recv_data)
     }
 
     CharacterDatabase.BeginTransaction();
-    CharacterDatabase.PExecute("INSERT INTO character_gifts VALUES ('%u', '%u', '%u', '%u')", item->GetOwnerGuid().GetCounter(), item->GetGUIDLow(), item->GetEntry(), item->GetUInt32Value(ITEM_FIELD_FLAGS));
+
+    static SqlStatementID insGifts;
+    CharacterDatabase.CreateStatement(insGifts, "INSERT INTO character_gifts VALUES (?, ?, ?, ?)")
+        .PExecute(item->GetOwnerGuid().GetCounter(), item->GetGUIDLow(), item->GetEntry(), item->GetUInt32Value(ITEM_FIELD_FLAGS));
+
     item->SetEntry(gift->GetEntry());
 
     switch (item->GetEntry())
@@ -1190,6 +1209,7 @@ void WorldSession::HandleWrapItemOpcode(WorldPacket& recv_data)
         case 17307: item->SetEntry(17308); break;
         case 21830: item->SetEntry(21831); break;
     }
+
     item->SetGuidValue(ITEM_FIELD_GIFTCREATOR, _player->GetObjectGuid());
     item->SetUInt32Value(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_WRAPPED);
     item->SetState(ITEM_CHANGED, _player);
@@ -1200,6 +1220,7 @@ void WorldSession::HandleWrapItemOpcode(WorldPacket& recv_data)
         item->RemoveFromUpdateQueueOf(_player);
         item->SaveToDB();                                   // item gave inventory record unchanged and can be save standalone
     }
+
     CharacterDatabase.CommitTransaction();
 
     uint32 count = 1;
@@ -1254,6 +1275,11 @@ void WorldSession::HandleSocketOpcode(WorldPacket& recv_data)
     for (int i = 0; i < MAX_GEM_SOCKETS; ++i)               // get geminfo from dbc storage
         GemProps[i] = (Gems[i]) ? sGemPropertiesStore.LookupEntry(Gems[i]->GetProto()->GemProperties) : NULL;
 
+    // Find first prismatic socket
+    int32 firstPrismatic = 0;
+    while (firstPrismatic < MAX_GEM_SOCKETS && itemProto->Socket[firstPrismatic].Color)
+        ++firstPrismatic;
+
     for (int i = 0; i < MAX_GEM_SOCKETS; ++i)               // check for hack maybe
     {
         if (!GemProps[i])
@@ -1266,11 +1292,8 @@ void WorldSession::HandleSocketOpcode(WorldPacket& recv_data)
             if (!itemTarget->GetEnchantmentId(PRISMATIC_ENCHANTMENT_SLOT))
                 return;
 
-            // not first not-colored (not normally used) socket
-            if (i != 0 && !itemProto->Socket[i - 1].Color && (i + 1 >= MAX_GEM_SOCKETS || itemProto->Socket[i + 1].Color))
+            if (i != firstPrismatic)
                 return;
-
-            // ok, this is first not colored socket for item with prismatic socket
         }
 
         // tried to put normal gem in meta socket
@@ -1326,6 +1349,7 @@ void WorldSession::HandleSocketOpcode(WorldPacket& recv_data)
                         }
                     }
                 }
+
             }
         }
 
@@ -1367,6 +1391,55 @@ void WorldSession::HandleSocketOpcode(WorldPacket& recv_data)
                 if (limit_newcount > 0 && uint32(limit_newcount) > limitEntry->maxCount)
                 {
                     _player->SendEquipError(EQUIP_ERR_ITEM_UNIQUE_EQUIPPABLE_SOCKETED, itemTarget, NULL);
+                    return;
+                }
+            }
+        }
+
+        // check for jewelcrafting gems
+        int32 jc_newcount = 0;
+        if (iGemProto->RequiredSkill == SKILL_JEWELCRAFTING)
+        {
+            for (int j = 0; j < MAX_GEM_SOCKETS; ++j)
+            {
+                if (Gems[j])
+                {
+                    // gem getting replaced
+                    if (OldEnchants[j])
+                    {
+                        if (SpellItemEnchantmentEntry const* enchantEntry = sSpellItemEnchantmentStore.LookupEntry(OldEnchants[j]))
+                            if (ItemPrototype const* jProto = ObjectMgr::GetItemPrototype(enchantEntry->GemID))
+                                if (jProto->RequiredSkill == SKILL_JEWELCRAFTING)
+                                    --jc_newcount;
+                    }
+
+                    // new gem
+                    if (Gems[j]->GetProto()->RequiredSkill == SKILL_JEWELCRAFTING)
+                        ++jc_newcount;
+                }
+                // existing gems
+                else if (OldEnchants[j])
+                {
+                    if (SpellItemEnchantmentEntry const* enchantEntry = sSpellItemEnchantmentStore.LookupEntry(OldEnchants[j]))
+                        if (ItemPrototype const* jProto = ObjectMgr::GetItemPrototype(enchantEntry->GemID))
+                            if (jProto->RequiredSkill == SKILL_JEWELCRAFTING)
+                                ++jc_newcount;
+                }
+            }
+
+            // more jewelcrafting gems than allowed in this item
+            if (jc_newcount > 0 && uint32(jc_newcount) > MAX_JEWELCRAFTING_GEMS)
+            {
+                _player->SendEquipError(EQUIP_ERR_ITEM_MAX_COUNT_EQUIPPED_SOCKETED, itemTarget, NULL);
+                return;
+            }
+
+            // need to check rest of the equipped items here to prevent client crash
+            if (itemTarget->IsEquipped())
+            {
+                if (InventoryResult res = _player->CanEquipMoreJewelcraftingGems(jc_newcount >= 0 ? jc_newcount : 0, slot))
+                {
+                    _player->SendEquipError(res, itemTarget, NULL);
                     return;
                 }
             }
@@ -1432,7 +1505,6 @@ void WorldSession::HandleCancelTempEnchantmentOpcode(WorldPacket& recv_data)
         return;
 
     Item* item = GetPlayer()->GetItemByPos(INVENTORY_SLOT_BAG_0, eslot);
-
     if (!item)
         return;
 
@@ -1478,13 +1550,12 @@ void WorldSession::HandleItemRefund(WorldPacket &recv_data)
 }
 
 /**
-* Handles the packet sent by the client when requesting information about item text.
-*
-* This function is called when client needs mail message body,
-* SetFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_READABLE | ITEM_DYNFLAG_UNK15 | ITEM_DYNFLAG_UNK16);
-* or when player clicks on item which has ITEM_FIELD_ITEM_TEXT_ID > 0
-*/
-
+ * Handles the packet sent by the client when requesting information about item text.
+ *
+ * This function is called when client needs mail message body,
+ * SetFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_READABLE | ITEM_DYNFLAG_UNK15 | ITEM_DYNFLAG_UNK16);
+ * or when player clicks on item which has ITEM_FIELD_ITEM_TEXT_ID > 0
+ */
 void WorldSession::HandleItemTextQuery(WorldPacket& recv_data)
 {
     ObjectGuid itemGuid;
@@ -1497,7 +1568,7 @@ void WorldSession::HandleItemTextQuery(WorldPacket& recv_data)
     if (Item* item = _player->GetItemByGuid(itemGuid))
     {
         data << uint8(0);                                   // has text
-        data << ObjectGuid(itemGuid);                       // item guid
+        data << itemGuid;                                   // item guid
         data << item->GetText();
     }
     else

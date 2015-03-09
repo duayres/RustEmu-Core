@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +30,6 @@ void AddItemsSetItem(Player* player, Item* item)
     uint32 setid = proto->ItemSet;
 
     ItemSetEntry const* set = sItemSetStore.LookupEntry(setid);
-
     if (!set)
     {
         sLog.outErrorDb("Item set %u for item (id %u) not found, mods not applied.", setid, proto->ItemId);
@@ -76,7 +75,8 @@ void AddItemsSetItem(Player* player, Item* item)
     {
         if (!set->spells[x])
             continue;
-        // not enough for  spell
+
+        // not enough for spell
         if (set->items_to_triggerspell[x] > eff->item_count)
             continue;
 
@@ -93,7 +93,7 @@ void AddItemsSetItem(Player* player, Item* item)
         // new spell
         for (uint32 y = 0; y < 8; ++y)
         {
-            if (!eff->spells[y])                            // free slot
+            if (!eff->spells[y])                             // free slot
             {
                 SpellEntry const* spellInfo = sSpellStore.LookupEntry(set->spells[x]);
                 if (!spellInfo)
@@ -116,7 +116,6 @@ void RemoveItemsSetItem(Player* player, ItemPrototype const* proto)
     uint32 setid = proto->ItemSet;
 
     ItemSetEntry const* set = sItemSetStore.LookupEntry(setid);
-
     if (!set)
     {
         sLog.outErrorDb("Item set #%u for item #%u not found, mods not removed.", setid, proto->ItemId);
@@ -125,6 +124,7 @@ void RemoveItemsSetItem(Player* player, ItemPrototype const* proto)
 
     ItemSetEffect* eff = NULL;
     size_t setindex = 0;
+
     for (; setindex < player->ItemSetEff.size(); ++setindex)
     {
         if (player->ItemSetEff[setindex] && player->ItemSetEff[setindex]->setid == setid)
@@ -180,42 +180,42 @@ bool ItemCanGoIntoBag(ItemPrototype const* pProto, ItemPrototype const* pBagProt
         {
             switch (pBagProto->SubClass)
             {
-            case ITEM_SUBCLASS_CONTAINER:
-                return true;
-            case ITEM_SUBCLASS_SOUL_CONTAINER:
-                if (!(pProto->BagFamily & BAG_FAMILY_MASK_SOUL_SHARDS))
-                    return false;
-                return true;
-            case ITEM_SUBCLASS_HERB_CONTAINER:
-                if (!(pProto->BagFamily & BAG_FAMILY_MASK_HERBS))
-                    return false;
-                return true;
-            case ITEM_SUBCLASS_ENCHANTING_CONTAINER:
-                if (!(pProto->BagFamily & BAG_FAMILY_MASK_ENCHANTING_SUPP))
-                    return false;
-                return true;
-            case ITEM_SUBCLASS_MINING_CONTAINER:
-                if (!(pProto->BagFamily & BAG_FAMILY_MASK_MINING_SUPP))
-                    return false;
-                return true;
-            case ITEM_SUBCLASS_ENGINEERING_CONTAINER:
-                if (!(pProto->BagFamily & BAG_FAMILY_MASK_ENGINEERING_SUPP))
-                    return false;
-                return true;
-            case ITEM_SUBCLASS_GEM_CONTAINER:
-                if (!(pProto->BagFamily & BAG_FAMILY_MASK_GEMS))
-                    return false;
-                return true;
-            case ITEM_SUBCLASS_LEATHERWORKING_CONTAINER:
-                if (!(pProto->BagFamily & BAG_FAMILY_MASK_LEATHERWORKING_SUPP))
-                    return false;
-                return true;
-            case ITEM_SUBCLASS_INSCRIPTION_CONTAINER:
-                if (!(pProto->BagFamily & BAG_FAMILY_MASK_INSCRIPTION_SUPP))
-                    return false;
-                return true;
-            default:
-                break;
+                case ITEM_SUBCLASS_CONTAINER:
+                    return true;
+                case ITEM_SUBCLASS_SOUL_CONTAINER:
+                    if (!(pProto->BagFamily & BAG_FAMILY_MASK_SOUL_SHARDS))
+                        return false;
+                    return true;
+                case ITEM_SUBCLASS_HERB_CONTAINER:
+                    if (!(pProto->BagFamily & BAG_FAMILY_MASK_HERBS))
+                        return false;
+                    return true;
+                case ITEM_SUBCLASS_ENCHANTING_CONTAINER:
+                    if (!(pProto->BagFamily & BAG_FAMILY_MASK_ENCHANTING_SUPP))
+                        return false;
+                    return true;
+                case ITEM_SUBCLASS_MINING_CONTAINER:
+                    if (!(pProto->BagFamily & BAG_FAMILY_MASK_MINING_SUPP))
+                        return false;
+                    return true;
+                case ITEM_SUBCLASS_ENGINEERING_CONTAINER:
+                    if (!(pProto->BagFamily & BAG_FAMILY_MASK_ENGINEERING_SUPP))
+                        return false;
+                    return true;
+                case ITEM_SUBCLASS_GEM_CONTAINER:
+                    if (!(pProto->BagFamily & BAG_FAMILY_MASK_GEMS))
+                        return false;
+                    return true;
+                case ITEM_SUBCLASS_LEATHERWORKING_CONTAINER:
+                    if (!(pProto->BagFamily & BAG_FAMILY_MASK_LEATHERWORKING_SUPP))
+                        return false;
+                    return true;
+                case ITEM_SUBCLASS_INSCRIPTION_CONTAINER:
+                    if (!(pProto->BagFamily & BAG_FAMILY_MASK_INSCRIPTION_SUPP))
+                        return false;
+                    return true;
+                default:
+                    break;
             }
             break;
         }
@@ -223,16 +223,16 @@ bool ItemCanGoIntoBag(ItemPrototype const* pProto, ItemPrototype const* pBagProt
         {
             switch (pBagProto->SubClass)
             {
-            case ITEM_SUBCLASS_QUIVER:
-                if (!(pProto->BagFamily & BAG_FAMILY_MASK_ARROWS))
+                case ITEM_SUBCLASS_QUIVER:
+                    if (!(pProto->BagFamily & BAG_FAMILY_MASK_ARROWS))
+                        return false;
+                    return true;
+                case ITEM_SUBCLASS_AMMO_POUCH:
+                    if (!(pProto->BagFamily & BAG_FAMILY_MASK_BULLETS))
+                        return false;
+                    return true;
+                default:
                     return false;
-                return true;
-            case ITEM_SUBCLASS_AMMO_POUCH:
-                if (!(pProto->BagFamily & BAG_FAMILY_MASK_BULLETS))
-                    return false;
-                return true;
-            default:
-                return false;
             }
             break;
         }
@@ -244,21 +244,21 @@ bool ItemCanGoIntoBag(ItemPrototype const* pProto, ItemPrototype const* pBagProt
 
 Item::Item() : loot(NULL)
 {
-    m_objectType |= TYPEMASK_ITEM;
+    m_objectType  |= TYPEMASK_ITEM;
     m_objectTypeId = TYPEID_ITEM;
 
-    m_updateFlag = UPDATEFLAG_HIGHGUID;
-    m_valuesCount = ITEM_END;
+    m_updateFlag   = UPDATEFLAG_HIGHGUID;
+    m_valuesCount  = ITEM_END;
 
-    m_slot = 0;
-    m_state = ITEM_NEW;
-    m_queuePos = -1;
-    m_container = NULL;
-    m_lootState = ITEM_LOOT_NONE;
-    m_inTrade = false;
+    m_slot         = 0;
+    m_state        = ITEM_NEW;
+    m_queuePos     = -1;
+    m_container    = NULL;
+    m_lootState    = ITEM_LOOT_NONE;
+    m_inTrade      = false;
 
-    m_paidCost = 0;
-    m_paidExtCost = 0;
+    m_paidCost     = 0;
+    m_paidExtCost  = 0;
 }
 
 bool Item::Create(uint32 guidlow, uint32 itemId, Player const* owner)
@@ -323,58 +323,58 @@ void Item::SaveToDB()
 
     switch (m_state)
     {
-    case ITEM_NEW:
-    {
-        DeleteFromDB(guid);
-
-        std::ostringstream ss;
-        GetDataValuesStr(ss);
-
-        static SqlStatementID insItem;
-        CharacterDatabase.CreateStatement(insItem, "INSERT INTO item_instance (guid, owner_guid, data, text) VALUES (?, ?, ?, ?)")
-            .PExecute(guid, GetOwnerGuid().GetCounter(), ss.str().c_str(), m_text.c_str());
-
-        break;
-    }
-    case ITEM_CHANGED:
-    {
-        std::ostringstream ss;
-        GetDataValuesStr(ss);
-
-        static SqlStatementID updInstance;
-        CharacterDatabase.CreateStatement(updInstance, "UPDATE item_instance SET data = ?, owner_guid = ?, text = ? WHERE guid = ?")
-            .PExecute(ss.str().c_str(), GetOwnerGuid().GetCounter(), m_text.c_str(), guid);
-
-        if (HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_WRAPPED))
+        case ITEM_NEW:
         {
-            static SqlStatementID updGifts;
-            CharacterDatabase.CreateStatement(updGifts, "UPDATE character_gifts SET guid = ? WHERE item_guid = ?")
-                .PExecute(GetOwnerGuid().GetCounter(), GetGUIDLow());
+            DeleteFromDB(guid);
+
+            std::ostringstream ss;
+            GetDataValuesStr(ss);
+
+            static SqlStatementID insItem;
+            CharacterDatabase.CreateStatement(insItem, "INSERT INTO item_instance (guid, owner_guid, data, text) VALUES (?, ?, ?, ?)")
+                .PExecute(guid, GetOwnerGuid().GetCounter(), ss.str().c_str(), m_text.c_str());
+
+            break;
         }
+        case ITEM_CHANGED:
+        {
+            std::ostringstream ss;
+            GetDataValuesStr(ss);
 
-        break;
-    }
-    case ITEM_REMOVED:
-    {
-        DeleteFromDB(guid);
+            static SqlStatementID updInstance;
+            CharacterDatabase.CreateStatement(updInstance, "UPDATE item_instance SET data = ?, owner_guid = ?, text = ? WHERE guid = ?")
+                .PExecute(ss.str().c_str(), GetOwnerGuid().GetCounter(), m_text.c_str(), guid);
 
-        if (HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_WRAPPED))
-            DeleteGiftsFromDB();
+            if (HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_WRAPPED))
+            {
+                static SqlStatementID updGifts;
+                CharacterDatabase.CreateStatement(updGifts, "UPDATE character_gifts SET guid = ? WHERE item_guid = ?")
+                    .PExecute(GetOwnerGuid().GetCounter(), GetGUIDLow());
+            }
 
-        if (HasSavedLoot())
-            DeleteLootFromDB();
+            break;
+        }
+        case ITEM_REMOVED:
+        {
+            DeleteFromDB(guid);
 
-        if (HasFlag(ITEM_FIELD_FLAGS, ITEM_FLAG_REFUNDABLE))
-            DeleteRefundDataFromDB();
+            if (HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_WRAPPED))
+                DeleteGiftsFromDB();
 
-        if (HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_BOP_TRADEABLE))
-            DeleteSoulboundTradeableFromDB();
+            if (HasSavedLoot())
+                DeleteLootFromDB();
 
-        delete this;
-        return;
-    }
-    case ITEM_UNCHANGED:
-        return;
+            if (HasFlag(ITEM_FIELD_FLAGS, ITEM_FLAG_REFUNDABLE))
+                DeleteRefundDataFromDB();
+
+            if (HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_BOP_TRADEABLE))
+                DeleteSoulboundTradeableFromDB();
+
+            delete this;
+            return;
+        }
+        case ITEM_UNCHANGED:
+            return;
     }
 
     if (m_lootState == ITEM_LOOT_CHANGED || m_lootState == ITEM_LOOT_REMOVED)
@@ -523,7 +523,7 @@ bool Item::LoadFromDB(uint32 guidLow, Field* fields, ObjectGuid ownerGuid)
 
 void Item::LoadLootFromDB(Field* fields)
 {
-    uint32 itemId = fields[1].GetUInt32();
+    uint32 itemId     = fields[1].GetUInt32();
     uint32 itemAmount = fields[2].GetUInt32();
 
     // money value special case
@@ -609,9 +609,9 @@ ItemPrototype const* Item::GetProto() const
     return ObjectMgr::GetItemPrototype(GetEntry());
 }
 
-Player* Item::GetOwner()const
+Player* Item::GetOwner() const
 {
-    return sObjectMgr.GetPlayer(GetOwnerGuid());
+    return sObjectMgr.GetPlayer(GetOwnerGuid(), false);
 }
 
 uint32 Item::GetSkill()
@@ -635,17 +635,19 @@ uint32 Item::GetSkill()
     switch (proto->Class)
     {
         case ITEM_CLASS_WEAPON:
+        {
             if (proto->SubClass >= MAX_ITEM_SUBCLASS_WEAPON)
                 return 0;
             else
                 return item_weapon_skills[proto->SubClass];
-
+        }
         case ITEM_CLASS_ARMOR:
+        {
             if (proto->SubClass >= MAX_ITEM_SUBCLASS_ARMOR)
                 return 0;
             else
                 return item_armor_skills[proto->SubClass];
-
+        }
         default:
             return 0;
     }
@@ -677,6 +679,7 @@ uint32 Item::GetSpell()
                 case ITEM_SUBCLASS_WEAPON_WAND:    return 5009;
                 default: return 0;
             }
+            break;
         case ITEM_CLASS_ARMOR:
             switch (proto->SubClass)
             {
@@ -687,6 +690,9 @@ uint32 Item::GetSpell()
                 case ITEM_SUBCLASS_ARMOR_SHIELD:   return 9116;
                 default: return 0;
             }
+            break;
+        default:
+            break;
     }
     return 0;
 }
@@ -694,7 +700,6 @@ uint32 Item::GetSpell()
 int32 Item::GenerateItemRandomPropertyId(uint32 item_id)
 {
     ItemPrototype const* itemProto = sItemStorage.LookupEntry<ItemPrototype>(item_id);
-
     if (!itemProto)
         return 0;
 
@@ -755,7 +760,7 @@ void Item::SetItemRandomProperties(int32 randomPropId)
         if (item_rand)
         {
             if (GetInt32Value(ITEM_FIELD_RANDOM_PROPERTIES_ID) != -int32(item_rand->ID) ||
-                    !GetItemSuffixFactor())
+                !GetItemSuffixFactor())
             {
                 SetInt32Value(ITEM_FIELD_RANDOM_PROPERTIES_ID, -int32(item_rand->ID));
                 UpdateItemSuffixFactor();
@@ -773,6 +778,7 @@ bool Item::UpdateItemSuffixFactor()
     uint32 suffixFactor = GenerateEnchSuffixFactor(GetEntry());
     if (GetItemSuffixFactor() == suffixFactor)
         return false;
+
     SetUInt32Value(ITEM_FIELD_PROPERTY_SEED, suffixFactor);
     return true;
 }
@@ -938,6 +944,7 @@ bool Item::IsFitToSpellRequirements(SpellEntry const* spellInfo) const
         // EffectItemType[0] is the associated scroll itemID, if a scroll can be made
         if (spellInfo->EffectItemType[EFFECT_INDEX_0] == 0)
             return false;
+
         // Other checks do not apply to vellum enchants, so return final result
         return ((proto->SubClass == ITEM_SUBCLASS_WEAPON_ENCHANTMENT && spellInfo->EquippedItemClass == ITEM_CLASS_WEAPON) ||
                 (proto->SubClass == ITEM_SUBCLASS_ARMOR_ENCHANTMENT && spellInfo->EquippedItemClass == ITEM_CLASS_ARMOR));
@@ -978,8 +985,10 @@ bool Item::IsTargetValidForItemUse(Unit* pUnitTarget)
         return false;
 
     for (ItemRequiredTargetMap::const_iterator itr = bounds.first; itr != bounds.second; ++itr)
+    {
         if (itr->second.IsFitToRequirements(pUnitTarget))
             return true;
+    }
 
     return false;
 }
@@ -1021,6 +1030,7 @@ void Item::ClearEnchantment(EnchantmentSlot slot)
 
     for (uint8 x = 0; x < 3; ++x)
         SetUInt32Value(ITEM_FIELD_ENCHANTMENT_1_1 + slot * MAX_ENCHANTMENT_OFFSET + x, 0);
+
     SetState(ITEM_CHANGED);
 }
 
@@ -1031,30 +1041,32 @@ bool Item::GemsFitSockets() const
     {
         uint8 SocketColor = GetProto()->Socket[enchant_slot - SOCK_ENCHANTMENT_SLOT].Color;
 
+        if (!SocketColor) // prismatic socket
+            continue;
+
         uint32 enchant_id = GetEnchantmentId(EnchantmentSlot(enchant_slot));
         if (!enchant_id)
         {
-            if (SocketColor) fits &= false;
+            if (SocketColor)
+                fits &= false;
             continue;
         }
 
         SpellItemEnchantmentEntry const* enchantEntry = sSpellItemEnchantmentStore.LookupEntry(enchant_id);
         if (!enchantEntry)
         {
-            if (SocketColor) fits &= false;
+            if (SocketColor)
+                fits &= false;
             continue;
         }
 
         uint8 GemColor = 0;
 
-        uint32 gemid = enchantEntry->GemID;
-        if (gemid)
+        if (uint32 gemid = enchantEntry->GemID)
         {
-            ItemPrototype const* gemProto = sItemStorage.LookupEntry<ItemPrototype>(gemid);
-            if (gemProto)
+            if (ItemPrototype const* gemProto = sItemStorage.LookupEntry<ItemPrototype>(gemid))
             {
-                GemPropertiesEntry const* gemProperty = sGemPropertiesStore.LookupEntry(gemProto->GemProperties);
-                if (gemProperty)
+                if (GemPropertiesEntry const* gemProperty = sGemPropertiesStore.LookupEntry(gemProto->GemProperties))
                     GemColor = gemProperty->color;
             }
         }
@@ -1140,19 +1152,22 @@ bool Item::IsLimitedToAnotherMapOrZone(uint32 cur_mapId, uint32 cur_zoneId) cons
 // time.
 void Item::SendTimeUpdate(Player* owner)
 {
+    if (!owner || !owner->IsInWorld())
+        return;
+
     uint32 duration = GetUInt32Value(ITEM_FIELD_DURATION);
     if (!duration)
         return;
 
-    WorldPacket data(SMSG_ITEM_TIME_UPDATE, (8 + 4));
-    data << ObjectGuid(GetObjectGuid());
+    WorldPacket data(SMSG_ITEM_TIME_UPDATE, 8 + 4);
+    data << GetObjectGuid();
     data << uint32(duration);
     owner->GetSession()->SendPacket(&data);
 }
 
 Item* Item::CreateItem(uint32 item, uint32 count, Player const* player, uint32 randomPropertyId)
 {
-    if (count < 1)
+    if (!count)
         return NULL;                                        // don't create item at zero count
 
     if (ItemPrototype const* pProto = ObjectMgr::GetItemPrototype(item))
@@ -1160,7 +1175,7 @@ Item* Item::CreateItem(uint32 item, uint32 count, Player const* player, uint32 r
         if (count > pProto->GetMaxStackSize())
             count = pProto->GetMaxStackSize();
 
-        MANGOS_ASSERT(count != 0 && "pProto->Stackable == 0 but checked at loading already");
+        MANGOS_ASSERT(count > 0 && "pProto->Stackable == 0 but checked at loading already");
 
         Item* pItem = NewItemOrBag(pProto);
         if (pItem->Create(sObjectMgr.GenerateItemLowGuid(), item, player))
@@ -1234,10 +1249,10 @@ void Item::RemoveFromClientUpdateList()
         pPlayer->RemoveUpdateObject(GetObjectGuid());
 }
 
-void Item::BuildUpdateData(UpdateDataMapType& update_players)
+void Item::BuildUpdateData(UpdateDataMapType& playerMap)
 {
-    if (Player* pl = GetOwner())
-        BuildUpdateDataForPlayer(pl, update_players);
+    if (Player* pPlayer = GetOwner())
+        BuildUpdateDataForPlayer(pPlayer, playerMap);
 
     ClearUpdateMask(false);
 }
@@ -1282,9 +1297,11 @@ bool Item::HasMaxCharges() const
 {
     ItemPrototype const* itemProto = GetProto();
 
-    for (int i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
+    for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
+    {
         if (GetSpellCharges(i) != itemProto->Spells[i].SpellCharges)
             return false;
+    }
 
     return true;
 }
@@ -1310,37 +1327,37 @@ void Item::SetLootState(ItemLootUpdateState state)
     // ITEM_LOOT_NONE -> ITEM_LOOT_NEW -> ITEM_LOOT_UNCHANGED [<-> ITEM_LOOT_CHANGED] -> ITEM_LOOT_REMOVED -> ITEM_LOOT_NONE
     switch (state)
     {
-    case ITEM_LOOT_NONE:
-    case ITEM_LOOT_NEW:
-        assert(false);                                 // not used in state change calls
-        return;
-    case ITEM_LOOT_TEMPORARY:
-        assert(m_lootState == ITEM_LOOT_NONE);          // called only for not generated yet loot case
-        m_lootState = ITEM_LOOT_TEMPORARY;
-        break;
-    case ITEM_LOOT_CHANGED:
-        // new loot must stay in new state until saved, temporary must stay until remove
-        if (m_lootState != ITEM_LOOT_NEW && m_lootState != ITEM_LOOT_TEMPORARY)
-            m_lootState = m_lootState == ITEM_LOOT_NONE ? ITEM_LOOT_NEW : state;
-        break;
-    case ITEM_LOOT_UNCHANGED:
-        // expected that called after DB update or load
-        if (m_lootState == ITEM_LOOT_REMOVED)
-            m_lootState = ITEM_LOOT_NONE;
-        // temporary must stay until remove (ignore any changes)
-        else if (m_lootState != ITEM_LOOT_TEMPORARY)
-            m_lootState = ITEM_LOOT_UNCHANGED;
-        break;
-    case ITEM_LOOT_REMOVED:
-        // if loot not saved then it existence in past can be just ignored
-        if (m_lootState == ITEM_LOOT_NEW || m_lootState == ITEM_LOOT_TEMPORARY)
-        {
-            m_lootState = ITEM_LOOT_NONE;
+        case ITEM_LOOT_NONE:
+        case ITEM_LOOT_NEW:
+            assert(false);                                 // not used in state change calls
             return;
-        }
+        case ITEM_LOOT_TEMPORARY:
+            assert(m_lootState == ITEM_LOOT_NONE);          // called only for not generated yet loot case
+            m_lootState = ITEM_LOOT_TEMPORARY;
+            break;
+        case ITEM_LOOT_CHANGED:
+            // new loot must stay in new state until saved, temporary must stay until remove
+            if (m_lootState != ITEM_LOOT_NEW && m_lootState != ITEM_LOOT_TEMPORARY)
+                m_lootState = m_lootState == ITEM_LOOT_NONE ? ITEM_LOOT_NEW : state;
+            break;
+        case ITEM_LOOT_UNCHANGED:
+            // expected that called after DB update or load
+            if (m_lootState == ITEM_LOOT_REMOVED)
+                m_lootState = ITEM_LOOT_NONE;
+            // temporary must stay until remove (ignore any changes)
+            else if (m_lootState != ITEM_LOOT_TEMPORARY)
+                m_lootState = ITEM_LOOT_UNCHANGED;
+            break;
+        case ITEM_LOOT_REMOVED:
+            // if loot not saved then it existence in past can be just ignored
+            if (m_lootState == ITEM_LOOT_NEW || m_lootState == ITEM_LOOT_TEMPORARY)
+            {
+                m_lootState = ITEM_LOOT_NONE;
+                return;
+            }
 
-        m_lootState = ITEM_LOOT_REMOVED;
-        break;
+            m_lootState = ITEM_LOOT_REMOVED;
+            break;
     }
 
     if (m_lootState != ITEM_LOOT_NONE && m_lootState != ITEM_LOOT_UNCHANGED && m_lootState != ITEM_LOOT_TEMPORARY)

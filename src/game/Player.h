@@ -55,6 +55,7 @@ class Spell;
 class Item;
 
 struct AreaTrigger;
+class OutdoorPvP;
 
 typedef std::deque<Mail*> PlayerMails;
 
@@ -1586,7 +1587,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         void VehicleSpellInitialize();
         void RemovePetActionBar();
 
-        bool HasSpell(uint32 spell) const override;
+        bool HasSpell(uint32 spell) const;
         bool HasActiveSpell(uint32 spell) const;            // show in spellbook
         TrainerSpellState GetTrainerSpellState(TrainerSpell const* trainer_spell, uint32 reqLevel) const;
         bool IsSpellFitByClassAndRace(uint32 spell_id, uint32* pReqlevel = NULL) const;
@@ -1684,12 +1685,13 @@ class MANGOS_DLL_SPEC Player : public Unit
         static bool IsActionButtonDataValid(uint8 button, uint32 action, uint8 type, Player* player, bool msg = true);
         ActionButton* addActionButton(uint8 spec, uint8 button, uint32 action, uint8 type);
         void removeActionButton(uint8 spec, uint8 button);
-        void SendInitialActionButtons() const;
+        void SendActionButtons(uint32 state) const;
+        void SendInitialActionButtons() const { SendActionButtons(1); }
         void SendLockActionButtons() const;
         ActionButton const* GetActionButton(uint8 button);
 
         PvPInfo pvpInfo;
-        void UpdatePvP(bool state, bool ovrride = false);
+        void UpdatePvP(bool state, bool bOverride = false);
         void UpdateZone(uint32 newZone, uint32 newArea);
         void UpdateArea(uint32 newArea);
         uint32 GetCachedZoneId() const { return m_zoneUpdateId; }
@@ -1831,8 +1833,8 @@ class MANGOS_DLL_SPEC Player : public Unit
         WorldSession* GetSession() const { return m_session; }
         void SetSession(WorldSession* s) { m_session = s; }
 
-        void BuildCreateUpdateBlockForPlayer(UpdateData* data, Player* target) const override;
-        void DestroyForPlayer(Player* target, bool anim = false) const override;
+        void BuildCreateUpdateBlockForPlayer(UpdateData *data, Player *target) const;
+        void DestroyForPlayer(Player *target, bool anim = false) const;
         void SendLogXPGain(uint32 GivenXP, Unit* victim, uint32 RestXP);
 
         uint8 LastSwingErrorMsg() const { return m_swingErrorMsg; }
@@ -1978,7 +1980,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         void UpdateCorpseReclaimDelay();
         void SendCorpseReclaimDelay(bool load = false);
 
-        uint32 GetShieldBlockValue() const override;        // overwrite Unit version (virtual)
+        uint32 GetShieldBlockValue() const;        // overwrite Unit version (virtual)
         bool CanParry() const { return m_canParry; }
         void SetCanParry(bool value);
         bool CanBlock() const { return m_canBlock; }
@@ -2193,7 +2195,7 @@ class MANGOS_DLL_SPEC Player : public Unit
         /*********************************************************/
         bool HasMovementFlag(MovementFlags f) const;        // for script access to m_movementInfo.HasMovementFlag
         void UpdateFallInformationIfNeed(MovementInfo const& minfo, uint16 opcode);
-        void SetFallInformation(uint32 time, float z)
+        void SetFallInformation(uint32 time, float z) override
         {
             m_lastFallTime = time;
             m_lastFallZ = z;
@@ -2221,13 +2223,6 @@ class MANGOS_DLL_SPEC Player : public Unit
         Camera* GetCamera() { return m_camera; }
         void    SetViewPoint(WorldObject* target, bool immediate = false, bool update_far_sight_field = true);
         bool    HasExternalViewPoint() const { return m_camera->GetBody() != (WorldObject*)this; };
-
-        float GetTransOffsetX() const { return m_movementInfo.GetTransportPos()->x; }
-        float GetTransOffsetY() const { return m_movementInfo.GetTransportPos()->y; }
-        float GetTransOffsetZ() const { return m_movementInfo.GetTransportPos()->z; }
-        float GetTransOffsetO() const { return m_movementInfo.GetTransportPos()->o; }
-        uint32 GetTransTime() const { return m_movementInfo.GetTransportTime(); }
-        int8 GetTransSeat() const { return m_movementInfo.GetTransportSeat(); }
 
         uint32 GetSaveTimer() const { return m_nextSave; }
         void   SetSaveTimer(uint32 timer) { m_nextSave = timer; }
@@ -2277,6 +2272,9 @@ class MANGOS_DLL_SPEC Player : public Unit
 
         void SendCinematicStart(uint32 CinematicSequenceId);
         void SendMovieStart(uint32 MovieId);
+
+        // select modelid depending on hair color or skin tone
+        uint32 GetModelForForm(SpellShapeshiftFormEntry const* ssEntry) const;
 
         /*********************************************************/
         /***                 INSTANCE SYSTEM                   ***/

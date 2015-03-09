@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,8 +37,8 @@ const char ChrRacesEntryfmt[] = "nxixiixixxxxixssssssssssssssssxxxxxxxxxxxxxxxxx
 const char CinematicSequencesEntryfmt[] = "nxxxxxxxxx";
 const char CreatureDisplayInfofmt[] = "nixifxxxxxxxxxxx";
 const char CreatureDisplayInfoExtrafmt[] = "nixxxxxxxxxxxxxxxxxxx";
-const char CreatureModelDatafmt[] = "nixxfxxxxxxxxxxffxxxxxxxxxxx";
 const char CreatureFamilyfmt[] = "nfifiiiiixssssssssssssssssxx";
+const char CreatureModelDatafmt[] = "nxxifxxxxxxxxxxffxxxxxxxxxxx";
 const char CreatureSpellDatafmt[] = "niiiixxxx";
 const char CreatureTypefmt[] = "nxxxxxxxxxxxxxxxxxx";
 const char CurrencyTypesfmt[] = "xnxi";
@@ -102,7 +102,7 @@ const char SpellDurationfmt[] = "niii";
 const char SpellDifficultyfmt[] = "niiii";
 const char SpellEntryfmt[] = "niiiiiiiiiiiixixiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiifxiiiiiiiiiiiiiiiiiiiiiiiiiiiifffiiiiiiiiiiiiiiiiiiiiifffiiiiiiiiiiiiiiifffiiiiiiiiiiiiixssssssssssssssssxssssssssssssssssxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxiiiiiiiiiiixfffxxxiiiiixxfffxi";
 const char SpellFocusObjectfmt[] = "nxxxxxxxxxxxxxxxxx";
-const char SpellItemEnchantmentfmt[] = "nxiiiiiixxxiiissssssssssssssssxiiiixxx";
+const char SpellItemEnchantmentfmt[] = "nxiiiiiixxxiiissssssssssssssssxiiiiiii";
 const char SpellItemEnchantmentConditionfmt[] = "nbbbbbxxxxxbbbbbbbbbbiiiiiXXXXX";
 const char SpellRadiusfmt[] = "nfxx";
 const char SpellRangefmt[] = "nffffxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
@@ -124,6 +124,6 @@ const char WMOAreaTableEntryfmt[] = "niiixxxxxiixxxxxxxxxxxxxxxxx";
 const char WorldMapAreaEntryfmt[] = "niixffffixx";
 const char WorldMapOverlayEntryfmt[] = "nxiiiixxxxxxxxxxx";
 const char WorldSafeLocsEntryfmt[] = "nifffxxxxxxxxxxxxxxxxx";
-const char WorldStateEntryfmt[] = "niiixssssssssssssssssxxxxxxxxxxxxxxxxxxixxxxxxxxxxxxxxxxxxxsiix";
+const char WorldStateEntryfmt[]="niiixssssssssssssssssxxxxxxxxxxxxxxxxxxixxxxxxxxxxxxxxxxxxxsiix";
 
 #endif

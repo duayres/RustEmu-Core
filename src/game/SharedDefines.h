@@ -262,6 +262,9 @@ const uint32 ItemQualityColors[MAX_ITEM_QUALITY] =
 // Spell Attributes definitions
 // ***********************************
 
+#define SpellAttributesEx1 SpellAttributesEx
+#define SpellAttributesEx0 SpellAttributes
+
 enum SpellAttributes
 {
     SPELL_ATTR_UNK0                            = 0x00000001,// 0
@@ -1390,6 +1393,8 @@ enum Targets
     TARGET_109                              = 109,
     TARGET_NARROW_FRONTAL_CONE_2            = 110,
 };
+
+#define MAX_SPELL_TARGET               111
 
 enum SpellMissInfo
 {

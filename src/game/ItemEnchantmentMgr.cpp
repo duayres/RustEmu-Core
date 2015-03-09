@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -73,12 +73,14 @@ void LoadRandomEnchantmentsTable()
 
         delete result;
 
+        sLog.outString();
         sLog.outString(">> Loaded %u Item Enchantment definitions", count);
     }
     else
+    {
+        sLog.outString();
         sLog.outErrorDb(">> Loaded 0 Item Enchantment definitions. DB table `item_enchantment_template` is empty.");
-
-    sLog.outString();
+    }
 }
 
 uint32 GetItemEnchantMod(uint32 entry)

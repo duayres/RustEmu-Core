@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include "SystemConfig.h"
 #include "DBCStores.h"
 #include "Policies/Singleton.h"
 #include "Log.h"
@@ -27,8 +28,8 @@
 
 #include <map>
 
-typedef std::map<uint16, uint32> AreaFlagByAreaID;
-typedef std::map<uint32, uint32> AreaFlagByMapID;
+typedef UNORDERED_MAP<uint16, uint32> AreaFlagByAreaID;
+typedef UNORDERED_MAP<uint32, uint32> AreaFlagByMapID;
 
 struct WMOAreaTableTripple
 {
@@ -36,9 +37,14 @@ struct WMOAreaTableTripple
     {
     }
 
-    bool operator <(const WMOAreaTableTripple& b) const
+    bool operator <(WMOAreaTableTripple const& b) const
     {
         return memcmp(this, &b, sizeof(WMOAreaTableTripple)) < 0;
+    }
+
+    bool operator == (WMOAreaTableTripple const& b) const
+    {
+        return (groupId == b.groupId && rootId == b.rootId && adtId == b.adtId);
     }
 
     // ordered by entropy; that way memcmp will have a minimal medium runtime
@@ -47,7 +53,14 @@ struct WMOAreaTableTripple
     int32 adtId;
 };
 
-typedef std::map<WMOAreaTableTripple, WMOAreaTableEntry const*> WMOAreaInfoByTripple;
+HASH_NAMESPACE_START
+template<> class hash <WMOAreaTableTripple>
+{
+    public: size_t operator()(const WMOAreaTableTripple& __x) const { return (size_t)((__x.groupId << 24) | (__x.rootId << 16) | __x.adtId); }
+};
+HASH_NAMESPACE_END
+
+typedef UNORDERED_MAP<WMOAreaTableTripple, WMOAreaTableEntry const*> WMOAreaInfoByTripple;
 
 DBCStorage <AreaTableEntry> sAreaStore(AreaTableEntryfmt);
 DBCStorage <AreaGroupEntry> sAreaGroupStore(AreaGroupEntryfmt);
@@ -71,8 +84,8 @@ DBCStorage <ChrRacesEntry> sChrRacesStore(ChrRacesEntryfmt);
 DBCStorage <CinematicSequencesEntry> sCinematicSequencesStore(CinematicSequencesEntryfmt);
 DBCStorage <CreatureDisplayInfoEntry> sCreatureDisplayInfoStore(CreatureDisplayInfofmt);
 DBCStorage <CreatureDisplayInfoExtraEntry> sCreatureDisplayInfoExtraStore(CreatureDisplayInfoExtrafmt);
-DBCStorage <CreatureModelDataEntry> sCreatureModelDataStore(CreatureModelDatafmt);
 DBCStorage <CreatureFamilyEntry> sCreatureFamilyStore(CreatureFamilyfmt);
+DBCStorage <CreatureModelDataEntry> sCreatureModelDataStore(CreatureModelDatafmt);
 DBCStorage <CreatureSpellDataEntry> sCreatureSpellDataStore(CreatureSpellDatafmt);
 DBCStorage <CreatureTypeEntry> sCreatureTypeStore(CreatureTypefmt);
 DBCStorage <CurrencyTypesEntry> sCurrencyTypesStore(CurrencyTypesfmt);
@@ -125,12 +138,13 @@ DBCStorage <LFGDungeonExpansionEntry> sLFGDungeonExpansionStore(LFGDungeonExpans
 LFGDungeonExpansionMap sLFGDungeonExpansionMap;
 
 DBCStorage <LiquidTypeEntry> sLiquidTypeStore(LiquidTypefmt);
+
 DBCStorage <LockEntry> sLockStore(LockEntryfmt);
 
 DBCStorage <MailTemplateEntry> sMailTemplateStore(MailTemplateEntryfmt);
 DBCStorage <MapEntry> sMapStore(MapEntryfmt);
 
-DBCStorage <MapDifficultyEntry> sMapDifficultyStore(MapDifficultyEntryfmt); // only for loading
+DBCStorage <MapDifficultyEntry> sMapDifficultyStore(MapDifficultyEntryfmt);
 MapDifficultyMap sMapDifficultyMap;
 
 DBCStorage <MovieEntry> sMovieStore(MovieEntryfmt);
@@ -158,6 +172,8 @@ DBCStorage <SpellItemEnchantmentConditionEntry> sSpellItemEnchantmentConditionSt
 DBCStorage <SpellEntry> sSpellStore(SpellEntryfmt);
 SpellCategoryStore sSpellCategoryStore;
 PetFamilySpellsStore sPetFamilySpellsStore;
+
+SpellEffectMap sSpellEffectMap;
 
 DBCStorage <SpellCastTimesEntry> sSpellCastTimesStore(SpellCastTimefmt);
 DBCStorage <SpellDifficultyEntry> sSpellDifficultyStore(SpellDifficultyfmt);
@@ -233,8 +249,8 @@ static bool ReadDBCBuildFileText(const std::string& dbc_path, char const* locale
         char buf[100];
         fread(buf, 1, 100 - 1, file);
         fclose(file);
-
-        text = &buf[0];
+        text.clear();
+        text.append(buf);
         return true;
     }
     else
@@ -320,6 +336,7 @@ inline void LoadDBC(LocalData& localeData, BarGoLink& bar, StoreProblemList& err
             {
                 localeData.checkedDbcLocaleBuilds |= (1 << i); // mark as checked for speedup next checks
 
+
                 uint32 build_loc = ReadDBCBuild(dbc_dir_loc, localStr);
                 if (localeData.main_build != build_loc)
                 {
@@ -376,7 +393,7 @@ void LoadDBCStores(const std::string& dataPath)
         exit(1);
     }
 
-    const uint32 DBCFilesCount = 96;
+    const uint32 DBCFilesCount = 97;
 
     BarGoLink bar(DBCFilesCount);
 
@@ -416,8 +433,8 @@ void LoadDBCStores(const std::string& dataPath)
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sCinematicSequencesStore,  dbcPath, "CinematicSequences.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sCreatureDisplayInfoStore, dbcPath, "CreatureDisplayInfo.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sCreatureDisplayInfoExtraStore, dbcPath, "CreatureDisplayInfoExtra.dbc");
-    LoadDBC(availableDbcLocales, bar, bad_dbc_files, sCreatureModelDataStore,   dbcPath, "CreatureModelData.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sCreatureFamilyStore,      dbcPath, "CreatureFamily.dbc");
+    LoadDBC(availableDbcLocales, bar, bad_dbc_files, sCreatureModelDataStore,   dbcPath, "CreatureModelData.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sCreatureSpellDataStore,   dbcPath, "CreatureSpellData.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sCreatureTypeStore,        dbcPath, "CreatureType.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sCurrencyTypesStore,       dbcPath, "CurrencyTypes.dbc");
@@ -440,6 +457,19 @@ void LoadDBCStores(const std::string& dataPath)
 
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sFactionTemplateStore,     dbcPath, "FactionTemplate.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sGameObjectDisplayInfoStore, dbcPath, "GameObjectDisplayInfo.dbc");
+    for (uint32 i = 0; i < sGameObjectDisplayInfoStore.GetNumRows(); ++i)
+    {
+        if (GameObjectDisplayInfoEntry *info = const_cast<GameObjectDisplayInfoEntry*>(sGameObjectDisplayInfoStore.LookupEntry(i)))
+        {
+            if (info->maxX < info->minX)
+                std::swap(info->maxX, info->minX);
+            if (info->maxY < info->minY)
+                std::swap(info->maxY, info->minY);
+            if (info->maxZ < info->minZ)
+                std::swap(info->maxZ, info->minZ);
+        }
+    }
+
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sGemPropertiesStore,       dbcPath, "GemProperties.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sGlyphPropertiesStore,     dbcPath, "GlyphProperties.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sGlyphSlotStore,           dbcPath, "GlyphSlot.dbc");
@@ -464,10 +494,10 @@ void LoadDBCStores(const std::string& dataPath)
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sLFGDungeonStore,          dbcPath, "LFGDungeons.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sLFGDungeonExpansionStore, dbcPath, "LFGDungeonExpansion.dbc");
     // fill data
-    for (uint32 i = 1; i < sLFGDungeonExpansionStore.GetNumRows(); ++i)
+    for(uint32 i = 1; i < sLFGDungeonExpansionStore.GetNumRows(); ++i)
     {
-        if (LFGDungeonExpansionEntry const* entry = sLFGDungeonExpansionStore.LookupEntry(i))
-            sLFGDungeonExpansionMap[MAKE_PAIR32(entry->dungeonID, entry->expansion)] = entry;
+        if(LFGDungeonExpansionEntry const* entry = sLFGDungeonExpansionStore.LookupEntry(i))
+            sLFGDungeonExpansionMap[MAKE_PAIR32(entry->dungeonID,entry->expansion)] = entry;
     }
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sItemClassStore,           dbcPath, "ItemClass.dbc");
     // LoadDBC(availableDbcLocales,bar,bad_dbc_files,sItemDisplayInfoStore,     dbcPath,"ItemDisplayInfo.dbc");     -- not used currently
@@ -485,8 +515,12 @@ void LoadDBCStores(const std::string& dataPath)
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sMapDifficultyStore,       dbcPath, "MapDifficulty.dbc");
     // fill data
     for (uint32 i = 1; i < sMapDifficultyStore.GetNumRows(); ++i)
+    {
         if (MapDifficultyEntry const* entry = sMapDifficultyStore.LookupEntry(i))
+        {
             sMapDifficultyMap[MAKE_PAIR32(entry->MapId, entry->Difficulty)] = entry;
+        }
+    }
 
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sMovieStore,               dbcPath, "Movie.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sOverrideSpellDataStore,   dbcPath, "OverrideSpellData.dbc");
@@ -519,6 +553,12 @@ void LoadDBCStores(const std::string& dataPath)
 #if MANGOS_ENDIAN == MANGOS_BIGENDIAN
         std::swap(*((uint32*)(&spell->SpellFamilyFlags)), *(((uint32*)(&spell->SpellFamilyFlags)) + 1));
 #endif
+
+        for (uint8 j = 0; j < MAX_EFFECT_INDEX; ++j)
+        {
+            if (spell)
+                sSpellEffectMap[spell->Id].effects[SpellEffectIndex(j)] = SpellEffectEntry(spell, SpellEffectIndex(j));
+        }
     }
 
     for (uint32 j = 0; j < sSkillLineAbilityStore.GetNumRows(); ++j)
@@ -529,7 +569,7 @@ void LoadDBCStores(const std::string& dataPath)
             continue;
 
         SpellEntry const* spellInfo = sSpellStore.LookupEntry(skillLine->spellId);
-        if (spellInfo && (spellInfo->Attributes & (SPELL_ATTR_ABILITY | SPELL_ATTR_PASSIVE | SPELL_ATTR_HIDDEN_CLIENTSIDE | SPELL_ATTR_HIDE_IN_COMBAT_LOG)) == (SPELL_ATTR_ABILITY | SPELL_ATTR_PASSIVE | SPELL_ATTR_HIDDEN_CLIENTSIDE | SPELL_ATTR_HIDE_IN_COMBAT_LOG))
+        if (spellInfo && (spellInfo->GetAttributes() & (SPELL_ATTR_ABILITY | SPELL_ATTR_PASSIVE | SPELL_ATTR_HIDDEN_CLIENTSIDE | SPELL_ATTR_HIDE_IN_COMBAT_LOG)) == (SPELL_ATTR_ABILITY | SPELL_ATTR_PASSIVE | SPELL_ATTR_HIDDEN_CLIENTSIDE | SPELL_ATTR_HIDE_IN_COMBAT_LOG))
         {
             for (unsigned int i = 1; i < sCreatureFamilyStore.GetNumRows(); ++i)
             {
@@ -667,13 +707,13 @@ void LoadDBCStores(const std::string& dataPath)
 
             // Hack DK node at Ebon Hold (unclear if bad dbc data or we need to revisit our checks in ObjectMgr::GetNearestTaxiNode )
             if (i == 315)
-                (const_cast<TaxiNodesEntry*>(node))->MountCreatureID[1] = node->MountCreatureID[0];
+               (const_cast<TaxiNodesEntry*>(node))->MountCreatureID[1] = node->MountCreatureID[0];
         }
     }
 
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sTeamContributionPoints,   dbcPath, "TeamContributionPoints.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sTotemCategoryStore,       dbcPath, "TotemCategory.dbc");
-    LoadDBC(availableDbcLocales, bar, bad_dbc_files, sTransportAnimationStore, dbcPath, "TransportAnimation.dbc");
+    LoadDBC(availableDbcLocales,bar,bad_dbc_files,sTransportAnimationStore,     dbcPath,"TransportAnimation.dbc");
     for (uint32 i = 0; i < sTransportAnimationStore.GetNumRows(); ++i)
         if (TransportAnimationEntry const* entry = sTransportAnimationStore.LookupEntry(i))
             sTransportAnimationsByEntry[entry->transportEntry][entry->timeFrame] = entry;
@@ -681,6 +721,14 @@ void LoadDBCStores(const std::string& dataPath)
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sVehicleStore,             dbcPath, "Vehicle.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sVehicleSeatStore,         dbcPath, "VehicleSeat.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sWorldMapAreaStore,        dbcPath, "WorldMapArea.dbc");
+    for (uint32 i = 0; i < sWorldMapAreaStore.GetNumRows(); ++i)
+    {
+        if (WorldMapAreaEntry const* entry = sWorldMapAreaStore.LookupEntry(i))
+        {
+            if (entry->zone_id != 0) // Strip overall continent definition
+                sWorldMapAreaMap.insert(WorldMapAreaMap::value_type(entry->zone_id, entry));
+        }
+    }
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sWMOAreaTableStore,        dbcPath, "WMOAreaTable.dbc");
     for (uint32 i = 0; i < sWMOAreaTableStore.GetNumRows(); ++i)
     {
@@ -691,6 +739,7 @@ void LoadDBCStores(const std::string& dataPath)
     }
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sWorldMapOverlayStore,     dbcPath, "WorldMapOverlay.dbc");
     LoadDBC(availableDbcLocales, bar, bad_dbc_files, sWorldSafeLocsStore,       dbcPath, "WorldSafeLocs.dbc");
+    LoadDBC(availableDbcLocales, bar, bad_dbc_files, sWorldStateStore,          dbcPath, "WorldStateUI.dbc");
 
     // error checks
     if (bad_dbc_files.size() >= DBCFilesCount)
@@ -724,8 +773,8 @@ void LoadDBCStores(const std::string& dataPath)
         exit(1);
     }
 
-    sLog.outString(">> Initialized %d data stores", DBCFilesCount);
     sLog.outString();
+    sLog.outString(">> Initialized %d data stores", DBCFilesCount);
 }
 
 SimpleFactionsList const* GetFactionTeamList(uint32 faction)
@@ -755,10 +804,20 @@ TalentSpellPos const* GetTalentSpellPos(uint32 spellId)
     return &itr->second;
 }
 
+SpellEffectEntry const* GetSpellEffectEntry(uint32 spellId, SpellEffectIndex effect)
+{
+    SpellEffectMap::const_iterator itr = sSpellEffectMap.find(spellId);
+    if(itr == sSpellEffectMap.end())
+        return NULL;
+
+    return &itr->second.effects[effect];
+}
+
+
 uint32 GetTalentSpellCost(TalentSpellPos const* pos)
 {
     if (pos)
-        return pos->rank + 1;
+        return pos->rank+1;
 
     return 0;
 }
@@ -771,7 +830,7 @@ uint32 GetTalentSpellCost(uint32 spellId)
 int32 GetAreaFlagByAreaID(uint32 area_id)
 {
     AreaFlagByAreaID::iterator i = sAreaFlagByAreaID.find(area_id);
-    if (i == sAreaFlagByAreaID.end())
+    if(i == sAreaFlagByAreaID.end())
         return -1;
 
     return i->second;
@@ -779,10 +838,8 @@ int32 GetAreaFlagByAreaID(uint32 area_id)
 
 WMOAreaTableEntry const* GetWMOAreaTableEntryByTripple(int32 rootid, int32 adtid, int32 groupid)
 {
-    WMOAreaInfoByTripple::iterator i = sWMOAreaInfoByTripple.find(WMOAreaTableTripple(rootid, adtid, groupid));
-    if (i == sWMOAreaInfoByTripple.end())
-        return NULL;
-    return i->second;
+    WMOAreaInfoByTripple::const_iterator i = sWMOAreaInfoByTripple.find(WMOAreaTableTripple(rootid, adtid, groupid));
+    return (i == sWMOAreaInfoByTripple.end()) ? NULL : i->second;
 }
 
 AreaTableEntry const* GetAreaEntryByAreaID(uint32 area_id)
@@ -816,11 +873,9 @@ uint32 GetAreaFlagByMapId(uint32 mapid)
 
 uint32 GetVirtualMapForMapAndZone(uint32 mapid, uint32 zoneId)
 {
-    if (mapid != 530 && mapid != 571)                       // speed for most cases
-        return mapid;
-
-    if (WorldMapAreaEntry const* wma = sWorldMapAreaStore.LookupEntry(zoneId))
-        return wma->virtual_map_id >= 0 ? wma->virtual_map_id : wma->map_id;
+    WorldMapAreaMap::const_iterator itr = sWorldMapAreaMap.find(zoneId);
+    if (itr != sWorldMapAreaMap.end())
+        return itr->second->virtual_map_id >= 0 ? itr->second->virtual_map_id : itr->second->map_id;
 
     return mapid;
 }
@@ -841,6 +896,78 @@ ContentLevels GetContentLevelsForMapAndZone(uint32 mapid, uint32 zoneId)
         case 1:  return CONTENT_61_70;
         case 2:  return CONTENT_71_80;
     }
+}
+
+WorldMapAreaEntry const* GetWorldMapAreaByAreaID(uint32 area_id)
+{
+    int32 areaflag = GetAreaFlagByAreaID(area_id);
+
+    if (areaflag < 0)
+        return NULL;
+
+    AreaTableEntry const* entry = sAreaStore.LookupEntry(areaflag);
+
+    if (!entry)
+        return NULL;
+
+    WorldMapAreaMap::const_iterator itr = sWorldMapAreaMap.find((entry->zone == 0) ? entry->ID : entry->zone);
+    if (itr != sWorldMapAreaMap.end())
+        return itr->second;
+
+    return NULL;
+}
+
+WorldMapAreaEntry const* GetWorldMapAreaByMapID(uint32 map_id)
+{
+    MapEntry const* targetMapEntry = sMapStore.LookupEntry(map_id);
+    if (!targetMapEntry)
+        return NULL;
+
+    for (uint32 i = 0; i < sWorldMapAreaStore.GetNumRows(); ++i)
+    {
+        if (WorldMapAreaEntry const* entry = sWorldMapAreaStore.LookupEntry(i))
+        {
+            if (entry->map_id == map_id && (!targetMapEntry->IsContinent() || (entry->zone_id == 0)))
+                return entry;
+        }
+    }
+    return NULL;
+}
+
+std::vector<uint32> GetWorldMapAreaSetByMapID(uint32 map_id)
+{
+    std::vector<uint32> maps;
+    for (uint32 i = 0; i < sWorldMapAreaStore.GetNumRows(); ++i)
+    {
+        if (WorldMapAreaEntry const* entry = sWorldMapAreaStore.LookupEntry(i))
+        {
+            if (entry->map_id == map_id && !(entry->zone_id == 0)) // scip continents main area
+                maps.push_back(entry->zone_id);
+        }
+    }
+
+    for (uint32 i = 0; i < sAreaStore.GetNumRows(); ++i)
+    {
+        if (AreaTableEntry const* area = sAreaStore.LookupEntry(i))
+        {
+            if (area->mapid == map_id  && area->zone == 0)
+                maps.push_back(area->ID);
+        }
+    }
+
+    if (maps.size() > 1)
+    {
+        std::sort(maps.begin(), maps.end());
+        std::vector<uint32>::iterator itr = std::unique(maps.begin(), maps.end());
+        maps.resize(std::distance(maps.begin(),itr));
+        // for multizoned maps push special 0 zone - for "non-zoned" objects.
+        maps.push_back(0);
+    }
+    else if (maps.empty())
+        // If no zones in map (arenas, transport, etc) push special 0 zone - for all map.
+        maps.push_back(0);
+
+    return maps;
 }
 
 ChatChannelsEntry const* GetChannelEntryFor(uint32 channel_id)
@@ -913,7 +1040,7 @@ MapDifficultyEntry const* GetMapDifficultyData(uint32 mapId, Difficulty difficul
 
 LFGDungeonExpansionEntry const* GetLFGExpansionEntry(uint32 dungeonId, uint32 expansion)
 {
-    LFGDungeonExpansionMap::const_iterator itr = sLFGDungeonExpansionMap.find(MAKE_PAIR32(dungeonId, expansion));
+    LFGDungeonExpansionMap::const_iterator itr = sLFGDungeonExpansionMap.find(MAKE_PAIR32(dungeonId,expansion));
     return itr != sLFGDungeonExpansionMap.end() ? itr->second : NULL;
 }
 
@@ -1018,4 +1145,5 @@ MANGOS_DLL_SPEC DBCStorage <FactionEntry>       const* GetFactionStore()        
 MANGOS_DLL_SPEC DBCStorage <ItemEntry>          const* GetItemDisplayStore()    { return &sItemStore;           }
 MANGOS_DLL_SPEC DBCStorage <CreatureDisplayInfoEntry> const* GetCreatureDisplayStore() { return &sCreatureDisplayInfoStore; }
 MANGOS_DLL_SPEC DBCStorage <EmotesEntry>        const* GetEmotesStore()         { return &sEmotesStore;         }
+MANGOS_DLL_SPEC DBCStorage <AchievementEntry>   const* GetAchievementStore()    { return &sAchievementStore;    }
 MANGOS_DLL_SPEC DBCStorage <EmotesTextEntry>    const* GetEmotesTextStore()     { return &sEmotesTextStore;     }

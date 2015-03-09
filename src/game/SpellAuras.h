@@ -553,7 +553,7 @@ class MANGOS_DLL_SPEC Aura
         AreaAuraType m_areaAuraType;
 };
 
-SpellAuraHolder* CreateSpellAuraHolder(SpellEntry const* spellproto, Unit *target, WorldObject *caster, Item *castItem = NULL);
+MANGOS_DLL_SPEC SpellAuraHolder* CreateSpellAuraHolder(SpellEntry const* spellproto, Unit *target, WorldObject *caster, Item *castItem = NULL);
 
 class MANGOS_DLL_SPEC AuraPair
 {
