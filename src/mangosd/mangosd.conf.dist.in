@@ -3,7 +3,7 @@
 #####################################
 
 [MangosdConf]
-ConfVersion=2015030719
+ConfVersion=2015030914
 
 ###################################################################################################################
 # CONNECTIONS AND DIRECTORIES
@@ -595,6 +595,11 @@ LogColors = ""
 #        Amount of honor that new players will start with
 #        Default: 0
 #
+#    AllowHonorKillsTitles
+#        Allow characters to get titles, depending of honor kills amount (something like old 1.xx honor system)
+#        Default: 0 - disallow
+#                 1 - allow
+#
 #    MaxArenaPoints
 #        Max arena points that player can have.
 #        Default: 5000
@@ -714,6 +719,10 @@ LogColors = ""
 #        Increase to store more guild_bank events in table - minimum is 25 (GUILD_BANK_MAX_LOGS) for each guild_bank tab
 #        Useful when you don't want old log events to be overwritten by new, but increasing can slow down performance
 #        Default: 25
+#
+#    Loot.IgnoreChestGroupRulesFromDB
+#        Ignore database setting for loot rules for chests
+#        Default: 0 (disable)
 #
 #    TimerBar.Fatigue.GMLevel
 #        Disable/enable fatigue for security level (0..4) or high
@@ -883,6 +892,21 @@ LogColors = ""
 #        Addition for check strict melee distance in CheckRange()
 #        Default: 4 (overall dist ~ 9)
 #
+#    Calendar.Timer (milliseconds)
+#        Timer for update calendar events
+#        Default: 30000 (30 seconds)
+#
+#    Player.FixMovementPackets.Method
+#        Movement packet fixes, taking into account client<->server connection lag.
+#        WARNING! dont change on the running server, players seeing each other will be desynchronized (looks like twitching)
+#        Default: 0  (disabled)
+#                 1  (add delay server<->client in ping times)
+#                 2  (add fixed delay (Player.FixMovementPackets.AddTime below)
+#
+#    Player.FixMovementPackets.AddTime
+#        Add fixed time (in ms.) to movement packets.
+#        Default: 50
+#
 ###################################################################################################################
 
 GameType = 1
@@ -908,6 +932,7 @@ StartHeroicPlayerLevel = 55
 StartPlayerMoney = 0
 MaxHonorPoints = 75000
 StartHonorPoints = 0
+AllowHonorKillsTitles = 0
 MaxArenaPoints = 5000
 StartArenaPoints = 0
 InstantLogout = 1
@@ -934,6 +959,7 @@ Quests.Weekly.ResetHour = 6
 Quests.IgnoreRaid = 0
 Guild.EventLogRecordsCount = 100
 Guild.BankEventLogRecordsCount = 25
+Loot.IgnoreChestGroupRulesFromDB = 1
 TimerBar.Fatigue.GMLevel = 4
 TimerBar.Fatigue.Max = 60
 TimerBar.Breath.GMLevel = 4
@@ -971,6 +997,9 @@ AllowTransferToCustomMap = 0
 Resistance.CalculationMethod = 1
 Resistance.AddByOverLevel = 0
 Melee.Distance.Addition = 4
+Calendar.Timer       = 30000
+Player.FixMovementPackets.Method = 0
+Player.FixMovementPackets.AddTime = 50
 
 ###################################################################################################################
 # PLAYER INTERACTION
