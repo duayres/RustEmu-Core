@@ -10,6 +10,7 @@ Implemented (from R2 project):
  * Worldlocation
  * Transport, MOTransport, Vehicle, VehicleKit systems
  * Spell system and SpellAura system
+ * WorldStateMgr
 
 # C(ontinued)-MaNGOS -- README
 
