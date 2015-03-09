@@ -601,11 +601,8 @@ class MANGOS_DLL_SPEC Creature : public Unit
         CreatureAI* AI() { return i_AI; }
 
         void SetWalk(bool enable, bool asDefault = true);
-        void SetLevitate(bool enable) override;
-        void SetSwim(bool enable) override;
-        void SetCanFly(bool enable) override;
-        void SetFeatherFall(bool enable) override;
-        void SetHover(bool enable) override;
+        void SetLevitate(bool enable, float altitude = 1.0f);
+        void SetSwim(bool enable);
         void SetRoot(bool enable) override;
         void SetWaterWalk(bool enable) override;
 

@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,24 +30,24 @@ class WorldPacket;
 
 enum FriendStatus
 {
-    FRIEND_STATUS_OFFLINE   = 0,
-    FRIEND_STATUS_ONLINE    = 1,
-    FRIEND_STATUS_AFK       = 2,
-    FRIEND_STATUS_UNK3      = 3,
-    FRIEND_STATUS_DND       = 4
+    FRIEND_STATUS_OFFLINE   = 0x00,
+    FRIEND_STATUS_ONLINE    = 0x01,
+    FRIEND_STATUS_AFK       = 0x02,
+    FRIEND_STATUS_DND       = 0x04,
+    FRIEND_STATUS_RAF       = 0x08,
 };
 
 enum SocialFlag
 {
+    SOCIAL_FLAG_NONE        = 0,
     SOCIAL_FLAG_FRIEND      = 0x01,
     SOCIAL_FLAG_IGNORED     = 0x02,
     SOCIAL_FLAG_MUTED       = 0x04,                         // guessed
-    SOCIAL_FLAG_RAF         = 0x08                          // Recruit-A-Friend
 };
 
 struct FriendInfo
 {
-    FriendStatus Status;
+    uint8  Status;
     uint32 Flags;
     uint32 Area;
     uint32 Level;
@@ -59,7 +59,8 @@ struct FriendInfo
         Flags(0),
         Area(0),
         Level(0),
-        Class(0)
+        Class(0),
+        Note("")
     {}
 
     FriendInfo(uint32 flags, const std::string& note) :
@@ -72,8 +73,8 @@ struct FriendInfo
     {}
 };
 
-typedef std::map<uint32, FriendInfo> PlayerSocialMap;
-typedef std::map<uint32, PlayerSocial> SocialMap;
+typedef UNORDERED_MAP<ObjectGuid, FriendInfo> PlayerSocialMap;
+typedef UNORDERED_MAP<ObjectGuid, PlayerSocial> SocialMap;
 
 /// Results of friend related commands
 enum FriendsResult
@@ -112,24 +113,28 @@ enum FriendsResult
 
 class PlayerSocial
 {
-        friend class SocialMgr;
+    friend class SocialMgr;
     public:
         PlayerSocial();
         ~PlayerSocial();
         // adding/removing
-        bool AddToSocialList(ObjectGuid friend_guid, bool ignore);
-        void RemoveFromSocialList(ObjectGuid friend_guid, bool ignore);
-        void SetFriendNote(ObjectGuid friend_guid, std::string note);
+        bool AddToSocialList(ObjectGuid const& friend_guid, bool ignore);
+        void RemoveFromSocialList(ObjectGuid const& friend_guid, bool ignore, bool isBatch = false);
+        void SetFriendNote(ObjectGuid const& friend_guid, std::string note);
         // Packet send's
         void SendSocialList();
         // Misc
-        bool HasFriend(ObjectGuid friend_guid);
-        bool HasIgnore(ObjectGuid ignore_guid);
-        void SetPlayerGuid(ObjectGuid guid) { m_playerLowGuid = guid.GetCounter(); }
+        bool HasFriend(ObjectGuid const& friend_guid);
+        bool HasIgnore(ObjectGuid const& ignore_guid);
+        void SetPlayerGuid(ObjectGuid const& guid) { m_playerGuid = guid; }
         uint32 GetNumberOfSocialsWithFlag(SocialFlag flag);
+
+        // Saving
+        void SaveFriendInfo(ObjectGuid const& friend_guid, FriendInfo const& fi);
+
     private:
         PlayerSocialMap m_playerSocialMap;
-        uint32 m_playerLowGuid;
+        ObjectGuid m_playerGuid;
 };
 
 class SocialMgr
@@ -138,15 +143,15 @@ class SocialMgr
         SocialMgr();
         ~SocialMgr();
         // Misc
-        void RemovePlayerSocial(uint32 guid) { m_socialMap.erase(guid); }
+        void RemovePlayerSocial(ObjectGuid const& guid) { m_socialMap.erase(guid); }
 
-        void GetFriendInfo(Player* player, uint32 friendGUID, FriendInfo& friendInfo);
+        FriendInfo GetFriendInfo(Player* player, ObjectGuid const& friendGUID);
         // Packet management
-        void MakeFriendStatusPacket(FriendsResult result, uint32 friend_guid, WorldPacket* data);
-        void SendFriendStatus(Player* player, FriendsResult result, ObjectGuid friend_guid, bool broadcast);
+        void MakeFriendStatusPacket(FriendsResult result, ObjectGuid const& friend_guid, WorldPacket *data);
+        void SendFriendStatus(Player* player, FriendsResult result, ObjectGuid const& friend_guid, bool broadcast);
         void BroadcastToFriendListers(Player* player, WorldPacket* packet);
         // Loading
-        PlayerSocial* LoadFromDB(QueryResult* result, ObjectGuid guid);
+        PlayerSocial* LoadFromDB(QueryResult *result, ObjectGuid const& guid);
     private:
         SocialMap m_socialMap;
 };

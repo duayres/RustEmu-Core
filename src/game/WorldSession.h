@@ -771,7 +771,8 @@ class MANGOS_DLL_SPEC WorldSession
         void HandleWhoisOpcode(WorldPacket& recv_data);
         void HandleResetInstancesOpcode(WorldPacket& recv_data);
         void HandleHearthandResurrect(WorldPacket& recv_data);
-
+        void HandleInstanceLockResponse(WorldPacket& recv_data);
+        void HandleSetSavedInstanceExtend(WorldPacket& recv_data);
         void HandleUpdateMissileTrajectory(WorldPacket& recv_data);
 
         // LFG
@@ -900,8 +901,11 @@ class MANGOS_DLL_SPEC WorldSession
     private:
         // private trade methods
         void moveItems(Item* myItems[], Item* hisItems[]);
+
+        // movement
         bool VerifyMovementInfo(MovementInfo const& movementInfo, ObjectGuid const& guid) const;
-        void HandleMoverRelocation(MovementInfo& movementInfo);
+        void HandlePlayerRelocation(MovementInfo& movementInfo);
+        void UpdateMoverPosition(MovementInfo& movementInfo);
 
         void ExecuteOpcode(OpcodeHandler const& opHandle, WorldPacket* packet);
 
@@ -927,6 +931,7 @@ class MANGOS_DLL_SPEC WorldSession
         LocaleConstant m_sessionDbcLocale;
         int m_sessionDbLocaleIndex;
         uint32 m_latency;
+        uint32 m_clientTimeDelay;
         AccountData m_accountData[NUM_ACCOUNT_DATA_TYPES];
         uint32 m_Tutorials[8];
         TutorialDataState m_tutorialState;

@@ -310,7 +310,7 @@ bool VehicleKit::AddPassenger(Unit* passenger, SeatId seatId)
             player->VehicleSpellInitialize();
         }
 
-        // Allow to keep AI of controlled vehicle with CREATURE_FLAG_EXTRA_KEEP_AI extra-flag
+        // Allow to keep AI of controlled vehicle with CREATURE_FLAG_EXTRA_ACTIVE extra-flag
         if (!(((Creature*)GetBase())->GetCreatureInfo()->ExtraFlags & CREATURE_FLAG_EXTRA_ACTIVE))
             ((Creature*)GetBase())->AIM_Initialize();
 
@@ -435,7 +435,7 @@ void VehicleKit::RemovePassenger(Unit* passenger, bool dismount /*false*/)
             player->RemovePetActionBar();
         }
 
-        // Allow to keep AI of controlled vehicle with CREATURE_FLAG_EXTRA_KEEP_AI extra-flag
+        // Allow to keep AI of controlled vehicle with CREATURE_FLAG_EXTRA_ACTIVE extra-flag
         if (!(((Creature*)GetBase())->GetCreatureInfo()->ExtraFlags & CREATURE_FLAG_EXTRA_ACTIVE))
             ((Creature*)GetBase())->AIM_Initialize();
     }

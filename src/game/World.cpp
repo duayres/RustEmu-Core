@@ -30,8 +30,6 @@
 #include "WorldSession.h"
 #include "WorldPacket.h"
 #include "Player.h"
-#include "SkillExtraItems.h"
-#include "SkillDiscovery.h"
 #include "AccountMgr.h"
 #include "AchievementMgr.h"
 #include "AuctionHouseMgr.h"
@@ -578,6 +576,10 @@ void World::LoadConfigSettings(bool reload)
 
     setConfigMinMax(CONFIG_FLOAT_CROWDCONTROL_HP_BASE, "CrowdControlHPBase", 0.1f, 0.0f, 1.0f);
 
+    // calendar
+    int32 delayHours = sConfig.GetIntDefault("Calendar.RemoveExpiredEvents", -1);
+    setConfig(CONFIG_INT32_CALENDAR_REMOVE_EXPIRED_EVENTS_DELAY, delayHours < 0 ? -1 : delayHours * HOUR /*convert to sec.*/);
+
     // resistance calculation options
     setConfigMinMax(CONFIG_UINT32_RESIST_CALC_METHOD, "Resistance.CalculationMethod", 1, 0, 1);
     setConfig(CONFIG_BOOL_RESIST_ADD_BY_OVER_LEVEL, "Resistance.AddByOverLevel", false);
@@ -588,9 +590,14 @@ void World::LoadConfigSettings(bool reload)
 
     setConfigMinMax(CONFIG_FLOAT_MELEE_DIST_ADDITION, "Melee.Distance.Addition", 4.0f, 0.0f, 10.0f);
 
+    setConfigMinMax(CONFIG_UINT32_FIX_MOVE_PACKETS_METHOD, "Player.FixMovementPackets.Method", 0, 0, 2);
+    setConfigMinMax(CONFIG_UINT32_FIX_MOVE_PACKETS_ADD_TIME, "Player.FixMovementPackets.AddTime", 50, 1, 1000);
+
     setConfig(CONFIG_UINT32_MAX_HONOR_POINTS, "MaxHonorPoints", 75000);
 
     setConfigMinMax(CONFIG_UINT32_START_HONOR_POINTS, "StartHonorPoints", 0, 0, getConfig(CONFIG_UINT32_MAX_HONOR_POINTS));
+
+    setConfig(CONFIG_BOOL_ALLOW_HONOR_KILLS_TITLES, "AllowHonorKillsTitles", false);
 
     setConfig(CONFIG_UINT32_MAX_ARENA_POINTS, "MaxArenaPoints", 5000);
 
@@ -701,6 +708,8 @@ void World::LoadConfigSettings(bool reload)
     setConfigMinMax(CONFIG_UINT32_QUEST_WEEKLY_RESET_HOUR, "Quests.Weekly.ResetHour", 6, 0 , 23);
 
     setConfig(CONFIG_BOOL_QUEST_IGNORE_RAID, "Quests.IgnoreRaid", false);
+
+    setConfig(CONFIG_BOOL_LOOT_CHESTS_IGNORE_DB, "Loot.IgnoreChestGroupRulesFromDB", false);
 
     setConfig(CONFIG_BOOL_DETECT_POS_COLLISION, "DetectPosCollision", true);
 
@@ -1238,10 +1247,10 @@ void World::SetInitialWorldSettings()
     sLog.outString();
 
     sLog.outString("Loading Skill Discovery Table...");
-    LoadSkillDiscoveryTable();
+    sSpellMgr.LoadSkillDiscoveryTable();
 
     sLog.outString("Loading Skill Extra Item Table...");
-    LoadSkillExtraItemTable();
+    sSpellMgr.LoadSkillExtraItemTable();
 
     sLog.outString("Loading Skill Fishing base level requirements...");
     sObjectMgr.LoadFishingBaseSkillLevel();
@@ -1296,6 +1305,9 @@ void World::SetInitialWorldSettings()
     sLog.outString("Loading GameTeleports...");
     sObjectMgr.LoadGameTele();
 
+    sLog.outString("Loading Calendar events/invites...");
+    sCalendarMgr.LoadFromDB();
+
     ///- Loading localization data
     sLog.outString("Loading Localization strings...");
     sObjectMgr.LoadCreatureLocales();                       // must be after CreatureInfo loading
@@ -1327,8 +1339,6 @@ void World::SetInitialWorldSettings()
 
     sLog.outString("Loading Groups...");
     sObjectMgr.LoadGroups();
-
-    sCalendarMgr.LoadCalendarsFromDB();
 
     sLog.outString("Returning old mails...");
     sObjectMgr.ReturnOrDeleteOldMails(false);
@@ -1414,6 +1424,9 @@ void World::SetInitialWorldSettings()
 
     m_timers[WUPDATE_WORLDSTATE].SetInterval(sConfig.GetIntDefault("WorldState.Timer", 60000));
     m_timers[WUPDATE_WORLDSTATE].Reset();
+
+    m_timers[WUPDATE_CALENDAR].SetInterval(sConfig.GetIntDefault("Calendar.Timer", 30000));
+    m_timers[WUPDATE_CALENDAR].Reset();
 
     // to set mailtimer to return mails every day between 4 and 5 am
     // mailtimer is increased when updating auctions
@@ -1635,6 +1648,13 @@ void World::Update(uint32 diff)
     {
         m_timers[WUPDATE_WORLDSTATE].Reset();
         sWorldStateMgr.Update();
+    }
+
+    // Update Calendar (cleanup and save)
+    if (m_timers[WUPDATE_CALENDAR].Passed())
+    {
+        m_timers[WUPDATE_CALENDAR].Reset();
+        sCalendarMgr.Update();
     }
 
     // Check if any group can be created by dungeon finder

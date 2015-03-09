@@ -44,8 +44,6 @@
 #include "PathFinder.h"
 #include "TargetedMovementGenerator.h"
 #include "HomeMovementGenerator.h"
-#include "SkillDiscovery.h"
-#include "SkillExtraItems.h"
 #include "SystemConfig.h"
 #include "Config/Config.h"
 #include "Mail.h"
@@ -701,7 +699,7 @@ bool ChatHandler::HandleReloadReputationSpilloverTemplateCommand(char* /*args*/)
 bool ChatHandler::HandleReloadSkillDiscoveryTemplateCommand(char* /*args*/)
 {
     sLog.outString("Re-Loading Skill Discovery Table...");
-    LoadSkillDiscoveryTable();
+    sSpellMgr.LoadSkillDiscoveryTable();
     SendGlobalSysMessage("DB table `skill_discovery_template` (recipes discovered at crafting) reloaded.");
     return true;
 }
@@ -709,7 +707,7 @@ bool ChatHandler::HandleReloadSkillDiscoveryTemplateCommand(char* /*args*/)
 bool ChatHandler::HandleReloadSkillExtraItemTemplateCommand(char* /*args*/)
 {
     sLog.outString("Re-Loading Skill Extra Item Table...");
-    LoadSkillExtraItemTable();
+    sSpellMgr.LoadSkillExtraItemTable();
     SendGlobalSysMessage("DB table `skill_extra_item_template` (extra item creation when crafting) reloaded.");
     return true;
 }
@@ -5997,7 +5995,10 @@ bool ChatHandler::HandleGMFlyCommand(char* args)
     if (!target)
         target = m_session->GetPlayer();
 
-    target->SetCanFly(value);
+    WorldPacket data(value ? SMSG_MOVE_SET_CAN_FLY : SMSG_MOVE_UNSET_CAN_FLY, 12);
+    data << target->GetPackGUID();
+    data << uint32(0);                                      // unknown
+    target->SendMessageToSet(&data, true);
     PSendSysMessage(LANG_COMMAND_FLYMODE_STATUS, GetNameLink(target).c_str(), args);
     return true;
 }

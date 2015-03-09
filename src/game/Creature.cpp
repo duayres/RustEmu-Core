@@ -35,6 +35,7 @@
 #include "MapManager.h"
 #include "CreatureAI.h"
 #include "CreatureAISelector.h"
+#include "CreatureEventAI.h"
 #include "PetAI.h"
 #include "Formulas.h"
 #include "WaypointMovementGenerator.h"
@@ -332,13 +333,10 @@ bool Creature::InitEntry(uint32 Entry, CreatureData const* data /*=NULL*/, GameE
     UpdateSpeed(MOVE_WALK, false);
     UpdateSpeed(MOVE_RUN,  false);
 
-    SetLevitate(cinfo->InhabitType & INHABIT_AIR); // TODO: may not be correct to send opcode at this point (already handled by UPDATE_OBJECT createObject)
+    SetLevitate(cinfo->InhabitType & INHABIT_AIR, GetObjectGuid().IsPet() ? 2.0f : 4.0f);
 
-    // check if we need to add swimming movement. TODO: i thing movement flags should be computed automatically at each movement of creature so we need a sort of UpdateMovementFlags() method
-    if (cinfo->InhabitType & INHABIT_WATER &&                                   // check inhabit type water
-        data &&                                                                 // check if there is data to get creature spawn pos
-        GetMap()->GetTerrain()->IsInWater(data->posX, data->posY, data->posZ))  // check if creature is in water
-        m_movementInfo.AddMovementFlag(MOVEFLAG_SWIMMING);                      // add swimming movement
+    if (CanSwim())
+        SetSwim(IsInWater());
 
     // checked at loading
     m_defaultMovementType = MovementGeneratorType(cinfo->MovementType);
@@ -523,6 +521,9 @@ void Creature::Update(uint32 update_diff, uint32 diff)
             // Call AI respawn virtual function
             if (AI())
                 AI()->JustRespawned();
+
+            if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(GetZoneId()))
+                outdoorPvP->HandleCreatureRespawn(this);
 
             if (m_isCreatureLinkingTrigger)
                 GetMap()->GetCreatureLinkingHolder()->DoCreatureLinkingEvent(LINKING_EVENT_RESPAWN, this);
@@ -808,7 +809,11 @@ bool Creature::AIM_Initialize()
     GetMotionMaster()->Initialize();
 
     i_AI = FactorySelector::selectAI(this);
-    delete oldAI;
+    if (oldAI && oldAI != i_AI)
+    {
+        GetEvents()->CleanupEventList();
+        delete oldAI;
+    }
 
     LockAI(false);
     return true;
@@ -2117,7 +2122,7 @@ bool Creature::LoadCreatureAddon(bool reload)
         SetUInt32Value(UNIT_NPC_EMOTESTATE, cainfo->emote);
 
     if (cainfo->splineFlags & SPLINEFLAG_FLYING)
-        SetLevitate(true);
+        SetLevitate(true, GetObjectGuid().IsPet() ? 2.0f : 4.0f);
 
     if (cainfo->auras)
     {
@@ -2361,6 +2366,9 @@ void Creature::GetRespawnCoord(float& x, float& y, float& z, float* ori, float* 
 
     if (dist)
         *dist = GetRespawnRadius();
+
+    if (IsLevitating())
+        z += GetFloatValue(UNIT_FIELD_HOVERHEIGHT);
 
     // lets check if our creatures have valid spawn coordinates
     MANGOS_ASSERT(MaNGOS::IsValidMapCoord(x, y, z) || PrintCoordinatesError(x, y, z, "respawn"));
@@ -2745,19 +2753,25 @@ void Creature::SetWalk(bool enable, bool asDefault)
     else
         m_movementInfo.RemoveMovementFlag(MOVEFLAG_WALK_MODE);
 
-    WorldPacket data(enable ? SMSG_SPLINE_MOVE_SET_WALK_MODE : SMSG_SPLINE_MOVE_SET_RUN_MODE, 9);
+    WorldPacket data(enable ? SMSG_SPLINE_MOVE_SET_WALK_MODE : SMSG_SPLINE_MOVE_SET_RUN_MODE, GetPackGUID().size());
     data << GetPackGUID();
     SendMessageToSet(&data, true);
 }
 
-void Creature::SetLevitate(bool enable)
+void Creature::SetLevitate(bool enable, float altitude)
 {
     if (enable)
+    {
         m_movementInfo.AddMovementFlag(MOVEFLAG_LEVITATING);
+        SetFloatValue(UNIT_FIELD_HOVERHEIGHT, altitude);            // Used for storing altitude of levitated creature
+    }
     else
+    {
         m_movementInfo.RemoveMovementFlag(MOVEFLAG_LEVITATING);
+        SetFloatValue(UNIT_FIELD_HOVERHEIGHT, 0.0f);
+    }
 
-    WorldPacket data(enable ? SMSG_SPLINE_MOVE_GRAVITY_DISABLE : SMSG_SPLINE_MOVE_GRAVITY_ENABLE, 9);
+    WorldPacket data(enable ? SMSG_SPLINE_MOVE_GRAVITY_DISABLE : SMSG_SPLINE_MOVE_GRAVITY_ENABLE, GetPackGUID().size());
     data << GetPackGUID();
     SendMessageToSet(&data, true);
 }
@@ -2769,45 +2783,9 @@ void Creature::SetSwim(bool enable)
     else
         m_movementInfo.RemoveMovementFlag(MOVEFLAG_SWIMMING);
 
-    WorldPacket data(enable ? SMSG_SPLINE_MOVE_START_SWIM : SMSG_SPLINE_MOVE_STOP_SWIM);
-    data << GetPackGUID();
-    SendMessageToSet(&data, true);
-}
-
-void Creature::SetCanFly(bool enable)
-{
-    if (enable)
-        m_movementInfo.AddMovementFlag(MOVEFLAG_CAN_FLY);
-    else
-        m_movementInfo.RemoveMovementFlag(MOVEFLAG_CAN_FLY);
-
-    WorldPacket data(enable ? SMSG_SPLINE_MOVE_SET_FLYING : SMSG_SPLINE_MOVE_UNSET_FLYING, 9);
-    data << GetPackGUID();
-    SendMessageToSet(&data, true);
-}
-
-void Creature::SetFeatherFall(bool enable)
-{
-    if (enable)
-        m_movementInfo.AddMovementFlag(MOVEFLAG_SAFE_FALL);
-    else
-        m_movementInfo.RemoveMovementFlag(MOVEFLAG_SAFE_FALL);
-
-    WorldPacket data(enable ? SMSG_SPLINE_MOVE_FEATHER_FALL : SMSG_SPLINE_MOVE_NORMAL_FALL);
-    data << GetPackGUID();
-    SendMessageToSet(&data, true);
-}
-
-void Creature::SetHover(bool enable)
-{
-    if (enable)
-        m_movementInfo.AddMovementFlag(MOVEFLAG_HOVER);
-    else
-        m_movementInfo.RemoveMovementFlag(MOVEFLAG_HOVER);
-
-    WorldPacket data(enable ? SMSG_SPLINE_MOVE_SET_HOVER : SMSG_SPLINE_MOVE_UNSET_HOVER, 9);
-    data << GetPackGUID();
-    SendMessageToSet(&data, false);
+    //    WorldPacket data(enable ? SMSG_SPLINE_MOVE_START_SWIM : SMSG_SPLINE_MOVE_STOP_SWIM, 8);
+    //    data << GetPackGUID();
+    //    SendMessageToSet(&data, true);
 }
 
 Unit* Creature::SelectPreferredTargetForSpell(SpellEntry const* spellInfo)

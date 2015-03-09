@@ -5343,7 +5343,7 @@ SpellCastResult Spell::CheckOrTakeRunePower(bool take)
                 continue;
 
             if (take)
-                plr->SetRuneCooldown(i, RUNE_COOLDOWN, true); // 5*2=10 sec
+                plr->SetRuneCooldown(i, RUNE_BASE_COOLDOWN, true); // 5*2=10 sec
 
             --runeCost[rune];
         }
@@ -5369,7 +5369,7 @@ SpellCastResult Spell::CheckOrTakeRunePower(bool take)
                     continue;
 
                 if (take)
-                    plr->SetRuneCooldown(i, RUNE_COOLDOWN, true); // 5*2=10 sec
+                    plr->SetRuneCooldown(i, RUNE_BASE_COOLDOWN, true); // 5*2=10 sec
 
                 --runeCost[rune];
 

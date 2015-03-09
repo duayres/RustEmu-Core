@@ -395,10 +395,6 @@ set(SRC_GRP_WORLD_HANDLERS
     QuestHandler.cpp
     ScriptMgr.cpp
     ScriptMgr.h
-    SkillDiscovery.cpp
-    SkillDiscovery.h
-    SkillExtraItems.cpp
-    SkillExtraItems.h
     SkillHandler.cpp
     Spell.cpp
     Spell.h

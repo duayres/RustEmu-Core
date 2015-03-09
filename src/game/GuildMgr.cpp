@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -96,9 +96,11 @@ void GuildMgr::LoadGuilds()
     if (!result)
     {
         BarGoLink bar(1);
+
         bar.step();
-        sLog.outString(">> Loaded %u guild definitions", count);
+
         sLog.outString();
+        sLog.outString(">> Loaded %u guild definitions", count);
         return;
     }
 
@@ -143,9 +145,6 @@ void GuildMgr::LoadGuilds()
             continue;
         }
 
-        newGuild->LoadGuildEventLogFromDB();
-        newGuild->LoadGuildBankEventLogFromDB();
-        newGuild->LoadGuildBankFromDB();
         AddGuild(newGuild);
     }
     while (result->NextRow());
@@ -160,6 +159,6 @@ void GuildMgr::LoadGuilds()
     CharacterDatabase.PExecute("DELETE FROM guild_eventlog WHERE LogGuid > '%u'", sWorld.getConfig(CONFIG_UINT32_GUILD_EVENT_LOG_COUNT));
     CharacterDatabase.PExecute("DELETE FROM guild_bank_eventlog WHERE LogGuid > '%u'", sWorld.getConfig(CONFIG_UINT32_GUILD_BANK_EVENT_LOG_COUNT));
 
-    sLog.outString(">> Loaded %u guild definitions", count);
     sLog.outString();
+    sLog.outString(">> Loaded %u guild definitions", count);
 }

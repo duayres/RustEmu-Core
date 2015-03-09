@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,10 +23,10 @@
 #include "PetAI.h"
 #include "TotemAI.h"
 #include "CreatureEventAI.h"
-#include "RandomMovementGenerator.h"
 #include "CreatureAIImpl.h"
-#include "MovementGeneratorImpl.h"
 #include "CreatureAIRegistry.h"
+#include "MovementGeneratorImpl.h"
+#include "RandomMovementGenerator.h"
 #include "WaypointMovementGenerator.h"
 
 namespace AIRegistry

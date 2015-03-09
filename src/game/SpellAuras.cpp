@@ -5757,6 +5757,8 @@ void Aura::HandleAuraModRoot(bool apply, bool Real)
 
             target->m_movementInfo.RemoveMovementFlag(MOVEFLAG_ROOT);
 
+            if (target->GetTypeId() != TYPEID_PLAYER)
+                target->AddEvent(new AttackResumeEvent(*target), ATTACK_DISPLAY_DELAY);
         }
 
         target->GetUnitStateMgr().DropAction(UNIT_ACTION_ROOT);
@@ -5871,7 +5873,7 @@ void Aura::HandleModTaunt(bool apply, bool Real)
         return;
 
     if (apply)
-        target->TauntApply(caster);
+        target->TauntApply(caster, false);
     else
     {
         // When taunt aura fades out, mob will switch to previous target if current has less than 1.1 * secondthreat
@@ -6120,6 +6122,8 @@ void Aura::HandleAuraModEffectImmunity(bool apply, bool /*Real*/)
             bg->EventPlayerDroppedFlag(player);
         else if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(player->GetCachedZoneId()))
             outdoorPvP->HandleDropFlag(player, GetSpellProto()->Id);
+        else if (InstanceData* mapInstance = player->GetInstanceData())
+            mapInstance->OnPlayerDroppedFlag(player, GetId());
     }
 
     target->ApplySpellImmune(GetId(), IMMUNITY_EFFECT, m_modifier.m_miscvalue, apply);

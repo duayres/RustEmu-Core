@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,6 +43,9 @@ void WorldSession::HandleMoveWorldportAckOpcode()
     // ignore unexpected far teleports
     if (!GetPlayer()->IsBeingTeleportedFar())
         return;
+
+    if (_player->GetVehicleKit())
+        _player->GetVehicleKit()->RemoveAllPassengers();
 
     // get start teleport coordinates (will used later in fail case)
     WorldLocation const& old_loc = GetPlayer()->GetPosition();
@@ -105,8 +108,16 @@ void WorldSession::HandleMoveWorldportAckOpcode()
     if (!map)
         map = sMapMgr.CreateMap(loc.GetMapId(), GetPlayer());
 
+    if (!map)
+    {
+        DETAIL_LOG("WorldSession::HandleMoveWorldportAckOpcode: cannot create requested map %u for teleport player %s!",loc.GetMapId(), GetPlayer()->GetGuidStr().c_str());
+        GetPlayer()->SetSemaphoreTeleportFar(false);
+        GetPlayer()->TeleportToHomebind();
+        return;
+    }
+
     GetPlayer()->SetMap(map);
-    GetPlayer()->Relocate(loc.x, loc.y, loc.z, loc.orientation);
+    GetPlayer()->Relocate(loc);
 
     GetPlayer()->SendInitialPacketsBeforeAddToMap();
     // the CanEnter checks are done in TeleporTo but conditions may change
@@ -153,7 +164,7 @@ void WorldSession::HandleMoveWorldportAckOpcode()
     GetPlayer()->SendInitialPacketsAfterAddToMap();
 
     // flight fast teleport case
-    if (GetPlayer()->GetMotionMaster()->GetCurrentMovementGeneratorType() == FLIGHT_MOTION_TYPE)
+    if (GetPlayer()->IsInUnitState(UNIT_ACTION_TAXI))
     {
         if (!_player->InBattleGround())
         {
@@ -175,7 +186,7 @@ void WorldSession::HandleMoveWorldportAckOpcode()
         {
             if (mapDiff->resetTime)
             {
-                if (time_t timeReset = sMapPersistentStateMgr.GetScheduler().GetResetTimeFor(mEntry->MapID, diff))
+                if (time_t timeReset = sMapPersistentStateMgr.GetScheduler().GetResetTimeFor(mEntry->MapID,diff))
                 {
                     uint32 timeleft = uint32(timeReset - time(NULL));
                     GetPlayer()->SendInstanceResetWarning(mEntry->MapID, diff, timeleft);
@@ -190,13 +201,16 @@ void WorldSession::HandleMoveWorldportAckOpcode()
 
     // honorless target
     if (GetPlayer()->pvpInfo.inHostileArea)
-        GetPlayer()->CastSpell(GetPlayer(), 2479, true);
+        GetPlayer()->CastSpell(GetPlayer(), SPELL_ID_HONORLESS_TARGET, true);
 
     // resummon pet
     GetPlayer()->ResummonPetTemporaryUnSummonedIfAny();
 
     // lets process all delayed operations on successful teleport
     GetPlayer()->ProcessDelayedOperations();
+
+    // Set last WS update time to 0 - grant sending ALL WS updates from new map.
+    GetPlayer()->SetLastWorldStateUpdateTime(time_t(0));
 }
 
 void WorldSession::HandleMoveTeleportAckOpcode(WorldPacket& recv_data)
@@ -210,7 +224,7 @@ void WorldSession::HandleMoveTeleportAckOpcode(WorldPacket& recv_data)
     uint32 counter, time;
     recv_data >> counter >> time;
     DEBUG_LOG("Guid: %s", guid.GetString().c_str());
-    DEBUG_LOG("Counter %u, time %u", counter, time / IN_MILLISECONDS);
+    DEBUG_LOG("Counter %u, time %u", counter, time/IN_MILLISECONDS);
 
     Unit* mover = _player->GetMover();
     Player* plMover = mover->GetTypeId() == TYPEID_PLAYER ? (Player*)mover : NULL;
@@ -238,7 +252,7 @@ void WorldSession::HandleMoveTeleportAckOpcode(WorldPacket& recv_data)
     {
         // honorless target
         if (plMover->pvpInfo.inHostileArea)
-            plMover->CastSpell(plMover, 2479, true);
+            plMover->CastSpell(plMover, SPELL_ID_HONORLESS_TARGET, true);
     }
 
     // resummon pet
@@ -248,14 +262,12 @@ void WorldSession::HandleMoveTeleportAckOpcode(WorldPacket& recv_data)
     GetPlayer()->ProcessDelayedOperations();
 }
 
-void WorldSession::HandleMovementOpcodes(WorldPacket& recv_data)
+void WorldSession::HandleMovementOpcodes(WorldPacket & recv_data)
 {
     Opcodes opcode = recv_data.GetOpcode();
-    if (!sLog.HasLogFilter(LOG_FILTER_PLAYER_MOVES))
-    {
-        DEBUG_LOG("WORLD: Received opcode %s (%u, 0x%X)", LookupOpcodeName(opcode), opcode, opcode);
-        recv_data.hexlike();
-    }
+
+    DEBUG_FILTER_LOG(LOG_FILTER_PLAYER_MOVES,"WorldSession::HandleMovementOpcodes: Recvd %s (%u, 0x%X) opcode", LookupOpcodeName(opcode), opcode, opcode);
+    //recv_data.hexlike();
 
     Unit* mover = _player->GetMover();
     Player* plMover = mover->GetTypeId() == TYPEID_PLAYER ? (Player*)mover : NULL;
@@ -263,7 +275,7 @@ void WorldSession::HandleMovementOpcodes(WorldPacket& recv_data)
     // ignore, waiting processing in WorldSession::HandleMoveWorldportAckOpcode and WorldSession::HandleMoveTeleportAck
     if (plMover && plMover->IsBeingTeleported())
     {
-        recv_data.rpos(recv_data.wpos());                   // prevent warnings spam
+        recv_data.rpos(recv_data.wpos());                                // prevent warnings spam
         return;
     }
 
@@ -273,6 +285,7 @@ void WorldSession::HandleMovementOpcodes(WorldPacket& recv_data)
 
     recv_data >> guid.ReadAsPacked();
     recv_data >> movementInfo;
+
     /*----------------*/
 
     if (!VerifyMovementInfo(movementInfo, guid))
@@ -283,21 +296,53 @@ void WorldSession::HandleMovementOpcodes(WorldPacket& recv_data)
         plMover->HandleFall(movementInfo);
 
     /* process position-change */
-    HandleMoverRelocation(movementInfo);
-
     if (plMover)
+    {
+        HandlePlayerRelocation(movementInfo);
+
         plMover->UpdateFallInformationIfNeed(movementInfo, opcode);
+
+        if (plMover->IsSitState() && (movementInfo.GetMovementFlags() & (MOVEFLAG_MASK_MOVING | MOVEFLAG_MASK_TURNING)))
+            plMover->SetStandState(UNIT_STAND_STATE_STAND);
+    }
 
     WorldPacket data(opcode, recv_data.size());
     data << mover->GetPackGUID();             // write guid
-    movementInfo.Write(data);                               // write data
+
+    // some movement packet fixes, taking into account client/server connection lag.
+    uint32 newTime = WorldTimer::getMSTime();
+
+    switch (sWorld.getConfig(CONFIG_UINT32_FIX_MOVE_PACKETS_METHOD))
+    {
+        case 1:
+        {
+            if (!m_clientTimeDelay)
+            {
+                if (newTime > movementInfo.GetTime())
+                    m_clientTimeDelay = newTime - movementInfo.GetTime();
+            }
+
+            if (m_clientTimeDelay)
+                newTime = movementInfo.GetTime() + m_clientTimeDelay;
+            break;
+        }
+        case 2:
+        {
+            newTime += sWorld.getConfig(CONFIG_UINT32_FIX_MOVE_PACKETS_ADD_TIME);
+            break;
+        }
+    }
+
+    movementInfo.UpdateTime(newTime);
+    movementInfo.Write(data);                 // write data
     mover->SendMessageToSetExcept(&data, _player);
+
+    UpdateMoverPosition(movementInfo);
 }
 
-void WorldSession::HandleForceSpeedChangeAckOpcodes(WorldPacket& recv_data)
+void WorldSession::HandleForceSpeedChangeAckOpcodes(WorldPacket &recv_data)
 {
-    Opcodes opcode = recv_data.GetOpcode();
-    DEBUG_LOG("WORLD: Received %s (%u, 0x%X) opcode", recv_data.GetOpcodeName(), opcode, opcode);
+    uint32 opcode = recv_data.GetOpcode();
 
     /* extract packet */
     ObjectGuid guid;
@@ -309,10 +354,13 @@ void WorldSession::HandleForceSpeedChangeAckOpcodes(WorldPacket& recv_data)
     recv_data >> movementInfo;
     recv_data >> newspeed;
 
+    DEBUG_LOG("WORLD: Recvd %s (%u, 0x%X) opcode, unit %s new speed %f ", LookupOpcodeName(opcode), opcode, opcode,
+        guid ? guid.GetString().c_str() : "<none>", newspeed);
+
     // now can skip not our packet
     if (_player->GetObjectGuid() != guid)
     {
-        recv_data.rpos(recv_data.wpos());                   // prevent warnings spam
+        recv_data.rpos(recv_data.wpos());                                // prevent warnings spam
         return;
     }
     /*----------------*/
@@ -349,18 +397,18 @@ void WorldSession::HandleForceSpeedChangeAckOpcodes(WorldPacket& recv_data)
             return;
     }
 
-    if (!_player->GetTransport() && fabs(_player->GetSpeed(move_type) - newspeed) > 0.01f)
+    if (!_player->IsOnTransport() && fabs(_player->GetSpeed(move_type) - newspeed) > 0.01f)
     {
-        if (_player->GetSpeed(move_type) > newspeed)        // must be greater - just correct
+        if (_player->GetSpeed(move_type) > newspeed)         // must be greater - just correct
         {
             sLog.outError("%sSpeedChange player %s is NOT correct (must be %f instead %f), force set to correct value",
-                          move_type_name[move_type], _player->GetName(), _player->GetSpeed(move_type), newspeed);
+                move_type_name[move_type], _player->GetName(), _player->GetSpeed(move_type), newspeed);
             _player->SetSpeedRate(move_type, _player->GetSpeedRate(move_type), true);
         }
         else                                                // must be lesser - cheating
         {
             BASIC_LOG("Player %s from account id %u kicked for incorrect speed (must be %f instead %f)",
-                      _player->GetName(), _player->GetSession()->GetAccountId(), _player->GetSpeed(move_type), newspeed);
+                _player->GetName(),_player->GetSession()->GetAccountId(),_player->GetSpeed(move_type), newspeed);
             _player->GetSession()->KickPlayer();
         }
     }
@@ -368,47 +416,52 @@ void WorldSession::HandleForceSpeedChangeAckOpcodes(WorldPacket& recv_data)
 
 void WorldSession::HandleSetActiveMoverOpcode(WorldPacket& recv_data)
 {
-    DEBUG_LOG("WORLD: Received opcode CMSG_SET_ACTIVE_MOVER");
+    DEBUG_LOG("WORLD: Recvd CMSG_SET_ACTIVE_MOVER");
     recv_data.hexlike();
 
     ObjectGuid guid;
     recv_data >> guid;
+    ObjectGuid moverGuid = GetPlayer()->GetMover() ? GetPlayer()->GetMover()->GetObjectGuid() : ObjectGuid();
 
-    if (_player->GetMover()->GetObjectGuid() != guid)
+    if (moverGuid != guid)
     {
         sLog.outError("HandleSetActiveMoverOpcode: incorrect mover guid: mover is %s and should be %s",
-                      _player->GetMover()->GetGuidStr().c_str(), guid.GetString().c_str());
+            moverGuid.GetString().c_str(), guid.GetString().c_str());
         return;
     }
 }
 
 void WorldSession::HandleMoveNotActiveMoverOpcode(WorldPacket& recv_data)
 {
-    DEBUG_LOG("WORLD: Received opcode CMSG_MOVE_NOT_ACTIVE_MOVER");
+    DEBUG_LOG("WORLD: Recvd CMSG_MOVE_NOT_ACTIVE_MOVER");
     recv_data.hexlike();
 
     ObjectGuid old_mover_guid;
-    MovementInfo mi;
+    MovementInfo movementInfo;
 
     recv_data >> old_mover_guid.ReadAsPacked();
-    recv_data >> mi;
+    recv_data >> movementInfo;
 
-    if (_player->GetMover()->GetObjectGuid() == old_mover_guid)
+    ObjectGuid moverGuid = GetPlayer()->GetMover() ? GetPlayer()->GetMover()->GetObjectGuid() : ObjectGuid();
+
+    if (moverGuid == old_mover_guid)
     {
-        sLog.outError("HandleMoveNotActiveMover: incorrect mover guid: mover is %s and should be %s instead of %s",
-                      _player->GetMover()->GetGuidStr().c_str(),
-                      _player->GetGuidStr().c_str(),
-                      old_mover_guid.GetString().c_str());
-        recv_data.rpos(recv_data.wpos());                   // prevent warnings spam
+/*        sLog.outError("HandleMoveNotActiveMover: incorrect mover guid: mover is %s and should be %s instead of %s",
+            _player->GetMover()->GetGuidStr().c_str(),
+            _player->GetGuidStr().c_str(),
+            old_mover_guid.GetString().c_str());
+*/
+        DEBUG_LOG("World: CMSG_MOVE_NOT_ACTIVE_MOVER %s received, but %s now is active mover!", moverGuid.GetString().c_str(), old_mover_guid.GetString().c_str());
+        recv_data.rpos(recv_data.wpos());                                // prevent warnings spam
         return;
     }
 
-    _player->m_movementInfo = mi;
+    _player->m_movementInfo = movementInfo;
 }
 
 void WorldSession::HandleMountSpecialAnimOpcode(WorldPacket& /*recvdata*/)
 {
-    // DEBUG_LOG("WORLD: Received opcode CMSG_MOUNTSPECIAL_ANIM");
+    //DEBUG_LOG("WORLD: Recvd CMSG_MOUNTSPECIAL_ANIM");
 
     WorldPacket data(SMSG_MOUNTSPECIAL_ANIM, 8);
     data << GetPlayer()->GetObjectGuid();
@@ -426,7 +479,7 @@ void WorldSession::HandleMoveKnockBackAck(WorldPacket& recv_data)
     // ignore, waiting processing in WorldSession::HandleMoveWorldportAckOpcode and WorldSession::HandleMoveTeleportAck
     if (plMover && plMover->IsBeingTeleported())
     {
-        recv_data.rpos(recv_data.wpos());                   // prevent warnings spam
+        recv_data.rpos(recv_data.wpos());                                // prevent warnings spam
         return;
     }
 
@@ -440,7 +493,7 @@ void WorldSession::HandleMoveKnockBackAck(WorldPacket& recv_data)
     if (!VerifyMovementInfo(movementInfo, guid))
         return;
 
-    HandleMoverRelocation(movementInfo);
+    mover->m_movementInfo = movementInfo;
 
     WorldPacket data(MSG_MOVE_KNOCK_BACK, recv_data.size() + 15);
     data << mover->GetPackGUID();
@@ -449,6 +502,7 @@ void WorldSession::HandleMoveKnockBackAck(WorldPacket& recv_data)
     data << movementInfo.GetJumpInfo().cosAngle;
     data << movementInfo.GetJumpInfo().xyspeed;
     data << movementInfo.GetJumpInfo().velocity;
+
     mover->SendMessageToSetExcept(&data, _player);
 }
 
@@ -471,26 +525,30 @@ void WorldSession::HandleMoveHoverAck(WorldPacket& recv_data)
 {
     DEBUG_LOG("CMSG_MOVE_HOVER_ACK");
 
-    ObjectGuid guid;                                        // guid - unused
-    MovementInfo movementInfo;
+    recv_data.rpos(recv_data.wpos());
 
-    recv_data >> guid.ReadAsPacked();
-    recv_data >> Unused<uint32>();                          // unk1
-    recv_data >> movementInfo;
-    recv_data >> Unused<uint32>();                          // unk2
+//    ObjectGuid guid;                                        // guid - unused
+//    MovementInfo movementInfo;
+//
+//    recv_data >> guid.ReadAsPacked();
+//    recv_data >> Unused<uint32>();                          // unk1
+//    recv_data >> movementInfo;
+//    recv_data >> Unused<uint32>();                          // unk2
 }
 
 void WorldSession::HandleMoveWaterWalkAck(WorldPacket& recv_data)
 {
     DEBUG_LOG("CMSG_MOVE_WATER_WALK_ACK");
 
-    ObjectGuid guid;                                        // guid - unused
-    MovementInfo movementInfo;
+    recv_data.rpos(recv_data.wpos());
 
-    recv_data >> guid.ReadAsPacked();
-    recv_data >> Unused<uint32>();                          // unk1
-    recv_data >> movementInfo;
-    recv_data >> Unused<uint32>();                          // unk2
+//    ObjectGuid guid;                                        // guid - unused
+//    MovementInfo movementInfo;
+//
+//    recv_data >> guid.ReadAsPacked();
+//    recv_data >> Unused<uint32>();                          // unk1
+//    recv_data >> movementInfo;
+//    recv_data >> Unused<uint32>();                          // unk2
 }
 
 void WorldSession::HandleSummonResponseOpcode(WorldPacket& recv_data)
@@ -512,58 +570,78 @@ bool WorldSession::VerifyMovementInfo(MovementInfo const& movementInfo, ObjectGu
     if (guid != _player->GetMover()->GetObjectGuid())
         return false;
 
-    if (!MaNGOS::IsValidMapCoord(movementInfo.GetPosition().getX(), movementInfo.GetPosition().getY(), movementInfo.GetPosition().getZ(), movementInfo.GetPosition().getO()))
+    Position const* pos = movementInfo.GetPos();
+
+    if (!MaNGOS::IsValidMapCoord(pos->x, pos->y, pos->z, pos->o))
         return false;
 
     if (movementInfo.HasMovementFlag(MOVEFLAG_ONTRANSPORT))
     {
-        if (!MaNGOS::IsValidMapCoord(movementInfo.GetPosition().getX() + movementInfo.GetTransportPosition().getX(), movementInfo.GetPosition().getY() + movementInfo.GetTransportPosition().getY(),
-            movementInfo.GetPosition().getZ() + movementInfo.GetTransportPosition().getZ(), movementInfo.GetPosition().getO() + movementInfo.GetTransportPosition().getO()))
-        {
+        Position const* tPos = movementInfo.GetTransportPos();
+
+        // transports size limited
+        // (also received at zeppelin/lift leave by some reason with t_* as absolute in continent coordinates, can be safely skipped)
+        if (tPos->x > 50.0f || tPos->y > 50.0f || tPos->z > 100.0f)
             return false;
-        }
+
+        if (!MaNGOS::IsValidMapCoord(pos->x + tPos->x, pos->y + tPos->y, pos->z + tPos->z, pos->o + tPos->o))
+            return false;
     }
 
     return true;
 }
 
-void WorldSession::HandleMoverRelocation(MovementInfo& movementInfo)
+void WorldSession::HandlePlayerRelocation(MovementInfo& movementInfo)
 {
-    movementInfo.UpdateTime(WorldTimer::getMSTime());
+    Unit* mover = _player->GetMover();
 
-    Unit *mover = _player->GetMover();
+    Player* plMover = mover->GetTypeId() == TYPEID_PLAYER ? (Player*)mover : NULL;
+    if (!plMover)
+        return;
 
-    if (Player *plMover = mover->GetTypeId() == TYPEID_PLAYER ? (Player*)mover : NULL)
+    if (movementInfo.HasMovementFlag(MOVEFLAG_ONTRANSPORT))
     {
-        if (movementInfo.HasMovementFlag(MOVEFLAG_ONTRANSPORT))
+        if (!plMover->IsOnTransport() && plMover->GetMap())
         {
-            if (!plMover->IsOnTransport() && plMover->GetMap())
-            {
-                // elevators also cause the client to send MOVEFLAG_ONTRANSPORT - just unmount if the guid can be found in the transport list
-                if (Transport* transport = plMover->GetMap()->GetTransport(movementInfo.GetTransportGuid()))
-                    transport->AddPassenger(plMover, movementInfo.GetTransportPosition());
-            }
+            // elevators also cause the client to send MOVEFLAG_ONTRANSPORT - just unmount if the guid can be found in the transport list
+            if (Transport* transport = sObjectMgr.GetTransportByGuid(movementInfo.GetTransportGuid()))
+                transport->AddPassenger(plMover, movementInfo.GetTransportPosition());
+            // FIXME - unblock next strings after finish ipmlement regular (not MO) transports.
+            //if (Transport* transport = plMover->GetMap()->GetTransport(movementInfo.GetTransportGuid()))
+            //    transport->AddPassenger(plMover, movementInfo.GetTransportPosition());
         }
-        else if (plMover->IsOnTransport())               // if we were on a transport, leave
-            plMover->GetTransport()->RemovePassenger(plMover);
+    }
+    else if (plMover->IsOnTransport())               // if we were on a transport, leave
+        plMover->GetTransport()->RemovePassenger(plMover);
 
-        if (movementInfo.HasMovementFlag(MOVEFLAG_SWIMMING) != plMover->IsInWater())
-        {
-            // now client not include swimming flag in case jumping under water
-            plMover->SetInWater(!plMover->IsInWater() || plMover->GetTerrain()->IsUnderWater(movementInfo.GetPos()->x, movementInfo.GetPos()->y, movementInfo.GetPos()->z));
-        }
+    if (movementInfo.HasMovementFlag(MOVEFLAG_SWIMMING) != plMover->IsInWater())
+    {
+        // now client not include swimming flag in case jumping under water
+        Position const* pos = movementInfo.GetPos();
+        plMover->SetInWater(!plMover->IsInWater() || plMover->GetTerrain()->IsUnderWater(pos->x, pos->y, pos->z));
+    }
+}
+
+void WorldSession::UpdateMoverPosition(MovementInfo& movementInfo)
+{
+    Unit* unitMover = _player->GetMover();
+
+    // player
+    if (Player* plMover = unitMover->GetTypeId() == TYPEID_PLAYER ? (Player*)unitMover : NULL)
+    {
+        plMover->m_movementInfo = movementInfo;
 
         plMover->SetPosition(Position(movementInfo.GetPosition(), plMover->GetPosition().GetPhaseMask()));
         if (plMover->IsOnTransport())
             plMover->SetTransportPosition(movementInfo.GetTransportPosition());
 
-        plMover->m_movementInfo = movementInfo;
+        float z = movementInfo.GetPos()->z;
+        uint32 mapId = plMover->GetMapId();
 
-        if ((movementInfo.GetPos()->z < -500.0f) || (plMover->GetMapId() == 617 && movementInfo.GetPos()->z < 2.0f) || (plMover->GetMapId() == 572 && movementInfo.GetPos()->z < 20.0f)
-            || (plMover->GetMapId() == 562 && movementInfo.GetPos()->z < -20.0f)) // Prevent falling under textures on some arenas
+        if ((z < -500.0f) || (mapId == 617 && z < 2.0f) || (mapId == 572 && z < 20.0f) ||
+            (mapId == 562 && z < -20.0f)) // Prevent falling under textures on some arenas
         {
-            if (plMover->GetBattleGround()
-                && plMover->GetBattleGround()->HandlePlayerUnderMap(_player))
+            if (plMover->GetBattleGround() && plMover->GetBattleGround()->HandlePlayerUnderMap(_player))
             {
                 // do nothing, the handle already did if returned true
             }
@@ -590,14 +668,13 @@ void WorldSession::HandleMoverRelocation(MovementInfo& movementInfo)
             }
         }
     }
-    else                                                    // creature charmed
+    // creature charmed
+    else if (unitMover->IsInWorld())
     {
-        if (mover->IsInWorld())
-        {
-            mover->m_movementInfo = movementInfo;
-            mover->SetPosition(Position(movementInfo.GetPosition(), mover->GetPosition().GetPhaseMask()));
-            if (mover->IsOnTransport())
-                mover->SetTransportPosition(movementInfo.GetTransportPosition());
-        }
+        unitMover->m_movementInfo = movementInfo;
+
+        unitMover->SetPosition(Position(movementInfo.GetPosition(), unitMover->GetPosition().GetPhaseMask()));
+        if (unitMover->IsOnTransport())
+            unitMover->SetTransportPosition(movementInfo.GetTransportPosition());
     }
 }

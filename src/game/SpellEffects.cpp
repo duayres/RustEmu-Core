@@ -26,7 +26,6 @@
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
 #include "Player.h"
-#include "SkillExtraItems.h"
 #include "Unit.h"
 #include "Spell.h"
 #include "DynamicObject.h"
@@ -41,7 +40,6 @@
 #include "GossipDef.h"
 #include "Creature.h"
 #include "Totem.h"
-#include "Vehicle.h"
 #include "CreatureAI.h"
 #include "BattleGround/BattleGroundMgr.h"
 #include "BattleGround/BattleGround.h"
@@ -50,7 +48,6 @@
 #include "OutdoorPvP/OutdoorPvP.h"
 #include "Language.h"
 #include "SocialMgr.h"
-#include "SkillDiscovery.h"
 #include "VMapFactory.h"
 #include "Util.h"
 #include "TemporarySummon.h"
@@ -6232,23 +6229,23 @@ void Spell::DoCreateItem(SpellEffectIndex eff_idx, uint32 itemtype)
     Player* player = (Player*)unitTarget;
 
     uint32 newitemid = itemtype;
-    ItemPrototype const *pProto = ObjectMgr::GetItemPrototype( newitemid );
+    ItemPrototype const *pProto = ObjectMgr::GetItemPrototype(newitemid);
     if (!pProto)
     {
-        player->SendEquipError( EQUIP_ERR_ITEM_NOT_FOUND, NULL, NULL );
+        player->SendEquipError(EQUIP_ERR_ITEM_NOT_FOUND, NULL, NULL);
         return;
     }
 
     // bg reward have some special in code work
     bool bg_mark = false;
-    switch(m_spellInfo->Id)
+    switch (m_spellInfo->Id)
     {
-        case SPELL_WG_MARK_VICTORY:
-        case SPELL_WG_MARK_DEFEAT:
-            bg_mark = true;
-            break;
-        default:
-            break;
+    case SPELL_WG_MARK_VICTORY:
+    case SPELL_WG_MARK_DEFEAT:
+        bg_mark = true;
+        break;
+    default:
+        break;
     }
 
     uint32 num_to_add = damage;
@@ -6259,13 +6256,13 @@ void Spell::DoCreateItem(SpellEffectIndex eff_idx, uint32 itemtype)
         num_to_add = pProto->GetMaxStackSize();
 
     // init items_count to 1, since 1 item will be created regardless of specialization
-    int items_count=1;
+    int items_count = 1;
     // the chance to create additional items
-    float additionalCreateChance=0.0f;
+    float additionalCreateChance = 0.0f;
     // the maximum number of created additional items
-    uint8 additionalMaxNum=0;
+    uint8 additionalMaxNum = 0;
     // get the chance and maximum number for creating extra items
-    if (canCreateExtraItems(player, m_spellInfo->Id, additionalCreateChance, additionalMaxNum))
+    if (sSpellMgr.CanCreateExtraItems(player, m_spellInfo->Id, additionalCreateChance, additionalMaxNum))
     {
         // roll with this chance till we roll not to create or we create the max num
         while (roll_chance_f(additionalCreateChance) && items_count <= additionalMaxNum)
@@ -6278,7 +6275,7 @@ void Spell::DoCreateItem(SpellEffectIndex eff_idx, uint32 itemtype)
     // can the player store the new item?
     ItemPosCountVec dest;
     uint32 no_space = 0;
-    InventoryResult msg = player->CanStoreNewItem( NULL_BAG, NULL_SLOT, dest, newitemid, num_to_add, &no_space );
+    InventoryResult msg = player->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, newitemid, num_to_add, &no_space);
     if (msg != EQUIP_ERR_OK)
     {
         // convert to possible store amount
@@ -6287,11 +6284,11 @@ void Spell::DoCreateItem(SpellEffectIndex eff_idx, uint32 itemtype)
         else
         {
             // ignore mana gem case (next effect will recharge existing example)
-            if (eff_idx == EFFECT_INDEX_0 && m_spellInfo->Effect[EFFECT_INDEX_1] == SPELL_EFFECT_DUMMY )
+            if (eff_idx == EFFECT_INDEX_0 && m_spellInfo->Effect[EFFECT_INDEX_1] == SPELL_EFFECT_DUMMY)
                 return;
 
             // if not created by another reason from full inventory or unique items amount limitation
-            player->SendEquipError( msg, NULL, NULL, newitemid );
+            player->SendEquipError(msg, NULL, NULL, newitemid);
             return;
         }
     }
@@ -6299,12 +6296,12 @@ void Spell::DoCreateItem(SpellEffectIndex eff_idx, uint32 itemtype)
     if (num_to_add)
     {
         // create the new item and store it
-        Item* pItem = player->StoreNewItem( dest, newitemid, true, Item::GenerateItemRandomPropertyId(newitemid));
+        Item* pItem = player->StoreNewItem(dest, newitemid, true, Item::GenerateItemRandomPropertyId(newitemid));
 
         // was it successful? return error if not
         if (!pItem)
         {
-            player->SendEquipError( EQUIP_ERR_ITEM_NOT_FOUND, NULL, NULL );
+            player->SendEquipError(EQUIP_ERR_ITEM_NOT_FOUND, NULL, NULL);
             return;
         }
 
@@ -10787,8 +10784,11 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                         return;
 
                     // learn random explicit discovery recipe (if any)
-                    if (uint32 discoveredSpell = GetExplicitDiscoverySpell(m_spellInfo->Id, (Player*)m_caster))
+                    if (uint32 discoveredSpell = sSpellMgr.GetExplicitDiscoverySpell(m_spellInfo->Id, (Player*)m_caster))
+                    {
                         ((Player*)m_caster)->learnSpell(discoveredSpell, false);
+                        ((Player*)m_caster)->UpdateCraftSkill(m_spellInfo->Id);
+                    }
 
                     return;
                 }

@@ -1,5 +1,5 @@
 /*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
+ * Copyright (C) 2005-2012 MaNGOS <http://getmangos.com/>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,9 @@
 #include "Common.h"
 #include "ObjectGuid.h"
 #include "SharedDefines.h"
+#include "World.h"
+
+#include <boost/thread/mutex.hpp>
 
 enum CalendarEventType
 {
@@ -83,180 +86,215 @@ enum CalendarModerationRank
     CALENDAR_RANK_OWNER             = 2
 };
 
-enum CalendarError
-{
-    CALENDAR_OK                                 = 0,
-    CALENDAR_ERROR_GUILD_EVENTS_EXCEEDED        = 1,
-    CALENDAR_ERROR_EVENTS_EXCEEDED              = 2,
-    CALENDAR_ERROR_SELF_INVITES_EXCEEDED        = 3,
-    CALENDAR_ERROR_OTHER_INVITES_EXCEEDED_S     = 4,
-    CALENDAR_ERROR_PERMISSIONS                  = 5,
-    CALENDAR_ERROR_EVENT_INVALID                = 6,
-    CALENDAR_ERROR_NOT_INVITED                  = 7,
-    CALENDAR_ERROR_INTERNAL                     = 8,
-    CALENDAR_ERROR_GUILD_PLAYER_NOT_IN_GUILD    = 9,
-    CALENDAR_ERROR_ALREADY_INVITED_TO_EVENT_S   = 10,
-    CALENDAR_ERROR_PLAYER_NOT_FOUND             = 11,
-    CALENDAR_ERROR_NOT_ALLIED                   = 12,
-    CALENDAR_ERROR_IGNORING_YOU_S               = 13,
-    CALENDAR_ERROR_INVITES_EXCEEDED             = 14,
-    CALENDAR_ERROR_INVALID_DATE                 = 16,
-    CALENDAR_ERROR_INVALID_TIME                 = 17,
-
-    CALENDAR_ERROR_NEEDS_TITLE                  = 19,
-    CALENDAR_ERROR_EVENT_PASSED                 = 20,
-    CALENDAR_ERROR_EVENT_LOCKED                 = 21,
-    CALENDAR_ERROR_DELETE_CREATOR_FAILED        = 22,
-    CALENDAR_ERROR_SYSTEM_DISABLED              = 24,
-    CALENDAR_ERROR_RESTRICTED_ACCOUNT           = 25,
-    CALENDAR_ERROR_ARENA_EVENTS_EXCEEDED        = 26,
-    CALENDAR_ERROR_RESTRICTED_LEVEL             = 27,
-    CALENDAR_ERROR_USER_SQUELCHED               = 28,
-    CALENDAR_ERROR_NO_INVITE                    = 29,
-
-    CALENDAR_ERROR_EVENT_WRONG_SERVER           = 36,
-    CALENDAR_ERROR_INVITE_WRONG_SERVER          = 37,
-    CALENDAR_ERROR_NO_GUILD_INVITES             = 38,
-    CALENDAR_ERROR_INVALID_SIGNUP               = 39,
-    CALENDAR_ERROR_NO_MODERATOR                 = 40
-};
-
-#define CALENDAR_MAX_EVENTS         30
-#define CALENDAR_MAX_GUILD_EVENTS   100
 #define CALENDAR_MAX_INVITES        100
 
+enum CalendarStateFlags
+{
+    CALENDAR_STATE_FLAG_INITIALIZED                = 0,
+    CALENDAR_STATE_FLAG_ACTIVE                     = 1,
+    CALENDAR_STATE_FLAG_SAVED                      = 2,
+    CALENDAR_STATE_FLAG_EXPIRED                    = 3,
+    CALENDAR_STATE_FLAG_UPDATED                    = 4,
+    CALENDAR_STATE_FLAG_DELETED                    = 7,
+};
+
 // forward declaration
+class WorldPacket;
+class DungeonPersistentState;
+
 class CalendarEvent;
 class CalendarInvite;
 class CalendarMgr;
-class Player;
-class DungeonPersistentState;
-class WorldPacket;
 
-typedef std::map<uint64, CalendarInvite*> CalendarInviteMap;
-typedef std::list<CalendarInvite*> CalendarInvitesList;
-typedef std::list<CalendarEvent*> CalendarEventsList;
+typedef UNORDERED_SET<CalendarInvite*> CalendarInvitesList;
+typedef UNORDERED_SET<CalendarEvent*> CalendarEventsList;
 
-// CalendarEvent class used to store one event
-class CalendarEvent
-{
-    public:
-        CalendarEvent(uint64 eventId, uint64 creatorGUID, uint32 guildId, CalendarEventType type, int32 dungeonId,
-                      time_t eventTime, uint32 flags, time_t unknownTime, std::string title, std::string description) :
-            EventId(eventId), CreatorGuid(creatorGUID), GuildId(guildId), Type(type), DungeonId(dungeonId),
-            EventTime(eventTime), Flags(flags), UnknownTime(unknownTime), Title(title),
-            Description(description) { }
-
-        CalendarEvent() : EventId(0), CreatorGuid(uint64(0)), GuildId(0), Type(CALENDAR_TYPE_OTHER), DungeonId(-1), EventTime(0),
-            Flags(0), UnknownTime(0) { }
-
-        ~CalendarEvent();
-
-        // helper to test event flag
-        bool IsGuildEvent() const { return Flags & CALENDAR_FLAG_GUILD_EVENT; }
-        bool IsGuildAnnouncement() const { return Flags & CALENDAR_FLAG_GUILD_ANNOUNCEMENT; }
-
-        bool AddInvite(CalendarInvite* invite);
-
-        CalendarInviteMap const* GetInviteMap() const { return &m_Invitee; }
-
-        CalendarInvite* GetInviteById(uint64 inviteId);
-        CalendarInvite* GetInviteByGuid(ObjectGuid const& guid);
-
-        bool RemoveInviteById(uint64 inviteId, Player* remover);
-        void RemoveInviteByGuid(ObjectGuid const& playerGuid);
-        void RemoveAllInvite(ObjectGuid const& remover);
-
-        uint64 EventId;                         // unique ID for that event
-        ObjectGuid CreatorGuid;                 // ObjectGuid of the event creator
-        uint32 GuildId;                         // guild Id set only if its an guild event or guild announce
-        CalendarEventType Type;                 // event type (look CalendarEventType enum)
-        CalendarRepeatType Repeatable;          // not actualy used, maybe no need to store it because it seem not handled by client
-        int32 DungeonId;                        // required for dungeon event type
-        time_t EventTime;                       // event date
-        uint32 Flags;                           // (look at CalendarFlags enum)
-        time_t UnknownTime;                     // maybe related to timezone
-        std::string Title;                      // title of the event
-        std::string Description;                // description of the event
-
-    private:
-        void RemoveInviteByItr(CalendarInviteMap::iterator inviteItr);
-        void RemoveAllInvite();
-
-        CalendarInviteMap m_Invitee;
-};
-
-// CalendarInvite class store single invite information
 class CalendarInvite
 {
-    public:
+public:
 
-        CalendarInvite() : InviteId(0), LastUpdateTime(time(NULL)), Status(CALENDAR_STATUS_INVITED), Rank(CALENDAR_RANK_PLAYER), m_calendarEvent(NULL) {}
+    CalendarInvite() : InviteId(ObjectGuid()), InviteeGuid(ObjectGuid()), SenderGuid(ObjectGuid()), LastUpdateTime(time(NULL)),
+        Status(CALENDAR_STATUS_INVITED), Rank(CALENDAR_RANK_PLAYER), Text(), m_calendarEventId(ObjectGuid()), m_flags(0)
+        {}
 
-        CalendarInvite(CalendarEvent* event, uint64 inviteId, ObjectGuid senderGuid, ObjectGuid inviteeGuid, time_t statusTime,
-                       CalendarInviteStatus status, CalendarModerationRank rank, std::string text);
+    CalendarInvite(CalendarEvent* calendarEvent, ObjectGuid inviteId, ObjectGuid senderGuid, ObjectGuid inviteeGuid, time_t statusTime,
+        CalendarInviteStatus status, CalendarModerationRank rank, std::string text);
 
-        ~CalendarInvite() {}
+    ~CalendarInvite() {}
 
-        CalendarEvent const* GetCalendarEvent() const { return m_calendarEvent; }
+    ObjectGuid const& GetObjectGuid() const { return InviteId; }
+    ObjectGuid const& GetEventGuid() const { return  m_calendarEventId; }
 
-        uint64 InviteId;                        // unique ID
-        ObjectGuid InviteeGuid;                 // invitee ObjectGuid
-        ObjectGuid SenderGuid;                  // the invite sender (can be equal to InviteeGuid)
-        time_t LastUpdateTime;                  // last time updated
-        CalendarInviteStatus Status;            // status of this invite (look CalendarInviteStatus enum)
-        CalendarModerationRank Rank;            // rank of the invitee (look CalendarModerationRank enum)
-        std::string Text;                       // seem not implemented in client
+    CalendarEvent const* GetCalendarEvent() const;
 
-    private:
-        CalendarEvent* m_calendarEvent;         // link to the parent events
+    ObjectGuid InviteId;
+    ObjectGuid InviteeGuid;
+    ObjectGuid SenderGuid;
+    time_t LastUpdateTime;
+    CalendarInviteStatus Status;
+    CalendarModerationRank Rank;
+    std::string Text;
+
+    // service flags
+    void AddFlag(CalendarStateFlags flag)         { m_flags |= (1 << flag); };
+    void RemoveFlag(CalendarStateFlags flag)      { m_flags &= ~(1 << flag); };
+    bool HasFlag(CalendarStateFlags flag) const   { return bool(m_flags & (1 << flag)); };
+
+private:
+    ObjectGuid m_calendarEventId;
+    uint32 m_flags;
 };
 
-// storage for all events
-typedef std::map<uint64, CalendarEvent> CalendarEventStore;
+class CalendarEvent
+{
+public:
 
-// CalendarMgr class is the main class to handle events and their invites
-class CalendarMgr
+    CalendarEvent(ObjectGuid eventId, ObjectGuid creatorGUID, uint32 guildId, CalendarEventType type, int32 dungeonId,
+        time_t eventTime, uint32 flags, time_t unknownTime, std::string title, std::string description) :
+        EventId(eventId), CreatorGuid(creatorGUID), GuildId(guildId), Type(type), DungeonId(dungeonId),
+        EventTime(eventTime), Flags(flags), UnknownTime(unknownTime), Title(title),
+        Description(description), m_flags(0)
+        {
+            m_Invitee.clear();
+        }
+
+    CalendarEvent() : EventId(ObjectGuid()), CreatorGuid(ObjectGuid()), GuildId(0), Type(CALENDAR_TYPE_OTHER), DungeonId(-1), EventTime(0),
+        Flags(0), UnknownTime(0), Title(), Description(), m_flags(0)
+        {
+            m_Invitee.clear();
+        }
+
+    ~CalendarEvent();
+
+    ObjectGuid const& GetObjectGuid() const { return EventId; }
+
+    bool IsGuildEvent() const { return Flags & CALENDAR_FLAG_GUILD_EVENT; }
+    bool IsGuildAnnouncement() const { return Flags & CALENDAR_FLAG_GUILD_ANNOUNCEMENT; }
+
+    bool AddInvite(CalendarInvite* invite);
+
+    GuidSet const* GetInvites() const { return &m_Invitee; }
+
+    CalendarInvite* GetInviteById(ObjectGuid const& inviteId);
+    CalendarInvite* GetInviteByGuid(ObjectGuid const& guid);
+
+    bool RemoveInviteById(ObjectGuid inviteId, ObjectGuid const& removerGuid);
+    void RemoveInviteByGuid(ObjectGuid const& playerGuid);
+    void RemoveInviteById(ObjectGuid const& inviteId);
+
+    void SendMailOnRemoveEvent(ObjectGuid const& removerGuid);
+
+    ObjectGuid EventId;
+    ObjectGuid CreatorGuid;
+    uint32     GuildId;
+    CalendarEventType Type;
+    CalendarRepeatType Repeatable;
+    int32 DungeonId;
+    time_t EventTime;
+    uint32 Flags;
+    time_t UnknownTime;
+    std::string Title;
+    std::string Description;
+
+    // service flags
+    void AddFlag(CalendarStateFlags flag)         { m_flags |= (1 << flag); };
+    void RemoveFlag(CalendarStateFlags flag)      { m_flags &= ~(1 << flag); };
+    bool HasFlag(CalendarStateFlags flag) const   { return bool(m_flags & (1 << flag)); };
+
+private:
+    GuidSet m_Invitee;
+    void RemoveAllInvite();
+    uint32 m_flags;
+};
+
+typedef UNORDERED_MAP<ObjectGuid, CalendarInvite> CalendarInviteStore;
+typedef UNORDERED_MAP<ObjectGuid, CalendarEvent> CalendarEventStore;
+
+class CalendarMgr : public MaNGOS::Singleton<CalendarMgr, MaNGOS::ClassLevelLockable<CalendarMgr, boost::mutex> >
 {
     public:
-        CalendarMgr() : m_MaxEventId(0), m_MaxInviteId(0) {};
-        ~CalendarMgr() {};
+        CalendarMgr();
+        ~CalendarMgr();
 
-        void GetPlayerEventsList(ObjectGuid const& guid, CalendarEventsList& calEventList);
-        void GetPlayerInvitesList(ObjectGuid const& guid, CalendarInvitesList& calInvList);
+    private:
+        CalendarEventStore  m_EventStore;
+        CalendarInviteStore m_InviteStore;
 
+        // first free low guid for selected guid type
+        ObjectGuidGenerator<HIGHGUID_CALENDAR_EVENT>     m_EventGuids;
+        ObjectGuidGenerator<HIGHGUID_INVITE>             m_InviteGuids;
+        uint32 GenerateEventLowGuid()                    { return m_EventGuids.Generate();  }
+        uint32 GenerateInviteLowGuid()                   { return m_InviteGuids.Generate(); }
+
+        // remapping DB ids
+        #define DELETED_ID UINT32_MAX
+        enum TRemapAction
+        {
+            RA_DEL_EXPIRED,
+            RA_REMAP_EVENTS,
+            RA_REMAP_INVITES
+        };
+        typedef std::pair<uint32, uint32> TRemapGee;
+        typedef std::list<TRemapGee> TRemapData;
+
+        struct IsNotRemap { bool operator() (const TRemapGee& gee) { return gee.first == gee.second || gee.second == DELETED_ID; } };
+
+        bool IsEventReadyForRemove(time_t eventTime)
+        {
+            int32 delaySec = sWorld.getConfig(CONFIG_INT32_CALENDAR_REMOVE_EXPIRED_EVENTS_DELAY);
+            return delaySec < 0 ? false : eventTime + time_t(delaySec) <= time(NULL);
+        }
+        void DBRemap(TRemapAction remapAction, TRemapData& remapData, bool& dbTransactionUsed);
+        void DBRemoveExpiredEventsAndRemapData();
+
+        // utils
+        inline bool IsDeletedEvent(CalendarEventStore::const_iterator iter) { return iter->second.HasFlag(CALENDAR_STATE_FLAG_DELETED); }
+        inline bool IsValidEvent(CalendarEventStore::const_iterator iter) { return iter != m_EventStore.end() && !IsDeletedEvent(iter); }
+
+        inline bool IsDeletedInvite(CalendarInviteStore::const_iterator iter) { return iter->second.HasFlag(CALENDAR_STATE_FLAG_DELETED); }
+        inline bool IsValidInvite(CalendarInviteStore::const_iterator iter) { return iter != m_InviteStore.end() && !IsDeletedInvite(iter); }
+
+    public:
+        CalendarEventsList* GetPlayerEventsList(ObjectGuid const& guid);
+        CalendarInvitesList* GetPlayerInvitesList(ObjectGuid const& guid);
         CalendarEvent* AddEvent(ObjectGuid const& guid, std::string title, std::string description, uint32 type, uint32 repeatable, uint32 maxInvites,
-                                int32 dungeonId, time_t eventTime, time_t unkTime, uint32 flags);
+            int32 dungeonId, time_t eventTime, time_t unkTime, uint32 flags);
 
-        CalendarInvite* AddInvite(CalendarEvent* event, ObjectGuid const& senderGuid, ObjectGuid const& inviteeGuid, CalendarInviteStatus status, CalendarModerationRank rank, const std::string &text, time_t statusTime);
+        CalendarInvite* AddInvite(CalendarEvent* event, ObjectGuid const& senderGuid, ObjectGuid const& inviteeGuid, CalendarInviteStatus status, CalendarModerationRank rank, std::string text, time_t statusTime);
 
-        void RemoveEvent(uint64 eventId, Player* remover);
-        bool RemoveInvite(uint64 eventId, uint64 inviteId, ObjectGuid const& removerGuid);
+        void RemoveEvent(ObjectGuid const& eventId, ObjectGuid const& remover);
+        bool RemoveInvite(ObjectGuid const& eventId, ObjectGuid const& invitId, ObjectGuid const& removerGuid);
         void RemovePlayerCalendar(ObjectGuid const& playerGuid);
         void RemoveGuildCalendar(ObjectGuid const& playerGuid, uint32 GuildId);
 
-        void CopyEvent(uint64 eventId, time_t newTime, ObjectGuid const& guid);
+        void CopyEvent(ObjectGuid const& eventId, time_t newTime, ObjectGuid const& guid);
         uint32 GetPlayerNumPending(ObjectGuid const& guid);
 
-        CalendarEvent* GetEventById(uint64 eventId)
-        {
-            CalendarEventStore::iterator itr = m_EventStore.find(eventId);
-            return (itr != m_EventStore.end()) ? &itr->second : NULL;
-        }
+        // Main calendar search methods.
+        CalendarEvent* GetEventById(ObjectGuid const& eventId);
+        CalendarInvite* GetInviteById(ObjectGuid const& inviteId);
 
-        // sql related
-        void LoadCalendarsFromDB();
+        // World thread update system
+        void Update();
+
+        // Save/load system
+        void LoadFromDB();
+        void SaveToDB();
+        void SaveEventToDB(CalendarEvent const* event);
+        void SaveInviteToDB(CalendarInvite const* invite);
+        void DeleteEventFromDB(ObjectGuid const& eventGuid);
+        void DeleteInviteFromDB(ObjectGuid const& inviteGuid);
 
         // send data to client function
         void SendCalendarEventInvite(CalendarInvite const* invite);
         void SendCalendarEventInviteAlert(CalendarInvite const* invite);
-        void SendCalendarCommandResult(Player* player, CalendarError err, char const* param = NULL);
+        void SendCalendarCommandResult(ObjectGuid const& guid, CalendarResponseResult err, char const* param = NULL);
         void SendCalendarEventRemovedAlert(CalendarEvent const* event);
-        void SendCalendarEvent(Player* player, CalendarEvent const* event, uint32 sendType);
-        void SendCalendarEventInviteRemoveAlert(Player* player, CalendarEvent const* event, CalendarInviteStatus status);
-        void SendCalendarEventInviteRemove(CalendarInvite const* invite, uint32 flags);
+        void SendCalendarEvent(ObjectGuid const& guid, CalendarEvent const* event, uint32 sendType);
+        void SendCalendarEventInviteRemoveAlert(ObjectGuid const& guid, CalendarEvent const* event, CalendarInviteStatus status);
+        void SendCalendarEventInviteRemove(CalendarInvite const* invite, CalendarEvent const* event, uint32 flags);
         void SendCalendarEventStatus(CalendarInvite const* invite);
-        void SendCalendarClearPendingAction(Player* player);
+        void SendCalendarClearPendingAction(ObjectGuid const& guid);
         void SendCalendarEventModeratorStatusAlert(CalendarInvite const* invite);
         void SendCalendarEventUpdateAlert(CalendarEvent const* event, time_t oldEventTime);
         void SendCalendarRaidLockoutRemove(ObjectGuid const& guid, DungeonPersistentState const* save);
@@ -265,16 +303,6 @@ class CalendarMgr
         void SendPacketToAllEventRelatives(WorldPacket packet, CalendarEvent const* event);
 
     private:
-        uint64 GetNewEventId() { return ++m_MaxEventId; }
-        uint64 GetNewInviteId() { return ++m_MaxInviteId; }
-
-        bool CanAddInviteTo(ObjectGuid const& guid);    // check if player can recieve a new invite
-        bool CanAddGuildEvent(uint32 guildId);          // check if guild not reached the event number limit
-        bool CanAddEvent(ObjectGuid const& guid);       // check if player not reached the event number limit
-
-        CalendarEventStore m_EventStore;        // main events storage
-        uint64 m_MaxEventId;                    // current max event ID
-        uint64 m_MaxInviteId;                   // current max invite ID
 };
 
 #define sCalendarMgr MaNGOS::Singleton<CalendarMgr>::Instance()
